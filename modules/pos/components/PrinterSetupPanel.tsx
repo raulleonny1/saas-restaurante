@@ -22,6 +22,8 @@ import type {
 import { Button, Input, Select, toast } from "@/ui";
 import { useCallback, useEffect, useState } from "react";
 
+type StationId = "tpv" | "kitchen";
+
 type StationDraft = {
   label: string;
   systemName: string;
@@ -70,10 +72,15 @@ export function PrinterSetupPanel({
     toDraft(printers?.kitchen, "Cocina · comanda"),
   );
   const [busy, setBusy] = useState(false);
-  const [scanning, setScanning] = useState(false);
+  /** Cada botón busca solo para su tarjeta */
+  const [scanningFor, setScanningFor] = useState<StationId | null>(null);
   const [bridgeUp, setBridgeUp] = useState<boolean | null>(null);
-  const [installed, setInstalled] = useState<InstalledPrinter[]>([]);
-  const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [tpvInstalled, setTpvInstalled] = useState<InstalledPrinter[]>([]);
+  const [kitchenInstalled, setKitchenInstalled] = useState<InstalledPrinter[]>(
+    [],
+  );
+  const [tpvScanMsg, setTpvScanMsg] = useState<string | null>(null);
+  const [kitchenScanMsg, setKitchenScanMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (storage === "device") {
@@ -98,61 +105,73 @@ export function PrinterSetupPanel({
     setKitchen(toDraft(printers?.kitchen, "Cocina · comanda"));
   }, [kitchenOutput, printers, restaurantId, storage]);
 
-  const scanPrinters = useCallback(async () => {
-    setScanning(true);
-    setScanMsg(null);
+  useEffect(() => {
+    void checkPrintBridge().then(setBridgeUp);
+  }, []);
+
+  const scanFor = useCallback(async (station: StationId) => {
+    setScanningFor(station);
+    const setMsg = station === "tpv" ? setTpvScanMsg : setKitchenScanMsg;
+    const setList = station === "tpv" ? setTpvInstalled : setKitchenInstalled;
+    setMsg(null);
     try {
       const up = await checkPrintBridge();
       setBridgeUp(up);
       if (!up) {
-        setInstalled([]);
-        setScanMsg(
-          "Asistente apagado. Descarga e inicia el asistente en este PC y vuelve a buscar.",
+        setList([]);
+        setMsg(
+          "Asistente apagado. Inícialo (descarga abajo) y vuelve a buscar aquí.",
         );
         return;
       }
       const result = await listInstalledPrinters();
       if (!result.available) {
-        setInstalled([]);
+        setList([]);
         setBridgeUp(false);
-        setScanMsg(result.message || "No se pudieron leer las impresoras");
+        setMsg(result.message || "No se pudieron leer las impresoras");
         return;
       }
-      setInstalled(result.printers);
+      setList(result.printers);
       if (result.printers.length === 0) {
-        setScanMsg(
-          "Asistente activo, pero Windows no tiene impresoras instaladas.",
-        );
+        setMsg("No hay impresoras instaladas en Windows.");
       } else {
-        setScanMsg(
-          `${result.printers.length} impresora(s) encontrada(s). Elige ventas y cocina abajo.`,
+        setMsg(
+          `${result.printers.length} encontrada(s). Elige la de ${
+            station === "tpv" ? "ventas" : "cocina"
+          }.`,
         );
-        toast(`${result.printers.length} impresoras encontradas`, "success");
+        toast(
+          station === "tpv"
+            ? `${result.printers.length} impresoras · elige la de ventas`
+            : `${result.printers.length} impresoras · elige la de cocina`,
+          "success",
+        );
       }
     } finally {
-      setScanning(false);
+      setScanningFor(null);
     }
   }, []);
 
-  useEffect(() => {
-    void (async () => {
-      const up = await checkPrintBridge();
-      setBridgeUp(up);
-      if (up) void scanPrinters();
-    })();
-  }, [scanPrinters]);
-
   async function save() {
     if (!canEdit) return;
+    const tpvName = tpv.systemName.trim();
+    const kitchenName = kitchen.systemName.trim();
+    if (tpvName && kitchenName && tpvName === kitchenName) {
+      toast(
+        "Ventas y cocina deben ser impresoras distintas. Elige otra en uno de los dos.",
+        "error",
+      );
+      return;
+    }
     const nextPrinters = {
       tpv: {
         label: tpv.label.trim() || "Ventas · ticket cliente",
-        systemName: tpv.systemName.trim() || undefined,
+        systemName: tpvName || undefined,
         paperWidthMm: tpv.paperWidthMm,
       },
       kitchen: {
         label: kitchen.label.trim() || "Cocina · comanda",
-        systemName: kitchen.systemName.trim() || undefined,
+        systemName: kitchenName || undefined,
         paperWidthMm: kitchen.paperWidthMm,
       },
     };
@@ -195,43 +214,8 @@ export function PrinterSetupPanel({
         <p
           className={`mt-1 text-sm ${floor ? "text-[#a8b5a4]" : "text-fg-muted"}`}
         >
-          La app busca las impresoras instaladas en este PC. Elige cuál es de
-          ventas (ticket) y cuál de cocina.
-        </p>
-      </div>
-
-      {/* Botón siempre visible y activo (solo se desactiva mientras busca) */}
-      <div
-        className={
-          floor
-            ? "rounded-2xl border-2 border-emerald-500/50 bg-emerald-950/40 p-4"
-            : "rounded-[var(--radius-lg)] border-2 border-accent/40 bg-accent-soft/30 p-4"
-        }
-      >
-        <button
-          type="button"
-          disabled={scanning}
-          onClick={() => void scanPrinters()}
-          className={
-            floor
-              ? "w-full rounded-xl bg-emerald-600 px-4 py-3.5 text-sm font-semibold text-white shadow-lg disabled:opacity-60"
-              : "w-full rounded-[var(--radius-md)] bg-accent px-4 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
-          }
-        >
-          {scanning
-            ? "Buscando impresoras en este PC…"
-            : installed.length > 0
-              ? `Volver a buscar (${installed.length} encontradas)`
-              : "Buscar impresoras instaladas"}
-        </button>
-        <p
-          className={`mt-2 text-center text-xs ${floor ? "text-[#a8b5a4]" : "text-fg-muted"}`}
-        >
-          {bridgeUp === true
-            ? scanMsg || "Asistente activo · elige ventas y cocina abajo"
-            : bridgeUp === false
-              ? "Si no encuentra nada: inicia el asistente (descarga abajo) y pulsa de nuevo"
-              : "Comprobando asistente local…"}
+          Cada botón busca solo para su impresora. Elige una distinta para
+          ventas y otra para cocina.
         </p>
       </div>
 
@@ -272,13 +256,18 @@ export function PrinterSetupPanel({
         <StationCard
           title="Impresora de ventas (TPV)"
           subtitle="Ticket del cliente al cobrar"
+          station="tpv"
           draft={tpv}
           onChange={setTpv}
           canEdit={canEdit}
           floor={floor}
-          installed={installed}
-          scanning={scanning}
-          onScan={() => void scanPrinters()}
+          installed={tpvInstalled}
+          excludeName={kitchen.systemName}
+          excludeLabel="ya elegida en cocina"
+          scanning={scanningFor === "tpv"}
+          otherScanning={scanningFor === "kitchen"}
+          scanMsg={tpvScanMsg}
+          onScan={() => void scanFor("tpv")}
           onTest={() =>
             printTpvTestPage({
               restaurantName,
@@ -291,13 +280,18 @@ export function PrinterSetupPanel({
         <StationCard
           title="Impresora de cocina"
           subtitle="Comanda al enviar a cocina / barra"
+          station="kitchen"
           draft={kitchen}
           onChange={setKitchen}
           canEdit={canEdit}
           floor={floor}
-          installed={installed}
-          scanning={scanning}
-          onScan={() => void scanPrinters()}
+          installed={kitchenInstalled}
+          excludeName={tpv.systemName}
+          excludeLabel="ya elegida en ventas"
+          scanning={scanningFor === "kitchen"}
+          otherScanning={scanningFor === "tpv"}
+          scanMsg={kitchenScanMsg}
+          onScan={() => void scanFor("kitchen")}
           onTest={() =>
             printKitchenTestPage({
               restaurantName,
@@ -308,6 +302,17 @@ export function PrinterSetupPanel({
           }
         />
       </div>
+
+      {tpv.systemName &&
+      kitchen.systemName &&
+      tpv.systemName === kitchen.systemName ? (
+        <p
+          className={`text-xs ${floor ? "text-amber-300" : "text-amber-700"}`}
+        >
+          Atención: ventas y cocina tienen la misma impresora. Elige otra en
+          uno de los dos.
+        </p>
+      ) : null}
 
       {canEdit ? (
         floor ? (
@@ -342,7 +347,6 @@ function BridgeBanner({
   const text = floor ? "text-[#a8b5a4]" : "text-fg-muted";
   const title = floor ? "text-[#e7efe4]" : "text-fg";
 
-  // Solo instrucciones de descarga si el asistente no está corriendo
   if (bridgeUp !== false) return null;
 
   return (
@@ -383,14 +387,9 @@ function BridgeBanner({
             Haz doble clic en <strong>start-windows.bat</strong>.
           </li>
           <li>
-            Deja la ventana negra abierta y pulsa el botón verde «Buscar
-            impresoras instaladas».
+            En cada tarjeta pulsa «Buscar» y elige una impresora distinta.
           </li>
         </ol>
-        <p>
-          El asistente solo lee impresoras de Windows en este PC; no se publica
-          en internet.
-        </p>
       </div>
     </div>
   );
@@ -399,41 +398,77 @@ function BridgeBanner({
 function StationCard({
   title,
   subtitle,
+  station,
   draft,
   onChange,
   canEdit,
   floor,
   installed,
+  excludeName,
+  excludeLabel,
   scanning,
+  otherScanning,
+  scanMsg,
   onScan,
   onTest,
 }: {
   title: string;
   subtitle: string;
+  station: StationId;
   draft: StationDraft;
   onChange: (next: StationDraft) => void;
   canEdit: boolean;
   floor: boolean;
   installed: InstalledPrinter[];
+  excludeName: string;
+  excludeLabel: string;
   scanning: boolean;
+  otherScanning: boolean;
+  scanMsg: string | null;
   onScan: () => void;
   onTest: () => void;
 }) {
+  const exclude = excludeName.trim();
+  const options = installed.filter((p) => p.name !== exclude);
   const selectValue =
-    draft.systemName &&
-    installed.some((p) => p.name === draft.systemName)
+    draft.systemName && options.some((p) => p.name === draft.systemName)
       ? draft.systemName
       : draft.systemName
         ? "__custom__"
         : "";
 
-  const printerSelect = (
-    <div className="space-y-2">
+  const roleName = station === "tpv" ? "ventas" : "cocina";
+
+  const body = (
+    <>
+      <button
+        type="button"
+        disabled={scanning || !canEdit || otherScanning}
+        onClick={onScan}
+        className={
+          floor
+            ? "w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white disabled:opacity-50"
+            : "w-full rounded-[var(--radius-md)] bg-accent py-3 text-sm font-semibold text-white disabled:opacity-50"
+        }
+      >
+        {scanning
+          ? `Buscando impresoras de ${roleName}…`
+          : installed.length > 0
+            ? `Buscar de nuevo (${roleName})`
+            : `Buscar impresoras de ${roleName}`}
+      </button>
+
+      {scanMsg ? (
+        <p className={`text-xs ${floor ? "text-[#a8b5a4]" : "text-fg-muted"}`}>
+          {scanMsg}
+        </p>
+      ) : null}
+
       <label className="block space-y-1.5">
         <span
           className={`text-xs font-medium ${floor ? "text-[#c5d0c2]" : "text-fg-muted"}`}
         >
-          Impresora instalada
+          Elegir impresora de {roleName}
         </span>
         <select
           value={selectValue}
@@ -451,10 +486,10 @@ function StationCard({
         >
           <option value="">
             {installed.length
-              ? "— Selecciona impresora —"
-              : "— Pulsa Buscar para listar —"}
+              ? `— Selecciona impresora de ${roleName} —`
+              : `— Pulsa Buscar de ${roleName} —`}
           </option>
-          {installed.map((p) => (
+          {options.map((p) => (
             <option key={p.name} value={p.name}>
               {p.name}
               {p.isDefault ? " (predeterminada)" : ""}
@@ -462,79 +497,28 @@ function StationCard({
             </option>
           ))}
           {draft.systemName &&
-          !installed.some((p) => p.name === draft.systemName) ? (
+          !options.some((p) => p.name === draft.systemName) ? (
             <option value="__custom__">{draft.systemName} (guardada)</option>
           ) : null}
         </select>
-      </label>
-      {installed.length === 0 ? (
-        <button
-          type="button"
-          disabled={scanning || !canEdit}
-          onClick={onScan}
-          className={
-            floor
-              ? "w-full rounded-xl border border-emerald-400/50 bg-emerald-600/90 py-2.5 text-xs font-semibold text-white disabled:opacity-50"
-              : "w-full rounded-[var(--radius-md)] border border-accent/40 bg-accent py-2.5 text-xs font-semibold text-white disabled:opacity-50"
-          }
-        >
-          {scanning ? "Buscando…" : "Buscar impresoras ahora"}
-        </button>
-      ) : null}
-    </div>
-  );
-
-  if (floor) {
-    return (
-      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-        <h3 className="text-sm font-medium text-[#e7efe4]">{title}</h3>
-        <p className="mt-0.5 text-xs text-[#8fa08c]">{subtitle}</p>
-        <div className="mt-3 space-y-3">
-          {printerSelect}
-          <FloorField
-            label="Nombre amigable"
-            value={draft.label}
-            disabled={!canEdit}
-            onChange={(v) => onChange({ ...draft, label: v })}
-            placeholder={title}
-          />
-          <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-[#c5d0c2]">
-              Ancho del papel
-            </span>
-            <select
-              value={String(draft.paperWidthMm)}
-              disabled={!canEdit}
-              onChange={(e) =>
-                onChange({
-                  ...draft,
-                  paperWidthMm: Number(e.target.value) as ThermalPaperWidth,
-                })
-              }
-              className="w-full rounded-xl border border-white/15 bg-[#152018] px-3 py-2.5 text-sm text-[#e7efe4]"
-            >
-              <option value="80">80 mm (recomendado)</option>
-              <option value="58">58 mm</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={onTest}
-            className="w-full rounded-xl border border-emerald-500/40 bg-emerald-950/40 py-2.5 text-sm font-medium text-emerald-200"
+        {exclude && installed.some((p) => p.name === exclude) ? (
+          <span
+            className={`block text-[11px] ${floor ? "text-[#8fa08c]" : "text-fg-muted"}`}
           >
-            Probar esta impresora
-          </button>
-        </div>
-      </div>
-    );
-  }
+            Oculta «{exclude}» ({excludeLabel}).
+          </span>
+        ) : null}
+      </label>
 
-  return (
-    <div className="rounded-[var(--radius-lg)] border border-border bg-bg p-4">
-      <h3 className="text-sm font-medium">{title}</h3>
-      <p className="mt-0.5 text-xs text-fg-muted">{subtitle}</p>
-      <div className="mt-3 space-y-3">
-        {printerSelect}
+      {floor ? (
+        <FloorField
+          label="Nombre amigable"
+          value={draft.label}
+          disabled={!canEdit}
+          onChange={(v) => onChange({ ...draft, label: v })}
+          placeholder={title}
+        />
+      ) : (
         <Input
           label="Nombre amigable"
           value={draft.label}
@@ -542,6 +526,29 @@ function StationCard({
           disabled={!canEdit}
           placeholder={title}
         />
+      )}
+
+      {floor ? (
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium text-[#c5d0c2]">
+            Ancho del papel
+          </span>
+          <select
+            value={String(draft.paperWidthMm)}
+            disabled={!canEdit}
+            onChange={(e) =>
+              onChange({
+                ...draft,
+                paperWidthMm: Number(e.target.value) as ThermalPaperWidth,
+              })
+            }
+            className="w-full rounded-xl border border-white/15 bg-[#152018] px-3 py-2.5 text-sm text-[#e7efe4]"
+          >
+            <option value="80">80 mm (recomendado)</option>
+            <option value="58">58 mm</option>
+          </select>
+        </label>
+      ) : (
         <Select
           label="Ancho del papel"
           value={String(draft.paperWidthMm)}
@@ -556,10 +563,39 @@ function StationCard({
           <option value="80">80 mm (recomendado)</option>
           <option value="58">58 mm</option>
         </Select>
+      )}
+
+      {floor ? (
+        <button
+          type="button"
+          onClick={onTest}
+          className="w-full rounded-xl border border-emerald-500/40 bg-emerald-950/40 py-2.5 text-sm font-medium text-emerald-200"
+        >
+          Probar esta impresora
+        </button>
+      ) : (
         <Button type="button" size="sm" variant="secondary" onClick={onTest}>
           Probar impresión
         </Button>
+      )}
+    </>
+  );
+
+  if (floor) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+        <h3 className="text-sm font-medium text-[#e7efe4]">{title}</h3>
+        <p className="mt-0.5 text-xs text-[#8fa08c]">{subtitle}</p>
+        <div className="mt-3 space-y-3">{body}</div>
       </div>
+    );
+  }
+
+  return (
+    <div className="rounded-[var(--radius-lg)] border border-border bg-bg p-4">
+      <h3 className="text-sm font-medium">{title}</h3>
+      <p className="mt-0.5 text-xs text-fg-muted">{subtitle}</p>
+      <div className="mt-3 space-y-3">{body}</div>
     </div>
   );
 }
