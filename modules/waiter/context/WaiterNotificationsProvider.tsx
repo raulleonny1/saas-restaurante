@@ -42,14 +42,15 @@ export function useWaiterNotifications() {
   return ctx;
 }
 
-function readyItemKeys(orders: Order[]) {
+function readyItemKeys(orders: Order[], tableIds: string[]) {
+  const allowed = new Set(tableIds);
   const keys = new Set<string>();
   for (const o of orders) {
     if (o.status === "paid" || o.status === "cancelled") continue;
+    if (!o.tableId || !allowed.has(o.tableId)) continue;
     for (const i of o.items) {
       if (i.status === "ready") {
-        // Incluye waiterAlertAt para reavisos de cocina sobre la misma línea
-        keys.add(`${o.id}:${i.id}:${o.waiterAlertAt ?? i.readyAt ?? ""}`);
+        keys.add(`${o.id}:${i.id}:${o.waiterAlertAt ?? "ready"}`);
       }
     }
   }
@@ -63,7 +64,7 @@ export function WaiterNotificationsProvider({
 }) {
   const { user } = useAuth();
   const { restaurantId } = useRestaurant();
-  const { openOrders } = usePos();
+  const { openOrders, tables } = usePos();
   const [remote, setRemote] = useState<AppNotification[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const seenReadyRef = useRef<Set<string>>(new Set());
@@ -77,10 +78,21 @@ export function WaiterNotificationsProvider({
     return subscribeStaffNotifications(restaurantId, user.uid, setRemote);
   }, [user, restaurantId]);
 
+  /** Solo mesas con pedido activo en el plano (evita avisos fantasma). */
+  const activeTableIds = useMemo(
+    () =>
+      tables
+        .filter((t) => t.currentOrderId || t.status === "occupied")
+        .map((t) => t.id),
+    [tables],
+  );
+
   const kitchen = useMemo(
     () =>
-      kitchenReadyAlerts(openOrders).filter((n) => !dismissed.has(n.id)),
-    [openOrders, dismissed],
+      kitchenReadyAlerts(openOrders, activeTableIds).filter(
+        (n) => !dismissed.has(n.id),
+      ),
+    [openOrders, activeTableIds, dismissed],
   );
 
   const notifications = useMemo(() => {
@@ -95,18 +107,13 @@ export function WaiterNotificationsProvider({
     await unlockWaiterAudio();
   }, []);
 
-  // Sonido + vibración cuando cocina marca listo
+  // Sonido solo ante avisos nuevos (no si no hay mesas activas)
   useEffect(() => {
-    const keys = readyItemKeys(openOrders);
+    const keys = readyItemKeys(openOrders, activeTableIds);
 
     if (!primedRef.current) {
       seenReadyRef.current = keys;
       primedRef.current = true;
-      // Si ya hay listos al abrir la app, avisa igual (banner + intento de sonido)
-      if (keys.size > 0) {
-        void playWaiterPickupAlarm();
-        vibratePickup();
-      }
       return;
     }
 
@@ -118,21 +125,21 @@ export function WaiterNotificationsProvider({
       }
     }
 
-    if (hasNew) {
+    if (hasNew && kitchen.length > 0) {
       void playWaiterPickupAlarm();
       vibratePickup();
     }
 
     seenReadyRef.current = keys;
-  }, [openOrders]);
+  }, [openOrders, activeTableIds, kitchen.length]);
 
-  // Recordatorio sonoro mientras haya avisos
+  // Recordatorio solo mientras queden avisos no cerrados
   useEffect(() => {
     if (!kitchen.length) return;
     const id = window.setInterval(() => {
       void playWaiterPickupAlarm();
       vibratePickup();
-    }, 12_000);
+    }, 20_000);
     return () => window.clearInterval(id);
   }, [kitchen.length]);
 
@@ -142,7 +149,21 @@ export function WaiterNotificationsProvider({
     unlockAudio,
     markRead: async (id) => {
       if (id.startsWith("ready_")) {
-        setDismissed((prev) => new Set(prev).add(id));
+        const related = notifications.find((n) => n.id === id);
+        setDismissed((prev) => {
+          const next = new Set(prev).add(id);
+          if (related?.referenceId) {
+            for (const n of notifications) {
+              if (
+                n.id.startsWith("ready_") &&
+                n.referenceId === related.referenceId
+              ) {
+                next.add(n.id);
+              }
+            }
+          }
+          return next;
+        });
         return;
       }
       if (!restaurantId) return;

@@ -17,6 +17,8 @@ import {
   resolveTableFloorTone,
   TABLE_TONE_LABEL,
   TABLE_TONE_WAITER,
+  TABLE_TONE_WAITER_LEGEND,
+  TABLE_TONE_WAITER_LIVE,
   type TableFloorTone,
 } from "@/modules/pos/domain/tableTone";
 import type { Table } from "@/types/orders";
@@ -125,7 +127,7 @@ function TablesContent() {
         {LEGEND.map((tone) => (
           <span
             key={tone}
-            className={`rounded-full border px-2 py-0.5 ${TABLE_TONE_WAITER[tone]}`}
+            className={`rounded-full border px-2 py-0.5 ${TABLE_TONE_WAITER_LEGEND[tone]}`}
           >
             {TABLE_TONE_LABEL[tone]}
           </span>
@@ -161,9 +163,9 @@ function TablesContent() {
               key={table.id}
               type="button"
               onClick={() => setPreviewTable(table)}
-              className={`min-h-[120px] rounded-2xl border p-3 text-left transition ${TABLE_TONE_WAITER[tone]} ${
-                selected ? "ring-2 ring-emerald-500" : ""
-              }`}
+              className={`min-h-[120px] rounded-2xl border p-3 text-left transition ${
+                TABLE_TONE_WAITER_LIVE[tone] ?? TABLE_TONE_WAITER[tone]
+              } ${selected ? "ring-2 ring-emerald-500" : ""}`}
             >
               <div className="flex items-start justify-between gap-1">
                 <p className="text-lg font-semibold">{table.name}</p>

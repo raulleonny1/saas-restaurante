@@ -22,10 +22,20 @@ export function orderForTable(
   table: Table,
   openOrders: Order[],
 ): Order | null {
+  // Solo el pedido activo de la mesa (evita tickets huérfanos → «Listo» fantasma)
+  if (table.currentOrderId) {
+    return openOrders.find((o) => o.id === table.currentOrderId) ?? null;
+  }
+  if (table.status === "available" || table.status === "dirty") {
+    return null;
+  }
   return (
-    openOrders.find((o) => o.id === table.currentOrderId) ??
-    openOrders.find((o) => o.tableId === table.id) ??
-    null
+    openOrders.find(
+      (o) =>
+        o.tableId === table.id &&
+        o.status !== "paid" &&
+        o.status !== "cancelled",
+    ) ?? null
   );
 }
 
@@ -106,7 +116,23 @@ export const TABLE_TONE_WAITER: Record<TableFloorTone, string> = {
   occupied: "border-red-500/60 bg-red-950/55",
   ordering: "border-amber-400/60 bg-amber-950/45",
   sent: "border-emerald-500/60 bg-emerald-950/50",
-  ready: "border-cyan-400/80 bg-cyan-950/60 animate-pulse",
+  ready: "border-cyan-400/80 bg-cyan-950/60",
+  reserved: "border-sky-500/40 bg-sky-950/30",
+  dirty: "border-stone-400/40 bg-stone-900/50",
+};
+
+/** Solo en la tarjeta de mesa con platos listos (no en la leyenda). */
+export const TABLE_TONE_WAITER_LIVE: Partial<Record<TableFloorTone, string>> = {
+  ready: "animate-pulse border-cyan-400/80 bg-cyan-950/60",
+};
+
+/** Leyenda estática (sin animación). */
+export const TABLE_TONE_WAITER_LEGEND: Record<TableFloorTone, string> = {
+  free: "border-white/15 bg-white/5",
+  occupied: "border-red-500/60 bg-red-950/55",
+  ordering: "border-amber-400/60 bg-amber-950/45",
+  sent: "border-emerald-500/60 bg-emerald-950/50",
+  ready: "border-cyan-400/50 bg-cyan-950/40",
   reserved: "border-sky-500/40 bg-sky-950/30",
   dirty: "border-stone-400/40 bg-stone-900/50",
 };

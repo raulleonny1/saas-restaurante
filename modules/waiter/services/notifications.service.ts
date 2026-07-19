@@ -56,12 +56,25 @@ export async function markStaffNotificationRead(input: {
   );
 }
 
-/** Solo si hay líneas realmente listas para retirar (no avisos viejos). */
-export function kitchenReadyAlerts(orders: Order[]): AppNotification[] {
+/**
+ * Avisos de retirada: solo líneas `ready` en pedidos con mesa aún activa.
+ * `tableIds` = mesas del plano (si se pasa, ignora pedidos de otras mesas).
+ */
+export function kitchenReadyAlerts(
+  orders: Order[],
+  tableIds?: string[] | null,
+): AppNotification[] {
+  const tableSet =
+    tableIds && tableIds.length > 0 ? new Set(tableIds) : null;
+
   return orders
     .filter((o) => {
       if (o.status === "paid" || o.status === "cancelled") return false;
-      return o.items.some((i) => i.status === "ready");
+      if (!o.items.some((i) => i.status === "ready")) return false;
+      // Sin mesa / mesa no en el plano del mesero → no avisar
+      if (!o.tableId) return false;
+      if (tableSet && !tableSet.has(o.tableId)) return false;
+      return true;
     })
     .map((o) => {
       const readyItems = o.items.filter((i) => i.status === "ready");
@@ -69,7 +82,8 @@ export function kitchenReadyAlerts(orders: Order[]): AppNotification[] {
         o.waiterAlertBody ||
         readyItems.map((i) => `${i.quantity}× ${i.name}`).join(", ") ||
         "Pedido listo para llevar a la mesa";
-      const stamp = o.waiterAlertAt ?? readyItems[0]?.readyAt ?? o.updatedAt;
+      // Id estable por pedido: Ok lo cierra hasta un nuevo waiterAlertAt
+      const stamp = o.waiterAlertAt ?? "ready";
       return {
         id: `ready_${o.id}_${stamp}`,
         restaurantId: o.restaurantId,
@@ -81,7 +95,7 @@ export function kitchenReadyAlerts(orders: Order[]): AppNotification[] {
         read: false,
         referenceType: "order" as const,
         referenceId: o.id,
-        createdAt: stamp,
+        createdAt: o.waiterAlertAt ?? o.updatedAt,
         updatedAt: o.updatedAt,
       };
     });

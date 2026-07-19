@@ -16,16 +16,22 @@ import { useEffect, useState } from "react";
  */
 export function ReadyPickupBanner() {
   const router = useRouter();
-  const { selectTable, openOrders } = usePos();
+  const { selectTable, openOrders, tables } = usePos();
   const { notifications, markRead, unlockAudio } = useWaiterNotifications();
   const [soundOn, setSoundOn] = useState(false);
+
+  const activeTableIds = new Set(
+    tables
+      .filter((t) => t.currentOrderId || t.status === "occupied")
+      .map((t) => t.id),
+  );
 
   const pickups = notifications.filter((n) => {
     if (!n.id.startsWith("ready_")) return false;
     const order = openOrders.find((o) => o.id === n.referenceId);
-    // Sin pedido activo o sin líneas listas → no mostrar
     if (!order) return false;
     if (order.status === "paid" || order.status === "cancelled") return false;
+    if (!order.tableId || !activeTableIds.has(order.tableId)) return false;
     return order.items.some((i) => i.status === "ready");
   });
   const top = pickups[0] ?? null;
