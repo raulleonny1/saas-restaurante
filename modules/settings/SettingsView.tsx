@@ -3,7 +3,7 @@
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { useTenant } from "@/context/TenantProvider";
-import { ROLE_LABELS, STAFF_ROLES } from "@/lib/roles";
+import { isSalaAdminRole, ROLE_LABELS, STAFF_ROLES } from "@/lib/roles";
 import {
   changePlan,
   markInvoicePaid,
@@ -23,6 +23,7 @@ import { updateTenantSettings } from "@/modules/tenant/services/settings.service
 import type { BillingPlanId, MemberInvite } from "@/types/billing";
 import { BILLING_PLANS } from "@/types/billing";
 import type { RoleId } from "@/types/rbac";
+import type { KitchenOutputMode } from "@/types/restaurant";
 import {
   Alert,
   Button,
@@ -37,10 +38,12 @@ import { useEffect, useState } from "react";
 type Tab = "general" | "branches" | "users" | "billing";
 
 export function SettingsView() {
-  const { can, user } = useAuth();
+  const { can, user, role } = useAuth();
   const { restaurant, restaurantId, refresh } = useRestaurant();
   const { ready, members, branches, billing, invoices, canManage } = useTenant();
   const [tab, setTab] = useState<Tab>("general");
+  const canEditSettings =
+    can("settings.manage") || canManage || isSalaAdminRole(role);
 
   if (!ready || !restaurantId || !restaurant) {
     return (
@@ -51,7 +54,7 @@ export function SettingsView() {
     );
   }
 
-  if (!can("settings.read") && !canManage) {
+  if (!can("settings.read") && !canManage && !isSalaAdminRole(role)) {
     return (
       <Alert tone="warning" title="Sin acceso">
         No tienes permiso para ver los ajustes del restaurante.
@@ -94,7 +97,7 @@ export function SettingsView() {
         <GeneralPanel
           restaurantId={restaurantId}
           restaurant={restaurant}
-          canEdit={can("settings.manage") || canManage}
+          canEdit={canEditSettings}
           onSaved={() => void refresh()}
         />
       ) : null}
@@ -146,6 +149,9 @@ function GeneralPanel({
   const [tax, setTax] = useState(String(restaurant.settings.taxPercent));
   const [tip, setTip] = useState(String(restaurant.settings.tipDefaultPercent));
   const [locale, setLocale] = useState(restaurant.settings.locale);
+  const [kitchenOutput, setKitchenOutput] = useState<KitchenOutputMode>(
+    restaurant.settings.kitchenOutput ?? "kds",
+  );
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -157,6 +163,7 @@ function GeneralPanel({
     setTax(String(restaurant.settings.taxPercent));
     setTip(String(restaurant.settings.tipDefaultPercent));
     setLocale(restaurant.settings.locale);
+    setKitchenOutput(restaurant.settings.kitchenOutput ?? "kds");
   }, [restaurant]);
 
   return (
@@ -180,6 +187,7 @@ function GeneralPanel({
                   taxPercent: Number(tax) || 0,
                   tipDefaultPercent: Number(tip) || 0,
                   locale,
+                  kitchenOutput,
                 },
               },
             });
@@ -203,6 +211,23 @@ function GeneralPanel({
         <Input label="Propina %" type="number" value={tip} onChange={(e) => setTip(e.target.value)} disabled={!canEdit} />
       </div>
       <Input label="Locale" value={locale} onChange={(e) => setLocale(e.target.value)} disabled={!canEdit} />
+      <Select
+        label="Salida cocina"
+        value={kitchenOutput}
+        onChange={(e) =>
+          setKitchenOutput(e.target.value as KitchenOutputMode)
+        }
+        disabled={!canEdit}
+      >
+        <option value="kds">Pantalla KDS (tablet cocina/barra)</option>
+        <option value="printer">Impresora térmica</option>
+        <option value="both">Ambos (KDS + impresora)</option>
+      </Select>
+      <p className="text-xs text-fg-muted">
+        Impresora térmica: debe estar instalada en este equipo (USB o red con
+        driver). Al «Enviar a cocina» se abre el diálogo de impresión. Con solo
+        impresora no hay aviso automático al mesero desde cocina.
+      </p>
       <p className="text-xs text-fg-muted">
         ID tenant: <code>{restaurantId}</code> · moneda {restaurant.currency} · TZ{" "}
         {restaurant.timezone}

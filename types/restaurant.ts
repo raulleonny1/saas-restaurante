@@ -10,6 +10,9 @@ import type { PermissionId, RoleId } from "./rbac";
 
 export type MemberRole = RoleId;
 
+/** Salida de comandas de cocina: pantalla KDS, impresora térmica, o ambas. */
+export type KitchenOutputMode = "kds" | "printer" | "both";
+
 export interface RestaurantSettings {
   tipDefaultPercent: number;
   taxPercent: number;
@@ -17,6 +20,13 @@ export interface RestaurantSettings {
   sumupEnabled: boolean;
   locale: string;
   defaultBranchId?: string;
+  /**
+   * Cómo salen las comandas al «Enviar a cocina».
+   * - kds: solo pantalla /kitchen|/bar (default)
+   * - printer: ticket térmico (impresora del sistema / red con driver)
+   * - both: imprime y sigue el KDS
+   */
+  kitchenOutput?: KitchenOutputMode;
 }
 
 /** Brand / company (multi-sucursal parent). */
@@ -78,4 +88,5 @@ export const DEFAULT_RESTAURANT_SETTINGS: RestaurantSettings = {
   stripeEnabled: false,
   sumupEnabled: false,
   locale: "es-ES",
+  kitchenOutput: "kds",
 };

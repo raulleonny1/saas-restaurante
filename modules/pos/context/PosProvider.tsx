@@ -12,6 +12,7 @@ import {
 import { resolveItemStation } from "@/modules/kitchen/domain/stations";
 import { advanceTicketColumn } from "@/modules/kitchen/services/kitchen.service";
 import { printOrderReceipt } from "@/modules/pos/domain/print";
+import { printKitchenTicket } from "@/modules/pos/domain/print-kitchen";
 import { balanceDue } from "@/modules/pos/domain/totals";
 import {
   enqueueMutation,
@@ -125,7 +126,8 @@ interface PosContextValue {
   removeItem: (itemId: string) => Promise<void>;
   setDiscount: (percent: number, amount?: number) => Promise<void>;
   setTip: (percent: number, amount?: number) => Promise<void>;
-  sendKitchen: () => Promise<void>;
+  /** Envía a cocina; puede abrir ticket térmico según settings.kitchenOutput. */
+  sendKitchen: () => Promise<{ printed: boolean }>;
   /** Mesero: lleva a mesa → marca ítems listos como servidos. */
   markItemsServed: (itemIds: string[]) => Promise<void>;
   moveToTable: (targetTableId: string) => Promise<void>;
@@ -543,8 +545,53 @@ export function PosProvider({ children }: { children: ReactNode }) {
 
   const sendKitchen = useCallback(async () => {
     const { order, restaurantId: rid, uid } = requireOrder();
-    await sendToKitchen(rid, order, taxPercent, uid, products, categories);
-  }, [requireOrder, taxPercent, products, categories]);
+    const pendingIds = new Set(
+      order.items
+        .filter(
+          (i) =>
+            i.status !== "cancelled" &&
+            (i.status === "open" || !i.sentAt),
+        )
+        .map((i) => i.id),
+    );
+    const next = await sendToKitchen(
+      rid,
+      order,
+      taxPercent,
+      uid,
+      products,
+      categories,
+    );
+    const mode = restaurant?.settings.kitchenOutput ?? "kds";
+    let printed = false;
+    if (
+      pendingIds.size > 0 &&
+      (mode === "printer" || mode === "both")
+    ) {
+      const justSent = next.items.filter(
+        (i) => pendingIds.has(i.id) && i.status !== "cancelled",
+      );
+      if (justSent.length) {
+        try {
+          printKitchenTicket(
+            { ...next, items: justSent },
+            { restaurantName },
+          );
+          printed = true;
+        } catch {
+          /* diálogo cancelado o bloqueado: no tumbar el envío */
+        }
+      }
+    }
+    return { printed };
+  }, [
+    requireOrder,
+    taxPercent,
+    products,
+    categories,
+    restaurant?.settings.kitchenOutput,
+    restaurantName,
+  ]);
 
   const markItemsServed = useCallback(
     async (itemIds: string[]) => {

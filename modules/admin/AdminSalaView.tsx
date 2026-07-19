@@ -17,13 +17,16 @@ import {
   restoreTable,
   subscribeAllTables,
 } from "@/modules/pos/services/tables.service";
+import { updateTenantSettings } from "@/modules/tenant/services/settings.service";
 import type { Employee } from "@/types/employees";
 import type { Table } from "@/types/orders";
+import type { KitchenOutputMode } from "@/types/restaurant";
 import {
   Alert,
   Badge,
   Button,
   PageHeader,
+  Select,
   Skeleton,
   toast,
 } from "@/ui";
@@ -33,9 +36,17 @@ import { useEffect, useMemo, useState } from "react";
 
 function AdminSalaWorkspace() {
   const { can, role } = useAuth();
-  const { restaurantId } = useRestaurant();
+  const { restaurantId, restaurant, refresh } = useRestaurant();
   const { branches } = useTenant();
   const { branchId, setBranchId } = usePos();
+  const [kitchenOutput, setKitchenOutput] = useState<KitchenOutputMode>(
+    restaurant?.settings.kitchenOutput ?? "kds",
+  );
+  const [kitchenBusy, setKitchenBusy] = useState(false);
+
+  useEffect(() => {
+    setKitchenOutput(restaurant?.settings.kitchenOutput ?? "kds");
+  }, [restaurant?.settings.kitchenOutput]);
   const {
     employees,
     archive,
@@ -160,6 +171,62 @@ function AdminSalaWorkspace() {
           </div>
         }
       />
+
+      {isSalaAdminRole(role) && restaurantId ? (
+        <section className="rounded-[var(--radius-xl)] border border-border bg-bg-elevated p-4 sm:p-5">
+          <h2 className="text-sm font-medium">Salida de cocina</h2>
+          <p className="mt-1 text-sm text-fg-muted">
+            Elige si las comandas van a tablet (KDS), a impresora térmica, o a
+            ambas. Configuran dueño, gerente o supervisor.
+          </p>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <Select
+                label="Modo comanda"
+                value={kitchenOutput}
+                onChange={(e) =>
+                  setKitchenOutput(e.target.value as KitchenOutputMode)
+                }
+              >
+                <option value="kds">Tablet · pantalla cocina/barra</option>
+                <option value="printer">Impresora térmica</option>
+                <option value="both">Ambos (tablet + impresora)</option>
+              </Select>
+            </div>
+            <Button
+              size="sm"
+              disabled={kitchenBusy}
+              onClick={() => {
+                void (async () => {
+                  try {
+                    setKitchenBusy(true);
+                    await updateTenantSettings({
+                      restaurantId,
+                      patch: { settings: { kitchenOutput } },
+                    });
+                    await refresh({ silent: true });
+                    toast("Salida de cocina guardada", "success");
+                  } catch (e) {
+                    toast(
+                      e instanceof Error ? e.message : "No se pudo guardar",
+                      "error",
+                    );
+                  } finally {
+                    setKitchenBusy(false);
+                  }
+                })();
+              }}
+            >
+              {kitchenBusy ? "Guardando…" : "Guardar"}
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-fg-muted">
+            Impresora: debe estar instalada en el equipo del mesero/caja (USB o
+            red con driver). Con solo impresora no hay aviso automático al
+            mesero desde cocina.
+          </p>
+        </section>
+      ) : null}
 
       {(can("catalog.products.manage") || can("catalog.categories.manage")) ? (
         <section className="rounded-[var(--radius-xl)] border border-accent/30 bg-accent-soft/20 p-4 sm:p-5">

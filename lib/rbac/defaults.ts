@@ -188,6 +188,7 @@ export const SYSTEM_ROLE_DEFAULTS: Record<RoleId, RolePermissionMap> = {
   supervisor: enable(none(), [
     "restaurant.read",
     "settings.read",
+    "settings.manage",
     "branches.read",
     "members.read",
     "members.invite",

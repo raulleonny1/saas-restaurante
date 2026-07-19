@@ -193,4 +193,4 @@ export interface MemberRbacFields {
   permissionsVersion: string;
 }
 
-export const PERMISSION_CATALOG_VERSION = "1.1.0";
+export const PERMISSION_CATALOG_VERSION = "1.2.0";

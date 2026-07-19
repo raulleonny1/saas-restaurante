@@ -318,8 +318,12 @@ export function WaiterOrderPage() {
                 try {
                   setBusy(true);
                   setMsg(null);
-                  await sendKitchen();
-                  setMsg("Enviado a cocina");
+                  const { printed } = await sendKitchen();
+                  setMsg(
+                    printed
+                      ? "Enviado · ticket de cocina"
+                      : "Enviado a cocina",
+                  );
                 } catch (e) {
                   setMsg(e instanceof Error ? e.message : "Error");
                 } finally {
