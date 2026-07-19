@@ -1,6 +1,7 @@
 /** Cliente del asistente local que lista impresoras instaladas en el PC. */
 
 export const PRINT_BRIDGE_URL = "http://127.0.0.1:17891";
+export const PRINT_BRIDGE_URL_ALT = "http://localhost:17891";
 export const PRINT_BRIDGE_DOWNLOAD_BAT = "/print-bridge/start-windows.bat";
 export const PRINT_BRIDGE_DOWNLOAD_PS1 = "/print-bridge/smartserve-print-bridge.ps1";
 
@@ -14,11 +15,19 @@ export type InstalledPrinter = {
 
 export type PrinterBridgeStatus =
   | { available: true; printers: InstalledPrinter[]; version?: string }
-  | { available: false; reason: "offline" | "error"; message?: string };
+  | { available: false; reason: "offline" | "error" | "popup_blocked"; message?: string };
+
+const BRIDGE_ORIGINS = new Set([
+  "http://127.0.0.1:17891",
+  "http://localhost:17891",
+]);
 
 function normalizePrinters(raw: unknown): InstalledPrinter[] {
-  // PowerShell a veces devuelve un solo objeto en vez de array
-  const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? [raw] : [];
+  const list = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === "object"
+      ? [raw]
+      : [];
   const out: InstalledPrinter[] = [];
   for (const item of list) {
     if (!item || typeof item !== "object") continue;
@@ -47,13 +56,14 @@ function normalizePrinters(raw: unknown): InstalledPrinter[] {
 }
 
 async function bridgeFetch(
+  base: string,
   path: string,
   timeoutMs: number,
 ): Promise<Response> {
   const ctrl = new AbortController();
   const t = window.setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    return await fetch(`${PRINT_BRIDGE_URL}${path}`, {
+    return await fetch(`${base}${path}`, {
       method: "GET",
       mode: "cors",
       cache: "no-store",
@@ -64,57 +74,145 @@ async function bridgeFetch(
   }
 }
 
+async function tryFetchPrinters(
+  timeoutMs: number,
+): Promise<PrinterBridgeStatus | null> {
+  for (const base of [PRINT_BRIDGE_URL, PRINT_BRIDGE_URL_ALT]) {
+    try {
+      const res = await bridgeFetch(base, "/printers", timeoutMs);
+      if (!res.ok) continue;
+      const data = (await res.json()) as {
+        ok?: boolean;
+        printers?: unknown;
+        error?: string;
+        version?: string;
+      };
+      if (data.ok === false) continue;
+      return {
+        available: true,
+        printers: normalizePrinters(data.printers),
+        version: data.version,
+      };
+    } catch {
+      /* probar siguiente base o popup */
+    }
+  }
+  return null;
+}
+
+/**
+ * El navegador (sobre todo HTTPS/Vercel) a veces bloquea fetch a 127.0.0.1.
+ * Abrimos una ventana del propio asistente (misma máquina) y recibimos la
+ * lista por postMessage — eso sí funciona con el asistente encendido.
+ */
+function listPrintersViaPopup(timeoutMs = 12_000): Promise<PrinterBridgeStatus> {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined") {
+      resolve({
+        available: false,
+        reason: "offline",
+        message: "Solo disponible en el navegador",
+      });
+      return;
+    }
+
+    const origin = window.location.origin;
+    const url =
+      `${PRINT_BRIDGE_URL}/discover?origin=${encodeURIComponent(origin)}` +
+      `&t=${Date.now()}`;
+
+    const popup = window.open(
+      url,
+      "smartserve-printers",
+      "width=480,height=560,menubar=no,toolbar=no,noopener=no",
+    );
+
+    if (!popup) {
+      resolve({
+        available: false,
+        reason: "popup_blocked",
+        message:
+          "El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio y pulsa Buscar otra vez.",
+      });
+      return;
+    }
+
+    let done = false;
+    const finish = (result: PrinterBridgeStatus) => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(timer);
+      window.removeEventListener("message", onMessage);
+      try {
+        popup.close();
+      } catch {
+        /* ignore */
+      }
+      resolve(result);
+    };
+
+    const onMessage = (event: MessageEvent) => {
+      if (!BRIDGE_ORIGINS.has(event.origin)) return;
+      const data = event.data as {
+        type?: string;
+        ok?: boolean;
+        printers?: unknown;
+        error?: string;
+        version?: string;
+      };
+      if (!data || data.type !== "smartserve-printers") return;
+      if (data.ok === false) {
+        finish({
+          available: false,
+          reason: "error",
+          message:
+            data.error ||
+            "El asistente no pudo leer impresoras. Reinicia start-windows.bat",
+        });
+        return;
+      }
+      finish({
+        available: true,
+        printers: normalizePrinters(data.printers),
+        version: data.version,
+      });
+    };
+
+    window.addEventListener("message", onMessage);
+
+    const timer = window.setTimeout(() => {
+      finish({
+        available: false,
+        reason: "offline",
+        message:
+          "No hubo respuesta del asistente. ¿Ves «ESTADO: ENCENDIDO» en la ventana negra? Reinicia el .bat y permite la ventana emergente.",
+      });
+    }, timeoutMs);
+  });
+}
+
 export async function checkPrintBridge(
   timeoutMs = 2500,
 ): Promise<boolean> {
-  try {
-    const res = await bridgeFetch("/health", timeoutMs);
-    return res.ok;
-  } catch {
-    return false;
+  for (const base of [PRINT_BRIDGE_URL, PRINT_BRIDGE_URL_ALT]) {
+    try {
+      const res = await bridgeFetch(base, "/health", timeoutMs);
+      if (res.ok) return true;
+    } catch {
+      /* siguiente */
+    }
   }
+  return false;
 }
 
-/** Lista impresoras instaladas vía el asistente local (127.0.0.1). */
+/**
+ * Lista impresoras: primero fetch directo; si Chrome lo bloquea
+ * (muy habitual en HTTPS), usa ventana local del asistente.
+ */
 export async function listInstalledPrinters(
   timeoutMs = 6000,
 ): Promise<PrinterBridgeStatus> {
-  try {
-    const res = await bridgeFetch("/printers", timeoutMs);
-    if (!res.ok) {
-      return {
-        available: false,
-        reason: "error",
-        message: `Asistente respondió ${res.status}. Reinicia start-windows.bat`,
-      };
-    }
-    const data = (await res.json()) as {
-      ok?: boolean;
-      printers?: unknown;
-      error?: string;
-      version?: string;
-    };
-    if (data.ok === false) {
-      return {
-        available: false,
-        reason: "error",
-        message: data.error || "Error al leer impresoras",
-      };
-    }
-    return {
-      available: true,
-      printers: normalizePrinters(data.printers),
-      version: data.version,
-    };
-  } catch (e) {
-    const aborted =
-      e instanceof DOMException && e.name === "AbortError";
-    return {
-      available: false,
-      reason: "offline",
-      message: aborted
-        ? "El asistente no respondió. ¿Está abierta la ventana negra?"
-        : "Asistente apagado. Abre start-windows.bat y deja la ventana abierta; luego Buscar.",
-    };
-  }
+  const viaFetch = await tryFetchPrinters(timeoutMs);
+  if (viaFetch) return viaFetch;
+  return listPrintersViaPopup(12_000);
 }

@@ -4,7 +4,7 @@
 
 $ErrorActionPreference = "Stop"
 $port = 17891
-$version = "1.1.0"
+$version = "1.2.0"
 
 function Get-PrinterListJson {
   $defaultName = $null
@@ -81,6 +81,70 @@ function Send-HttpResponse {
   $Stream.Write($headBytes, 0, $headBytes.Length)
   if ($bytes.Length -gt 0) { $Stream.Write($bytes, 0, $bytes.Length) }
   $Stream.Flush()
+}
+
+function Get-DiscoverHtml {
+  # Pagina local: lee /printers (mismo origen) y envia la lista a SmartServe por postMessage.
+  return @'
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>SmartServe · Impresoras</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#0e1410;color:#e7efe4;margin:0;padding:24px;text-align:center}
+    h1{font-size:18px;margin:0 0 8px}
+    p{color:#a8b5a4;font-size:13px;line-height:1.4}
+    .ok{color:#6ee7a8;font-weight:600;margin-top:16px}
+    .err{color:#fca5a5;margin-top:16px}
+  </style>
+</head>
+<body>
+  <h1>Buscando impresoras…</h1>
+  <p>Asistente local SmartServe. Esta ventana se cierra sola.</p>
+  <p id="msg"></p>
+  <script>
+  (async function () {
+    var params = new URLSearchParams(location.search);
+    var targetOrigin = params.get("origin") || "*";
+    var msg = document.getElementById("msg");
+    function send(payload) {
+      try {
+        if (window.opener) {
+          window.opener.postMessage(payload, targetOrigin);
+        }
+      } catch (e) {}
+      setTimeout(function () { window.close(); }, 600);
+    }
+    try {
+      var res = await fetch("/printers", { cache: "no-store" });
+      var data = await res.json();
+      if (!data.ok && data.ok !== undefined) {
+        msg.className = "err";
+        msg.textContent = data.error || "Error";
+        send({ type: "smartserve-printers", ok: false, error: data.error || "error" });
+        return;
+      }
+      var printers = data.printers || [];
+      msg.className = "ok";
+      msg.textContent = printers.length + " impresora(s) · volviendo a SmartServe…";
+      send({
+        type: "smartserve-printers",
+        ok: true,
+        printers: printers,
+        version: data.version || "1.1.0"
+      });
+    } catch (e) {
+      msg.className = "err";
+      msg.textContent = "No se pudo leer. Reinicia start-windows.bat";
+      send({ type: "smartserve-printers", ok: false, error: String(e && e.message || e) });
+    }
+  })();
+  </script>
+</body>
+</html>
+'@
 }
 
 function Read-HttpRequest([System.Net.Sockets.NetworkStream]$Stream) {
@@ -182,6 +246,7 @@ while ($true) {
       "/" {
         $body = (@{
           ok = $true; service = "smartserve-print-bridge"; version = $version
+          hint = "Abre /discover desde SmartServe o prueba /printers"
         } | ConvertTo-Json -Compress)
         Send-HttpResponse -Stream $stream -StatusCode 200 -StatusText "OK" -Body $body -Origin $origin
       }
@@ -191,6 +256,9 @@ while ($true) {
       }
       "/printers" {
         Send-HttpResponse -Stream $stream -StatusCode 200 -StatusText "OK" -Body (Get-PrinterListJson) -Origin $origin
+      }
+      "/discover" {
+        Send-HttpResponse -Stream $stream -StatusCode 200 -StatusText "OK" -Body (Get-DiscoverHtml) -Origin $origin -ContentType "text/html; charset=utf-8"
       }
       default {
         $body = (@{ ok = $false; error = "not_found" } | ConvertTo-Json -Compress)

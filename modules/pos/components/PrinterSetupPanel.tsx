@@ -113,24 +113,25 @@ export function PrinterSetupPanel({
     setScanningFor(station);
     const setMsg = station === "tpv" ? setTpvScanMsg : setKitchenScanMsg;
     const setList = station === "tpv" ? setTpvInstalled : setKitchenInstalled;
-    setMsg(null);
+    setMsg("Conectando con el asistente… (puede abrirse una ventana pequeña)");
     try {
+      // No confiar solo en /health: Chrome/HTTPS a menudo lo bloquea
+      // aunque el asistente esté ENCENDIDO. listInstalledPrinters usa
+      // fetch y, si falla, una ventana local http://127.0.0.1
       const up = await checkPrintBridge();
-      setBridgeUp(up);
-      if (!up) {
-        setList([]);
-        setMsg(
-          "Asistente apagado. Inícialo (descarga abajo) y vuelve a buscar aquí.",
-        );
-        return;
-      }
+      if (up) setBridgeUp(true);
+
       const result = await listInstalledPrinters();
       if (!result.available) {
         setList([]);
-        setBridgeUp(false);
+        if (result.reason !== "popup_blocked") {
+          setBridgeUp(false);
+        }
         setMsg(result.message || "No se pudieron leer las impresoras");
+        toast(result.message || "No se encontraron impresoras", "error");
         return;
       }
+      setBridgeUp(true);
       setList(result.printers);
       if (result.printers.length === 0) {
         setMsg("No hay impresoras instaladas en Windows.");
@@ -384,12 +385,13 @@ function BridgeBanner({
   return (
     <div className={box}>
       <p className={`text-sm font-medium ${title}`}>
-        Paso 1 · Encender el asistente en este PC
+        Paso 1 · Asistente en este PC
       </p>
       <p className={`mt-1 text-xs ${text}`}>
-        Sin esto, «Buscar» no puede ver impresoras (el navegador no tiene
-        permiso). No es instalar SmartServe: solo una ventana negra que debe
-        quedarse abierta.
+        Si la ventana negra ya dice ENCENDIDO, igual puede salir «apagado»
+        porque Chrome bloquea la comprobación. Da igual: pulsa{" "}
+        <strong>Buscar</strong> (se abrirá una ventana pequeña) y permite
+        ventanas emergentes. Reinicia el .bat si descargaste archivos nuevos.
       </p>
       <ol className={`mt-3 list-decimal space-y-2 pl-4 text-xs ${text}`}>
         <li>
