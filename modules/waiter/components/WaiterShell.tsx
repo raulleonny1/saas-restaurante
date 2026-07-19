@@ -5,6 +5,7 @@ import { useRestaurant } from "@/context/RestaurantProvider";
 import { canManageRestaurant, isWaiterOnlyRole } from "@/lib/roles";
 import { OfflineBanner } from "@/modules/pos/components/OfflineBanner";
 import { usePos } from "@/modules/pos/context/PosProvider";
+import { ReadyPickupBanner } from "@/modules/waiter/components/ReadyPickupBanner";
 import { useWaiterNotifications } from "@/modules/waiter/context/WaiterNotificationsProvider";
 import {
   Bell,
@@ -15,10 +16,17 @@ import {
   QrCode,
   Receipt,
   ShoppingBag,
+  Volume2,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
+import { useState } from "react";
+import {
+  isWaiterAudioUnlocked,
+  playWaiterPickupAlarm,
+  unlockWaiterAudio,
+} from "@/modules/waiter/domain/alertSound";
 
 const TABS = [
   { href: "/waiter", label: "Mesas", icon: LayoutGrid, match: "exact" as const },
@@ -45,6 +53,7 @@ export function WaiterShell({
   const table = tables.find((t) => t.id === selectedTableId);
   const floorOnly = isWaiterOnlyRole(role);
   const isAdmin = canManageRestaurant(role ?? undefined);
+  const [audioReady, setAudioReady] = useState(false);
 
   if (!user) {
     return (
@@ -77,8 +86,14 @@ export function WaiterShell({
   return (
     <div
       className="flex min-h-dvh flex-col bg-[#0e1410] text-[#e7efe4]"
-      onPointerDown={() => void unlockAudio()}
+      onPointerDown={() => {
+        void unlockAudio().then(() => {
+          if (isWaiterAudioUnlocked()) setAudioReady(true);
+        });
+      }}
     >
+      <ReadyPickupBanner />
+
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0e1410]/95 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
         <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
           <div className="min-w-0">
@@ -93,6 +108,22 @@ export function WaiterShell({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {!audioReady ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void (async () => {
+                    await unlockWaiterAudio();
+                    await unlockAudio();
+                    await playWaiterPickupAlarm();
+                    setAudioReady(isWaiterAudioUnlocked());
+                  })();
+                }}
+                className="inline-flex items-center gap-1 rounded-lg border border-amber-400/50 bg-amber-950/50 px-2.5 py-1.5 text-xs text-amber-200"
+              >
+                <Volume2 className="h-3.5 w-3.5" /> Sonido
+              </button>
+            ) : null}
             {isAdmin ? (
               <Link
                 href="/admin"
@@ -124,7 +155,11 @@ export function WaiterShell({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-lg flex-1 px-4 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+      <main
+        className={`mx-auto w-full max-w-lg flex-1 px-4 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] ${
+          unread > 0 ? "pt-36" : ""
+        }`}
+      >
         {children}
       </main>
 

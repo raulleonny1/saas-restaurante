@@ -2,11 +2,12 @@
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
-import {
-  playReadySound,
-  unlockKitchenAudio,
-} from "@/modules/kitchen/domain/sound";
 import { usePos } from "@/modules/pos/context/PosProvider";
+import {
+  playWaiterPickupAlarm,
+  unlockWaiterAudio,
+  vibratePickup,
+} from "@/modules/waiter/domain/alertSound";
 import {
   kitchenReadyAlerts,
   markStaffNotificationRead,
@@ -39,16 +40,6 @@ export function useWaiterNotifications() {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("useWaiterNotifications requires provider");
   return ctx;
-}
-
-function vibrateReady() {
-  try {
-    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      navigator.vibrate([200, 100, 200, 100, 300]);
-    }
-  } catch {
-    /* ignore */
-  }
 }
 
 function readyItemKeys(orders: Order[]) {
@@ -97,16 +88,21 @@ export function WaiterNotificationsProvider({
   const unread = notifications.filter((n) => !n.read).length;
 
   const unlockAudio = useCallback(async () => {
-    await unlockKitchenAudio();
+    await unlockWaiterAudio();
   }, []);
 
-  // Sonido + vibración cuando cocina marca un plato listo
+  // Sonido + vibración cuando cocina marca listo
   useEffect(() => {
     const keys = readyItemKeys(openOrders);
 
     if (!primedRef.current) {
       seenReadyRef.current = keys;
       primedRef.current = true;
+      // Si ya hay listos al abrir la app, avisa igual (banner + intento de sonido)
+      if (keys.size > 0) {
+        void playWaiterPickupAlarm();
+        vibratePickup();
+      }
       return;
     }
 
@@ -119,23 +115,20 @@ export function WaiterNotificationsProvider({
     }
 
     if (hasNew) {
-      void unlockKitchenAudio().then(() => {
-        playReadySound();
-        window.setTimeout(() => playReadySound(), 400);
-      });
-      vibrateReady();
+      void playWaiterPickupAlarm();
+      vibratePickup();
     }
 
     seenReadyRef.current = keys;
   }, [openOrders]);
 
-  // Recordatorio mientras haya avisos sin confirmar
+  // Recordatorio sonoro mientras haya avisos
   useEffect(() => {
     if (!kitchen.length) return;
     const id = window.setInterval(() => {
-      void unlockKitchenAudio().then(() => playReadySound());
-      vibrateReady();
-    }, 20_000);
+      void playWaiterPickupAlarm();
+      vibratePickup();
+    }, 12_000);
     return () => window.clearInterval(id);
   }, [kitchen.length]);
 
