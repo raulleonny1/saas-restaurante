@@ -13,7 +13,6 @@ import { resolveItemStation } from "@/modules/kitchen/domain/stations";
 import { advanceTicketColumn } from "@/modules/kitchen/services/kitchen.service";
 import { getEffectivePrintSettings } from "@/lib/printer-device-prefs";
 import { printOrderReceipt } from "@/modules/pos/domain/print";
-import { printKitchenTicket } from "@/modules/pos/domain/print-kitchen";
 import { balanceDue } from "@/modules/pos/domain/totals";
 import {
   enqueueMutation,
@@ -127,7 +126,7 @@ interface PosContextValue {
   removeItem: (itemId: string) => Promise<void>;
   setDiscount: (percent: number, amount?: number) => Promise<void>;
   setTip: (percent: number, amount?: number) => Promise<void>;
-  /** Envía a cocina; puede abrir ticket térmico según settings.kitchenOutput. */
+  /** Envía a cocina/barra (el ticket térmico sale en /kitchen|/bar, no en el mesero). */
   sendKitchen: () => Promise<{ printed: boolean }>;
   /** Mesero: lleva a mesa → marca ítems listos como servidos. */
   markItemsServed: (itemIds: string[]) => Promise<void>;
@@ -546,16 +545,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
 
   const sendKitchen = useCallback(async () => {
     const { order, restaurantId: rid, uid } = requireOrder();
-    const pendingIds = new Set(
-      order.items
-        .filter(
-          (i) =>
-            i.status !== "cancelled" &&
-            (i.status === "open" || !i.sentAt),
-        )
-        .map((i) => i.id),
-    );
-    const next = await sendToKitchen(
+    await sendToKitchen(
       rid,
       order,
       taxPercent,
@@ -563,46 +553,10 @@ export function PosProvider({ children }: { children: ReactNode }) {
       products,
       categories,
     );
-    const printCfg = getEffectivePrintSettings(
-      rid,
-      restaurant?.settings,
-    );
-    const mode = printCfg.kitchenOutput;
-    let printed = false;
-    if (
-      pendingIds.size > 0 &&
-      (mode === "printer" || mode === "both")
-    ) {
-      const justSent = next.items.filter(
-        (i) => pendingIds.has(i.id) && i.status !== "cancelled",
-      );
-      if (justSent.length) {
-        try {
-          const kp = printCfg.printers.kitchen;
-          printKitchenTicket(
-            { ...next, items: justSent },
-            {
-              restaurantName,
-              paperWidthMm: kp?.paperWidthMm ?? 80,
-              printerSystemName: kp?.systemName,
-              printerLabel: kp?.label ?? "Cocina · comanda",
-            },
-          );
-          printed = true;
-        } catch {
-          /* diálogo cancelado o bloqueado: no tumbar el envío */
-        }
-      }
-    }
-    return { printed };
-  }, [
-    requireOrder,
-    taxPercent,
-    products,
-    categories,
-    restaurant?.settings,
-    restaurantName,
-  ]);
+    // La comanda se imprime en el PC/tablet de cocina o barra (/kitchen|/bar),
+    // no en el mesero (así va a la impresora de cocina).
+    return { printed: false };
+  }, [requireOrder, taxPercent, products, categories]);
 
   const markItemsServed = useCallback(
     async (itemIds: string[]) => {

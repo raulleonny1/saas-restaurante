@@ -215,8 +215,8 @@ export function PrinterSetupPanel({
         <p
           className={`mt-1 text-sm ${floor ? "text-[#a8b5a4]" : "text-fg-muted"}`}
         >
-          Cada botón busca solo para su impresora. Elige una distinta para
-          ventas y otra para cocina.
+          Ventas = ticket al cobrar. Cocina = comanda en /kitchen o /bar (no
+          en el mesero). Elige impresoras distintas.
         </p>
       </div>
 

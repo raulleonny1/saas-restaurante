@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { useTenant } from "@/context/TenantProvider";
 import { isFirebaseConfigured } from "@/lib/firebase";
+import { getEffectivePrintSettings } from "@/lib/printer-device-prefs";
 import {
   getBranchPref,
   pickAllowedBranchId,
@@ -28,6 +29,7 @@ import {
   subscribeKitchenCatalog,
   subscribeKitchenOrders,
 } from "@/modules/kitchen/services/kitchen.service";
+import { printKitchenTicket } from "@/modules/pos/domain/print-kitchen";
 import type { Product, ProductCategory } from "@/types/catalog";
 import type {
   KitchenColumnId,
@@ -35,7 +37,7 @@ import type {
   KitchenTicket,
 } from "@/types/kitchen";
 import { KITCHEN_STATIONS } from "@/types/kitchen";
-import type { Order } from "@/types/orders";
+import type { Order, OrderItem } from "@/types/orders";
 import type { Branch } from "@/types/restaurant";
 import {
   createContext,
@@ -125,6 +127,9 @@ export function KitchenProvider({
   const seenKeysRef = useRef<Set<string>>(new Set());
   const primedRef = useRef(false);
   const lastUrgentBucketRef = useRef(-1);
+  /** Ítems ya impresos en este PC de cocina/barra (evita reimprimir). */
+  const printedItemKeysRef = useRef<Set<string>>(new Set());
+  const printPrimedRef = useRef(false);
 
   const allowedStations = useMemo(
     () =>
@@ -153,6 +158,8 @@ export function KitchenProvider({
     setOrders([]);
     primedRef.current = false;
     seenKeysRef.current = new Set();
+    printPrimedRef.current = false;
+    printedItemKeysRef.current = new Set();
   }, [user?.uid]);
 
   const setStation = useCallback(
@@ -161,6 +168,8 @@ export function KitchenProvider({
       localStorage.setItem(stationStorageKey(mode), id);
       primedRef.current = false;
       seenKeysRef.current = new Set();
+      printPrimedRef.current = false;
+      printedItemKeysRef.current = new Set();
     },
     [mode],
   );
@@ -254,6 +263,8 @@ export function KitchenProvider({
     if (!restaurantId || !branchId) return;
     primedRef.current = false;
     seenKeysRef.current = new Set();
+    printPrimedRef.current = false;
+    printedItemKeysRef.current = new Set();
     return subscribeKitchenOrders(
       restaurantId,
       branchId,
@@ -361,6 +372,76 @@ export function KitchenProvider({
 
     seenKeysRef.current = keys;
   }, [tickets, soundEnabled, now]);
+
+  /**
+   * Comanda térmica en el PC de cocina/barra (no en el mesero).
+   * Solo si la salida está en «impresora» o «ambos».
+   */
+  useEffect(() => {
+    if (!restaurantId || !ready) return;
+    const printCfg = getEffectivePrintSettings(
+      restaurantId,
+      restaurant?.settings,
+    );
+    const out = printCfg.kitchenOutput;
+    if (out !== "printer" && out !== "both") return;
+
+    type Bundle = { order: Order; items: OrderItem[] };
+    const byOrder = new Map<string, Bundle>();
+
+    for (const t of tickets) {
+      for (const row of t.items) {
+        if (row.column === "delivered" || row.column === "ready") continue;
+        const item = row.item;
+        if (item.status === "cancelled") continue;
+        const key = `${t.order.id}:${item.id}:${item.sentAt ?? ""}`;
+        if (!printPrimedRef.current) {
+          printedItemKeysRef.current.add(key);
+          continue;
+        }
+        if (printedItemKeysRef.current.has(key)) continue;
+        printedItemKeysRef.current.add(key);
+        const prev = byOrder.get(t.order.id);
+        if (prev) prev.items.push(item);
+        else byOrder.set(t.order.id, { order: t.order, items: [item] });
+      }
+    }
+
+    if (!printPrimedRef.current) {
+      printPrimedRef.current = true;
+      return;
+    }
+
+    if (!byOrder.size) return;
+
+    const kp = printCfg.printers.kitchen;
+    const stationPrint = mode === "bar" ? "bar" : "cocina";
+    for (const { order, items } of byOrder.values()) {
+      try {
+        printKitchenTicket(
+          { ...order, items },
+          {
+            restaurantName: restaurant?.name ?? "SmartServe",
+            station: stationPrint,
+            paperWidthMm: kp?.paperWidthMm ?? 80,
+            printerSystemName: kp?.systemName,
+            printerLabel:
+              kp?.label ??
+              (mode === "bar" ? "Barra · comanda" : "Cocina · comanda"),
+          },
+        );
+      } catch {
+        /* diálogo cancelado: no tumbar el KDS */
+      }
+    }
+  }, [
+    tickets,
+    restaurantId,
+    restaurant?.settings,
+    restaurant?.name,
+    ready,
+    mode,
+  ]);
 
   const findOrder = useCallback(
     (orderId: string) => orders.find((o) => o.id === orderId),
