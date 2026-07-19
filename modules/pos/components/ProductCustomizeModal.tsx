@@ -5,6 +5,7 @@ import { usePos } from "@/modules/pos/context/PosProvider";
 import type { Product, ProductModifierOption } from "@/types/catalog";
 import type { OrderItemModifier } from "@/types/orders";
 import { Button, Modal, Textarea, toast } from "@/ui";
+import { Minus, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export function ProductCustomizeModal({
@@ -22,6 +23,7 @@ export function ProductCustomizeModal({
     {},
   );
   const [kitchenNotes, setKitchenNotes] = useState("");
+  const [quantity, setQuantity] = useState(1);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -29,6 +31,7 @@ export function ProductCustomizeModal({
     setVariantId(product.variants?.[0]?.id);
     setSelectedMods({});
     setKitchenNotes("");
+    setQuantity(1);
   }, [open, product]);
 
   if (!product) return null;
@@ -98,6 +101,7 @@ export function ProductCustomizeModal({
                     variantId,
                     modifiers: buildModifiers(),
                     kitchenNotes: kitchenNotes.trim() || undefined,
+                    quantity,
                   });
                   onClose();
                 } catch (e) {
@@ -111,12 +115,40 @@ export function ProductCustomizeModal({
               })();
             }}
           >
-            Añadir al ticket
+            {quantity > 1
+              ? `Añadir ${quantity} al ticket`
+              : "Añadir al ticket"}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
+        <div>
+          <p className="mb-2 text-sm text-fg-muted">Cantidad</p>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              aria-label="Menos"
+              disabled={quantity <= 1}
+              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+              className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] border border-border bg-bg-muted text-fg disabled:opacity-40"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <span className="min-w-8 text-center text-lg font-semibold text-fg tabular-nums">
+              {quantity}
+            </span>
+            <button
+              type="button"
+              aria-label="Más"
+              onClick={() => setQuantity((q) => Math.min(99, q + 1))}
+              className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] border border-border bg-bg-muted text-fg"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
         {product.variants?.length ? (
           <div>
             <p className="mb-2 text-sm text-fg-muted">Variante</p>

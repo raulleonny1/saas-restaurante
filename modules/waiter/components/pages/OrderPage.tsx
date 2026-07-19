@@ -5,7 +5,7 @@ import { formatCurrency } from "@/lib/format";
 import { ProductGrid } from "@/modules/pos/components/ProductGrid";
 import { lineTotal } from "@/modules/pos/domain/totals";
 import { usePos } from "@/modules/pos/context/PosProvider";
-import { Minus, Plus, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, Minus, Plus, Send, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -54,6 +54,13 @@ export function WaiterOrderPage() {
   if (!activeOrder) {
     return (
       <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-5">
+        <Link
+          href="/waiter"
+          className="inline-flex items-center gap-1.5 text-sm text-emerald-400"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver a mesas
+        </Link>
         <h1 className="font-[family-name:var(--font-display)] text-2xl">
           Mesa {table.name}
         </h1>
@@ -85,6 +92,16 @@ export function WaiterOrderPage() {
 
   return (
     <div className="space-y-3">
+      <Link
+        href="/waiter"
+        className="inline-flex items-center gap-1.5 text-sm text-emerald-400"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Volver a mesas
+        <span className="font-normal text-[#8fa08c]">
+          · el pedido se guarda
+        </span>
+      </Link>
       <div className="flex items-center justify-between gap-2">
         <div>
           <h1 className="font-[family-name:var(--font-display)] text-2xl">
