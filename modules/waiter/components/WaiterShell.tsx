@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   LogOut,
+  Printer,
   QrCode,
   Receipt,
   ShoppingBag,
@@ -61,6 +62,7 @@ export function WaiterShell({
         { href: routes.pay, label: "Cobrar", icon: Receipt },
         { href: routes.history, label: "Caja", icon: History },
         { href: routes.order, label: "Pedido", icon: ShoppingBag },
+        { href: routes.printers, label: "Impr.", icon: Printer },
       ];
     }
     return [

@@ -273,6 +273,12 @@ export function CashierHomePage() {
           <p className="mt-1 text-sm text-[#8fa08c]">
             Pedidos de meseros, cocina y barra · se actualiza solo
           </p>
+          <Link
+            href={routes.printers}
+            className="mt-2 inline-block text-xs text-emerald-400 hover:underline"
+          >
+            Configurar impresoras ventas / cocina
+          </Link>
         </div>
         {branches.length > 1 ? (
           <select

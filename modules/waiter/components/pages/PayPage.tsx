@@ -3,6 +3,7 @@
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { formatCurrency } from "@/lib/format";
+import { getEffectivePrintSettings } from "@/lib/printer-device-prefs";
 import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { printOrderReceipt } from "@/modules/pos/domain/print";
 import { roundMoney } from "@/modules/pos/domain/totals";
@@ -23,7 +24,7 @@ const CASH_CHIPS = [5, 10, 20, 50, 100];
 
 export function WaiterPayPage() {
   const { can } = useAuth();
-  const { restaurant } = useRestaurant();
+  const { restaurantId, restaurant } = useRestaurant();
   const routes = useFloorRoutes();
   const {
     activeOrder,
@@ -34,7 +35,10 @@ export function WaiterPayPage() {
     selectedTableId,
     restaurantName,
   } = usePos();
-  const tpvPrinter = restaurant?.settings.printers?.tpv;
+  const tpvPrinter = getEffectivePrintSettings(
+    restaurantId,
+    restaurant?.settings,
+  ).printers.tpv;
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [tendered, setTendered] = useState("");
   const [tip, setTip] = useState("0");

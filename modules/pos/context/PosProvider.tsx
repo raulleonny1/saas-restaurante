@@ -11,6 +11,7 @@ import {
 } from "@/lib/session-prefs";
 import { resolveItemStation } from "@/modules/kitchen/domain/stations";
 import { advanceTicketColumn } from "@/modules/kitchen/services/kitchen.service";
+import { getEffectivePrintSettings } from "@/lib/printer-device-prefs";
 import { printOrderReceipt } from "@/modules/pos/domain/print";
 import { printKitchenTicket } from "@/modules/pos/domain/print-kitchen";
 import { balanceDue } from "@/modules/pos/domain/totals";
@@ -562,7 +563,11 @@ export function PosProvider({ children }: { children: ReactNode }) {
       products,
       categories,
     );
-    const mode = restaurant?.settings.kitchenOutput ?? "kds";
+    const printCfg = getEffectivePrintSettings(
+      rid,
+      restaurant?.settings,
+    );
+    const mode = printCfg.kitchenOutput;
     let printed = false;
     if (
       pendingIds.size > 0 &&
@@ -573,7 +578,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
       );
       if (justSent.length) {
         try {
-          const kp = restaurant?.settings.printers?.kitchen;
+          const kp = printCfg.printers.kitchen;
           printKitchenTicket(
             { ...next, items: justSent },
             {
@@ -595,8 +600,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
     taxPercent,
     products,
     categories,
-    restaurant?.settings.kitchenOutput,
-    restaurant?.settings.printers?.kitchen,
+    restaurant?.settings,
     restaurantName,
   ]);
 
@@ -729,20 +733,16 @@ export function PosProvider({ children }: { children: ReactNode }) {
     if (!paid) {
       throw new Error("El ticket solo se imprime cuando ya está cobrado");
     }
-    const tpv = restaurant?.settings.printers?.tpv;
+    const tpv = getEffectivePrintSettings(rid, restaurant?.settings).printers
+      .tpv;
     printOrderReceipt(order, payments, {
       restaurantName,
       paperWidthMm: tpv?.paperWidthMm ?? 80,
       printerSystemName: tpv?.systemName,
-      printerLabel: tpv?.label ?? "TPV · ticket cliente",
+      printerLabel: tpv?.label ?? "Ventas · ticket cliente",
     });
     await markPrinted(rid, order, uid);
-  }, [
-    requireOrder,
-    payments,
-    restaurantName,
-    restaurant?.settings.printers?.tpv,
-  ]);
+  }, [requireOrder, payments, restaurantName, restaurant?.settings]);
 
   const printPaidOrder = useCallback(
     async (order: Order, orderPayments: Payment[]) => {
@@ -754,16 +754,19 @@ export function PosProvider({ children }: { children: ReactNode }) {
       if (!paid) {
         throw new Error("El ticket solo se imprime cuando ya está cobrado");
       }
-      const tpv = restaurant?.settings.printers?.tpv;
+      const tpv = getEffectivePrintSettings(
+        restaurantId,
+        restaurant?.settings,
+      ).printers.tpv;
       printOrderReceipt(order, orderPayments, {
         restaurantName,
         paperWidthMm: tpv?.paperWidthMm ?? 80,
         printerSystemName: tpv?.systemName,
-        printerLabel: tpv?.label ?? "TPV · ticket cliente",
+        printerLabel: tpv?.label ?? "Ventas · ticket cliente",
       });
       await markPrinted(restaurantId, order, user.uid);
     },
-    [restaurantId, user, restaurantName, restaurant?.settings.printers?.tpv],
+    [restaurantId, user, restaurantName, restaurant?.settings],
   );
 
   const refund = useCallback(
