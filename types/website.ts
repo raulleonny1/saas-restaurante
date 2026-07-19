@@ -55,6 +55,8 @@ export interface WebsiteSettings extends Timestamps {
   reservationSettings?: {
     enabled: boolean;
     defaultPartySize?: number;
+    /** Duración estimada de la reserva (minutos). */
+    defaultDurationMinutes?: number;
     note?: string;
   };
   customDomain?: string | null;

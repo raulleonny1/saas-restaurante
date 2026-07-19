@@ -6,6 +6,7 @@ import {
   tableBusyInSlot,
 } from "@/modules/reservations/domain/assignment";
 import { newId, nowIso } from "@/modules/reservations/domain/ids";
+import { isBlockingReservationStatus } from "@/modules/reservations/domain/publicSlot";
 import { addMinutes } from "@/modules/reservations/domain/time";
 import type { Table } from "@/types/orders";
 import type {
@@ -138,6 +139,28 @@ export async function createReservation(
     doc(getDb(), "restaurants", input.restaurantId, "reservations", id),
     row,
   );
+  if (isBlockingReservationStatus(row.status)) {
+    batch.set(
+      doc(
+        getDb(),
+        "restaurants",
+        input.restaurantId,
+        "publicBookingSlots",
+        id,
+      ),
+      {
+        id: row.id,
+        restaurantId: row.restaurantId,
+        branchId: row.branchId,
+        tableId: row.tableId ?? null,
+        partySize: row.partySize,
+        startsAt: row.startsAt,
+        endsAt: row.endsAt,
+        status: row.status,
+        updatedAt: stamp,
+      },
+    );
+  }
   await batch.commit();
   return row;
 }
@@ -147,6 +170,7 @@ export async function updateReservationStatus(input: {
   reservation: Reservation;
   status: ReservationStatus;
 }): Promise<void> {
+  const stamp = nowIso();
   const batch = writeBatch(getDb());
   batch.update(
     doc(
@@ -156,8 +180,34 @@ export async function updateReservationStatus(input: {
       "reservations",
       input.reservation.id,
     ),
-    { status: input.status, updatedAt: nowIso() },
+    { status: input.status, updatedAt: stamp },
   );
+  const slotRef = doc(
+    getDb(),
+    "restaurants",
+    input.restaurantId,
+    "publicBookingSlots",
+    input.reservation.id,
+  );
+  if (isBlockingReservationStatus(input.status)) {
+    batch.set(
+      slotRef,
+      {
+        id: input.reservation.id,
+        restaurantId: input.restaurantId,
+        branchId: input.reservation.branchId,
+        tableId: input.reservation.tableId ?? null,
+        partySize: input.reservation.partySize,
+        startsAt: input.reservation.startsAt,
+        endsAt: input.reservation.endsAt,
+        status: input.status,
+        updatedAt: stamp,
+      },
+      { merge: true },
+    );
+  } else {
+    batch.delete(slotRef);
+  }
   await batch.commit();
 }
 
@@ -168,6 +218,7 @@ export async function assignTable(input: {
   tableName: string;
   automatic?: boolean;
 }): Promise<void> {
+  const stamp = nowIso();
   const batch = writeBatch(getDb());
   batch.update(
     doc(
@@ -181,9 +232,32 @@ export async function assignTable(input: {
       tableId: input.tableId,
       tableName: input.tableName,
       assignedAutomatically: Boolean(input.automatic),
-      updatedAt: nowIso(),
+      updatedAt: stamp,
     },
   );
+  if (isBlockingReservationStatus(input.reservation.status)) {
+    batch.set(
+      doc(
+        getDb(),
+        "restaurants",
+        input.restaurantId,
+        "publicBookingSlots",
+        input.reservation.id,
+      ),
+      {
+        id: input.reservation.id,
+        restaurantId: input.restaurantId,
+        branchId: input.reservation.branchId,
+        tableId: input.tableId,
+        partySize: input.reservation.partySize,
+        startsAt: input.reservation.startsAt,
+        endsAt: input.reservation.endsAt,
+        status: input.reservation.status,
+        updatedAt: stamp,
+      },
+      { merge: true },
+    );
+  }
   await batch.commit();
 }
 

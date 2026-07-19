@@ -374,13 +374,30 @@ service cloud.firestore {
         }
       }
 
-      // Plano de mesas / barras (POS + /waiter) — seats = asientos
+      /**
+       * Huecos de reserva sin datos personales (web/app eligen mesa libre).
+       * El documento completo de reserva sigue siendo privado para el staff.
+       */
+      match /publicBookingSlots/{slotId} {
+        allow read: if true;
+        allow create: if request.resource.data.restaurantId == restaurantId
+          && request.resource.data.branchId is string
+          && request.resource.data.partySize is number
+          && request.resource.data.partySize >= 1
+          && request.resource.data.partySize <= 50
+          && request.resource.data.startsAt is string
+          && request.resource.data.endsAt is string
+          && request.resource.data.status in ['pending', 'confirmed', 'seated']
+          && (
+            isMember(restaurantId)
+            || request.resource.data.status == 'pending'
+          );
+        allow update, delete: if isMember(restaurantId);
+      }
+
+      // Plano de mesas / barras — lectura pública para elegir mesa en reservas web
       match /tables/{tableId} {
-        allow read: if isMember(restaurantId) && (
-          !('branchId' in resource.data) ||
-          resource.data.branchId == null ||
-          canAccessBranch(restaurantId, resource.data.branchId)
-        );
+        allow read: if true;
         allow create: if isMember(restaurantId)
           && request.resource.data.restaurantId == restaurantId
           && request.resource.data.branchId is string

@@ -103,6 +103,9 @@ interface CustomerAppContextValue {
     startsAt: string;
     customerPhone?: string;
     notes?: string;
+    tableId?: string | null;
+    tableName?: string | null;
+    durationMinutes?: number;
   }) => Promise<void>;
   sendChat: (body: string) => Promise<void>;
   markRead: (id: string) => Promise<void>;
@@ -385,6 +388,9 @@ export function CustomerAppProvider({
         partySize: input.partySize,
         startsAt: input.startsAt,
         notes: input.notes,
+        tableId: input.tableId,
+        tableName: input.tableName,
+        durationMinutes: input.durationMinutes,
       });
     },
     sendChat: async (body) => {

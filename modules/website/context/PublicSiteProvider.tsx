@@ -64,6 +64,9 @@ interface PublicSiteContextValue {
     partySize: number;
     startsAt: string;
     notes?: string;
+    tableId?: string | null;
+    tableName?: string | null;
+    durationMinutes?: number;
   }) => Promise<void>;
   leaveReview: (input: {
     authorName: string;

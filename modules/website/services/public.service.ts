@@ -161,11 +161,15 @@ export async function submitPublicReservation(input: {
   partySize: number;
   startsAt: string;
   notes?: string;
+  tableId?: string | null;
+  tableName?: string | null;
+  durationMinutes?: number;
 }): Promise<Reservation> {
   const stamp = nowIso();
   const id = newId("res");
-  const ends = new Date(input.startsAt);
-  ends.setMinutes(ends.getMinutes() + 90);
+  const startsAt = new Date(input.startsAt).toISOString();
+  const ends = new Date(startsAt);
+  ends.setMinutes(ends.getMinutes() + (input.durationMinutes ?? 90));
   const row: Reservation = {
     id,
     restaurantId: input.restaurantId,
@@ -174,7 +178,9 @@ export async function submitPublicReservation(input: {
     customerPhone: input.customerPhone,
     customerEmail: input.customerEmail,
     partySize: input.partySize,
-    startsAt: new Date(input.startsAt).toISOString(),
+    tableId: input.tableId ?? null,
+    tableName: input.tableName ?? null,
+    startsAt,
     endsAt: ends.toISOString(),
     status: "pending",
     source: "web",
@@ -188,6 +194,26 @@ export async function submitPublicReservation(input: {
   await setDoc(
     doc(getDb(), "restaurants", input.restaurantId, "reservations", id),
     row,
+  );
+  await setDoc(
+    doc(
+      getDb(),
+      "restaurants",
+      input.restaurantId,
+      "publicBookingSlots",
+      id,
+    ),
+    {
+      id: row.id,
+      restaurantId: row.restaurantId,
+      branchId: row.branchId,
+      tableId: row.tableId ?? null,
+      partySize: row.partySize,
+      startsAt: row.startsAt,
+      endsAt: row.endsAt,
+      status: row.status,
+      updatedAt: stamp,
+    },
   );
   return row;
 }

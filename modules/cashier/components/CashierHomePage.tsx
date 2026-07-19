@@ -7,8 +7,11 @@ import { isDrinkStation } from "@/modules/kitchen/domain/stations";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import { balanceDue, roundMoney } from "@/modules/pos/domain/totals";
 import { subscribePaymentsForBranch } from "@/modules/pos/services/payments.service";
+import { formatSlot } from "@/modules/reservations/domain/time";
+import { subscribeReservations } from "@/modules/reservations/services/reservations.service";
 import { orderItemStatusLabel } from "@/modules/waiter/domain/itemStatus";
 import type { Order, OrderItem, OrderStatus } from "@/types/orders";
+import type { Reservation } from "@/types/reservations";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -177,12 +180,35 @@ export function CashierHomePage() {
   const [cardToday, setCardToday] = useState(0);
   const [tipsToday, setTipsToday] = useState(0);
   const [filter, setFilter] = useState<LiveFilter>("all");
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   /** Re-tick every 30s so “hace X min” stays fresh */
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (!restaurantId || !branchId) return;
+    return subscribeReservations(restaurantId, branchId, setReservations);
+  }, [restaurantId, branchId]);
+
+  const liveReservations = useMemo(() => {
+    const dayStart = startOfTodayIso();
+    const dayEnd = new Date();
+    dayEnd.setHours(23, 59, 59, 999);
+    const endIso = dayEnd.toISOString();
+    return reservations
+      .filter(
+        (r) =>
+          (r.status === "pending" ||
+            r.status === "confirmed" ||
+            r.status === "seated") &&
+          r.startsAt >= dayStart &&
+          r.startsAt <= endIso,
+      )
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  }, [reservations]);
 
   useEffect(() => {
     if (!restaurantId || !branchId) return;
@@ -271,7 +297,7 @@ export function CashierHomePage() {
             </span>
           </div>
           <p className="mt-1 text-sm text-[#8fa08c]">
-            Pedidos de meseros, cocina y barra · se actualiza solo
+            Pedidos y reservas web/app · se actualiza solo
           </p>
           <Link
             href={routes.printers}
@@ -296,6 +322,62 @@ export function CashierHomePage() {
           </select>
         ) : null}
       </div>
+
+      <section className="rounded-2xl border border-violet-500/30 bg-violet-950/25 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-violet-200">
+              Reservas de hoy
+            </p>
+            <p className="mt-0.5 text-[11px] text-[#8fa08c]">
+              Web y app · tiempo real
+            </p>
+          </div>
+          <span className="rounded-full bg-violet-500/20 px-2.5 py-1 text-xs font-semibold text-violet-100">
+            {liveReservations.length}
+          </span>
+        </div>
+        {!liveReservations.length ? (
+          <p className="mt-3 text-sm text-[#8fa08c]">
+            Sin reservas pendientes para hoy.
+          </p>
+        ) : (
+          <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto">
+            {liveReservations.map((r) => (
+              <li
+                key={r.id}
+                className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium text-[#e7efe4]">
+                      {r.customerName}
+                      <span className="ml-2 text-xs font-normal text-[#8fa08c]">
+                        · {r.partySize} pers.
+                      </span>
+                    </p>
+                    <p className="mt-0.5 text-xs text-violet-200/90">
+                      {formatSlot(r.startsAt)}
+                      {r.tableName ? ` · Mesa ${r.tableName}` : " · Sin mesa"}
+                    </p>
+                    <p className="mt-0.5 text-[11px] capitalize text-[#8fa08c]">
+                      {r.status}
+                      {r.source ? ` · ${r.source}` : ""}
+                      {r.customerPhone ? ` · ${r.customerPhone}` : ""}
+                    </p>
+                  </div>
+                  <Link
+                    href="/reservations"
+                    className="shrink-0 text-[11px] text-violet-300 hover:underline"
+                  >
+                    Gestionar
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-3">

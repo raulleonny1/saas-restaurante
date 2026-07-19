@@ -1,28 +1,151 @@
 "use client";
 
 import { formatCurrency } from "@/lib/format";
+import { addMinutes } from "@/modules/reservations/domain/time";
+import type { PublicBookingSlot } from "@/modules/reservations/domain/publicSlot";
+import {
+  availableTablesForSlot,
+  subscribePublicBookingSlots,
+  subscribePublicTables,
+} from "@/modules/reservations/services/public-slots.service";
 import { usePublicSite } from "@/modules/website/context/PublicSiteProvider";
 import { publicSitePath } from "@/modules/website/domain/slug";
+import type { Table } from "@/types/orders";
 import { Button, Input, Textarea, toast } from "@/ui";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export function HomeExtras() {
-  const { settings, promotions, events, sectionEnabled, restaurant } =
-    usePublicSite();
+  const {
+    settings,
+    promotions,
+    events,
+    sectionEnabled,
+    restaurant,
+    categories,
+    products,
+    slug,
+  } = usePublicSite();
+
+  const featured = useMemo(() => {
+    const byCat = categories
+      .map((c) => ({
+        category: c,
+        items: products.filter((p) => p.categoryId === c.id).slice(0, 4),
+      }))
+      .filter((g) => g.items.length)
+      .slice(0, 4);
+    if (byCat.length) return byCat;
+    if (!products.length) return [];
+    return [
+      {
+        category: { id: "carta", name: "Nuestra carta" },
+        items: products.slice(0, 8),
+      },
+    ];
+  }, [categories, products]);
+
   return (
-    <div className="space-y-12">
-      {settings?.about ? (
-        <section className="max-w-2xl">
-          <h2 className="font-[family-name:var(--font-display)] text-3xl">
-            Nuestra casa
-          </h2>
-          <p className="mt-3 text-[#c5d0c2]">{settings.about}</p>
+    <div className="space-y-14">
+      <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-transparent px-6 py-10 sm:px-10">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--site-accent)]">
+          Bienvenido
+        </p>
+        <h1 className="mt-2 max-w-xl font-[family-name:var(--font-display)] text-4xl tracking-tight sm:text-5xl">
+          {restaurant?.name}
+        </h1>
+        <p className="mt-3 max-w-lg text-[#c5d0c2]">
+          {settings?.about ||
+            settings?.seo?.description ||
+            "Descubre la carta, reserva mesa y pide online."}
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          {sectionEnabled("menu") ? (
+            <Link
+              href={publicSitePath(slug, "/menu")}
+              className="rounded-full bg-[var(--site-accent)] px-5 py-2.5 text-sm font-semibold text-white"
+            >
+              Ver carta
+            </Link>
+          ) : null}
+          {sectionEnabled("reservations") ? (
+            <Link
+              href={publicSitePath(slug, "/reservas")}
+              className="rounded-full border border-white/25 bg-white/5 px-5 py-2.5 text-sm font-semibold"
+            >
+              Reservar mesa
+            </Link>
+          ) : null}
+          {sectionEnabled("orders") ? (
+            <Link
+              href={publicSitePath(slug, "/pedir")}
+              className="rounded-full border border-white/15 px-5 py-2.5 text-sm text-[#c5d0c2]"
+            >
+              Pedir online
+            </Link>
+          ) : null}
+        </div>
+      </section>
+
+      {featured.length ? (
+        <section className="space-y-8">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <h2 className="font-[family-name:var(--font-display)] text-3xl">
+                Lo que ofrecemos
+              </h2>
+              <p className="mt-1 text-sm text-[#a8b5a4]">
+                Carta del local · actualizada desde el inventario
+              </p>
+            </div>
+            {sectionEnabled("menu") ? (
+              <Link
+                href={publicSitePath(slug, "/menu")}
+                className="text-sm text-[var(--site-accent)] hover:underline"
+              >
+                Carta completa
+              </Link>
+            ) : null}
+          </div>
+          {featured.map((g) => (
+            <div key={g.category.id}>
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#8fa08c]">
+                {g.category.name}
+              </h3>
+              <ul className="grid gap-3 sm:grid-cols-2">
+                {g.items.map((p) => (
+                  <li
+                    key={p.id}
+                    className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium">{p.name}</p>
+                        {p.description ? (
+                          <p className="mt-1 line-clamp-2 text-xs text-[#a8b5a4]">
+                            {p.description}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 tabular-nums text-[var(--site-accent)]">
+                        {formatCurrency(p.price, restaurant?.currency)}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </section>
-      ) : null}
+      ) : (
+        <p className="text-[#8fa08c]">
+          La carta se está preparando. Vuelve pronto.
+        </p>
+      )}
+
       {sectionEnabled("promotions") && promotions[0] ? (
-        <section>
-          <h2 className="font-[family-name:var(--font-display)] text-3xl">
+        <section className="rounded-2xl border border-[var(--site-accent)]/30 bg-[var(--site-accent)]/10 p-6">
+          <h2 className="font-[family-name:var(--font-display)] text-2xl">
             Promoción destacada
           </h2>
           <p className="mt-2 text-lg text-[var(--site-accent)]">
@@ -36,6 +159,7 @@ export function HomeExtras() {
           </p>
         </section>
       ) : null}
+
       {sectionEnabled("events") && events[0] ? (
         <section>
           <h2 className="font-[family-name:var(--font-display)] text-3xl">
@@ -47,6 +171,7 @@ export function HomeExtras() {
           </p>
         </section>
       ) : null}
+
       {restaurant?.phone ? (
         <p className="text-sm text-[#8fa08c]">Tel. {restaurant.phone}</p>
       ) : null}
@@ -253,7 +378,7 @@ export function OrderPage() {
 }
 
 export function ReservationsPage() {
-  const { bookTable, settings } = usePublicSite();
+  const { bookTable, settings, restaurant, branches } = usePublicSite();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -263,22 +388,78 @@ export function ReservationsPage() {
   const [when, setWhen] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [tableId, setTableId] = useState("");
+  const [tables, setTables] = useState<Table[]>([]);
+  const [slots, setSlots] = useState<PublicBookingSlot[]>([]);
+
+  const branchId =
+    branches.find((b) => b.isDefault)?.id ?? branches[0]?.id ?? "";
+  const duration =
+    settings?.reservationSettings?.defaultDurationMinutes ?? 90;
+  const partyNum = Math.max(1, Number(party) || 2);
+
+  useEffect(() => {
+    if (!restaurant?.id) return;
+    const unsubTables = subscribePublicTables(restaurant.id, setTables);
+    const unsubSlots = subscribePublicBookingSlots(restaurant.id, setSlots);
+    return () => {
+      unsubTables();
+      unsubSlots();
+    };
+  }, [restaurant?.id]);
+
+  const freeTables = useMemo(() => {
+    if (!when || !branchId) return [] as Table[];
+    const startsAt = new Date(when).toISOString();
+    const endsAt = addMinutes(startsAt, duration);
+    return availableTablesForSlot({
+      tables,
+      slots,
+      branchId,
+      partySize: partyNum,
+      startsAt,
+      endsAt,
+    });
+  }, [when, branchId, duration, tables, slots, partyNum]);
+
+  useEffect(() => {
+    if (tableId && !freeTables.some((t) => t.id === tableId)) {
+      setTableId("");
+    }
+  }, [freeTables, tableId]);
 
   return (
-    <div className="mx-auto max-w-lg space-y-4">
-      <h1 className="font-[family-name:var(--font-display)] text-4xl">
-        Reservas
-      </h1>
-      <p className="text-[#c5d0c2]">
-        {settings?.reservationSettings?.note ||
-          "Elige fecha y hora. Te confirmamos por teléfono o email."}
-      </p>
-      <Input label="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
-      <Input label="Teléfono" value={phone} onChange={(e) => setPhone(e.target.value)} />
-      <Input label="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+    <div className="mx-auto max-w-xl space-y-5">
+      <header>
+        <h1 className="font-[family-name:var(--font-display)] text-4xl">
+          Reservar mesa
+        </h1>
+        <p className="mt-2 text-[#c5d0c2]">
+          {settings?.reservationSettings?.note ||
+            "Elige fecha, comensales y una mesa libre. El local lo ve al instante."}
+        </p>
+      </header>
+
+      <Input
+        label="Nombre"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <Input
+        label="Teléfono"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+      />
+      <Input
+        label="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
       <Input
         label="Comensales"
         type="number"
+        min={1}
+        max={50}
         value={party}
         onChange={(e) => setParty(e.target.value)}
       />
@@ -288,6 +469,58 @@ export function ReservationsPage() {
         value={when}
         onChange={(e) => setWhen(e.target.value)}
       />
+
+      {when ? (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-[#e8efe6]">
+            Mesas disponibles
+            <span className="ml-2 text-xs font-normal text-[#8fa08c]">
+              ({freeTables.length} libres · {duration} min)
+            </span>
+          </p>
+          {!freeTables.length ? (
+            <p className="rounded-xl border border-amber-500/30 bg-amber-950/30 px-3 py-3 text-sm text-amber-100">
+              No hay mesas libres para ese horario y comensales. Prueba otra
+              hora o reduce el grupo.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {freeTables.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTableId(t.id)}
+                  className={`rounded-2xl border px-3 py-3 text-left text-sm transition ${
+                    tableId === t.id
+                      ? "border-[var(--site-accent)] bg-[var(--site-accent)]/20"
+                      : "border-white/15 bg-white/[0.03] hover:border-white/30"
+                  }`}
+                >
+                  <p className="font-semibold">{t.name}</p>
+                  <p className="mt-0.5 text-[11px] text-[#8fa08c]">
+                    {t.seats} asientos
+                    {t.zone ? ` · ${t.zone}` : ""}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setTableId("")}
+            className={`text-xs ${
+              !tableId ? "text-[var(--site-accent)]" : "text-[#8fa08c]"
+            }`}
+          >
+            Sin preferencia de mesa (asignamos la primera libre)
+          </button>
+        </div>
+      ) : (
+        <p className="text-sm text-[#8fa08c]">
+          Elige fecha y hora para ver mesas libres en tiempo real.
+        </p>
+      )}
+
       <Textarea
         label="Notas"
         rows={2}
@@ -295,20 +528,36 @@ export function ReservationsPage() {
         onChange={(e) => setNotes(e.target.value)}
       />
       <Button
-        disabled={busy || !name.trim() || !when}
+        disabled={busy || !name.trim() || !when || freeTables.length === 0}
         onClick={() => {
           void (async () => {
             try {
               setBusy(true);
+              if (!freeTables.length) {
+                throw new Error(
+                  "No hay mesas libres en ese horario. Elige otra hora.",
+                );
+              }
+              const picked =
+                freeTables.find((t) => t.id === tableId) ?? freeTables[0]!;
               await bookTable({
                 customerName: name,
                 customerPhone: phone,
                 customerEmail: email,
-                partySize: Number(party) || 2,
+                partySize: partyNum,
                 startsAt: when,
                 notes,
+                tableId: picked.id,
+                tableName: picked.name,
+                durationMinutes: duration,
               });
-              toast("Reserva enviada", "success");
+              toast(`Reserva enviada · mesa ${picked.name}`, "success");
+              setName("");
+              setPhone("");
+              setEmail("");
+              setNotes("");
+              setWhen("");
+              setTableId("");
             } catch (e) {
               toast(e instanceof Error ? e.message : "Error", "error");
             } finally {
@@ -317,7 +566,7 @@ export function ReservationsPage() {
           })();
         }}
       >
-        Solicitar reserva
+        Confirmar reserva
       </Button>
     </div>
   );
