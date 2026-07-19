@@ -1,60 +1,83 @@
 "use client";
 
 import { useRestaurant } from "@/context/RestaurantProvider";
+import { useTenant } from "@/context/TenantProvider";
 import {
-  getMockDashboardMetrics,
-  getMockDeltas,
-  MOCK_BRANCHES,
-  MOCK_RESTAURANT,
-  type MockDashboardDelta,
-} from "@/modules/dashboard/mock/data";
+  listBranches,
+  subscribeDashboard,
+} from "@/services/dashboard.service";
 import {
   EMPTY_DASHBOARD_METRICS,
   type DashboardMetrics,
 } from "@/types/dashboard";
 import type { Branch } from "@/types/restaurant";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-const MOCK_LOAD_MS = 280;
+export type DashboardDelta = {
+  revenuePct: number | null;
+  ordersPct: number | null;
+};
 
 /**
- * Dashboard data layer — simulated metrics only.
- * Swappable later for `subscribeDashboard` without changing the view.
+ * Dashboard en tiempo real desde Firestore (pedidos, mesas, stock, reservas).
  */
 export function useDashboard() {
-  const { restaurant } = useRestaurant();
+  const { restaurant, restaurantId } = useRestaurant();
+  const { branches: tenantBranches } = useTenant();
   const [branchId, setBranchId] = useState<string | null>(null);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [metrics, setMetrics] = useState<DashboardMetrics>(EMPTY_DASHBOARD_METRICS);
+  const [deltas, setDeltas] = useState<DashboardDelta>({
+    revenuePct: null,
+    ordersPct: null,
+  });
   const [loading, setLoading] = useState(true);
 
-  const branches: Branch[] = MOCK_BRANCHES;
-  const restaurantName = restaurant?.name ?? MOCK_RESTAURANT.name;
-  const currency = restaurant?.currency ?? MOCK_RESTAURANT.currency;
+  useEffect(() => {
+    if (tenantBranches.length) {
+      setBranches(tenantBranches.filter((b) => b.status !== "archived"));
+      return;
+    }
+    if (!restaurantId) {
+      setBranches([]);
+      return;
+    }
+    return listBranches(restaurantId, setBranches);
+  }, [restaurantId, tenantBranches]);
 
   useEffect(() => {
+    if (!restaurantId) {
+      setMetrics(EMPTY_DASHBOARD_METRICS);
+      setDeltas({ revenuePct: null, ordersPct: null });
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
-    const t = window.setTimeout(() => setLoading(false), MOCK_LOAD_MS);
-    return () => window.clearTimeout(t);
-  }, [branchId]);
+    let first = true;
+    const stop = subscribeDashboard(restaurantId, branchId, (next, nextDeltas) => {
+      setMetrics(next);
+      if (nextDeltas) setDeltas(nextDeltas);
+      if (first) {
+        first = false;
+        setLoading(false);
+      }
+    });
 
-  const metrics: DashboardMetrics = useMemo(
-    () => (loading ? EMPTY_DASHBOARD_METRICS : getMockDashboardMetrics(branchId)),
-    [branchId, loading],
-  );
-
-  const deltas: MockDashboardDelta = useMemo(
-    () => getMockDeltas(branchId),
-    [branchId],
-  );
+    return () => {
+      stop();
+    };
+  }, [restaurantId, branchId]);
 
   return {
-    restaurantName,
-    currency,
+    restaurantName: restaurant?.name ?? "Restaurante",
+    currency: restaurant?.currency ?? "EUR",
     branches,
     branchId,
     setBranchId,
     metrics,
     deltas,
-    loading,
-    isSimulated: true,
+    loading: loading || !restaurantId,
+    isSimulated: false,
   };
 }

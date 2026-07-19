@@ -3,6 +3,7 @@
 import { getDb, isFirebaseConfigured } from "@/lib/firebase";
 import { startOfToday } from "@/lib/format";
 import type { AiInsight } from "@/types/ai";
+import type { Ingredient } from "@/types/catalog";
 import type { Customer } from "@/types/customers";
 import {
   EMPTY_DASHBOARD_METRICS,
@@ -15,6 +16,16 @@ import type { Order, Table } from "@/types/orders";
 import type { Reservation } from "@/types/reservations";
 import type { Branch } from "@/types/restaurant";
 import { collection, onSnapshot, type Unsubscribe } from "firebase/firestore";
+
+export type DashboardDeltas = {
+  revenuePct: number | null;
+  ordersPct: number | null;
+};
+
+function pctChange(current: number, previous: number): number | null {
+  if (previous <= 0) return current > 0 ? 100 : null;
+  return ((current - previous) / previous) * 100;
+}
 
 function buildHourlySales(paidToday: Order[]): HourlySalesPoint[] {
   return Array.from({ length: 14 }, (_, i) => {
@@ -32,18 +43,21 @@ function buildHourlySales(paidToday: Order[]): HourlySalesPoint[] {
 
 function buildAlerts(
   lowStock: InventoryLevel[],
+  ingredientNames: Map<string, string>,
   insights: AiInsight[],
   openOrders: number,
 ): DashboardAlert[] {
   const alerts: DashboardAlert[] = [];
 
   for (const item of lowStock.slice(0, 5)) {
+    const name =
+      ingredientNames.get(item.ingredientId) ?? item.ingredientId;
     alerts.push({
       id: `stock-${item.id}`,
       type: "inventory",
       tone: item.quantity <= 0 ? "danger" : "warning",
       title: "Stock bajo",
-      description: `${item.ingredientId}: ${item.quantity} ${item.unit} (mín. ${item.minStock})`,
+      description: `${name}: ${item.quantity} ${item.unit} (mín. ${item.minStock})`,
     });
   }
 
@@ -74,13 +88,15 @@ function computeMetrics(input: {
   orders: Order[];
   tables: Table[];
   levels: InventoryLevel[];
+  ingredients: Ingredient[];
   customers: Customer[];
   reservations: Reservation[];
   insights: AiInsight[];
   branchId: string | null;
-}): DashboardMetrics {
+}): { metrics: DashboardMetrics; deltas: DashboardDeltas } {
   const start = startOfToday().getTime();
   const end = start + 24 * 60 * 60 * 1000;
+  const yStart = start - 24 * 60 * 60 * 1000;
 
   const inBranch = <T extends { branchId?: string | null }>(items: T[]) =>
     input.branchId
@@ -97,23 +113,34 @@ function computeMetrics(input: {
       (!input.branchId || !i.branchId || i.branchId === input.branchId),
   );
 
-  const paidToday = orders.filter(
-    (o) =>
-      o.status === "paid" &&
-      o.paidAt &&
-      new Date(o.paidAt).getTime() >= start &&
-      new Date(o.paidAt).getTime() < end,
-  );
+  const paidInRange = (from: number, to: number) =>
+    orders.filter(
+      (o) =>
+        o.status === "paid" &&
+        o.paidAt &&
+        new Date(o.paidAt).getTime() >= from &&
+        new Date(o.paidAt).getTime() < to,
+    );
+
+  const paidToday = paidInRange(start, end);
+  const paidYesterday = paidInRange(yStart, start);
 
   const openOrders = orders.filter((o) =>
     ["open", "sent", "preparing", "ready"].includes(o.status),
   ).length;
 
-  const openTables = tables.filter((t) => t.status === "occupied").length;
+  const openTables = tables.filter(
+    (t) => t.status === "occupied" && !t.deletedAt,
+  ).length;
 
   const lowStockItems = levels.filter((l) => l.quantity <= l.minStock);
   const revenueToday = paidToday.reduce((s, o) => s + (o.total || 0), 0);
   const ordersToday = paidToday.length;
+  const revenueYesterday = paidYesterday.reduce(
+    (s, o) => s + (o.total || 0),
+    0,
+  );
+  const ordersYesterday = paidYesterday.length;
 
   const customersToday = input.customers.filter(
     (c) =>
@@ -127,19 +154,34 @@ function computeMetrics(input: {
     return t >= start && t < end && !["cancelled", "no_show"].includes(r.status);
   }).length;
 
+  const ingredientNames = new Map(
+    input.ingredients.map((i) => [i.id, i.name]),
+  );
+
   return {
-    revenueToday,
-    ordersToday,
-    averageTicket: ordersToday ? revenueToday / ordersToday : 0,
-    openTables,
-    openOrders,
-    customersToday,
-    reservationsToday,
-    lowStockCount: lowStockItems.length,
-    hourlySales: buildHourlySales(paidToday),
-    lowStockItems,
-    aiInsights: insights,
-    alerts: buildAlerts(lowStockItems, insights, openOrders),
+    metrics: {
+      revenueToday,
+      ordersToday,
+      averageTicket: ordersToday ? revenueToday / ordersToday : 0,
+      openTables,
+      openOrders,
+      customersToday,
+      reservationsToday,
+      lowStockCount: lowStockItems.length,
+      hourlySales: buildHourlySales(paidToday),
+      lowStockItems,
+      aiInsights: insights,
+      alerts: buildAlerts(
+        lowStockItems,
+        ingredientNames,
+        insights,
+        openOrders,
+      ),
+    },
+    deltas: {
+      revenuePct: pctChange(revenueToday, revenueYesterday),
+      ordersPct: pctChange(ordersToday, ordersYesterday),
+    },
   };
 }
 
@@ -156,9 +198,9 @@ export function listBranches(
     collection(getDb(), "restaurants", restaurantId, "branches"),
     (snap) => {
       cb(
-        snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Branch).filter(
-          (b) => b.status !== "archived",
-        ),
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }) as Branch)
+          .filter((b) => b.status !== "archived"),
       );
     },
     () => cb([]),
@@ -166,15 +208,15 @@ export function listBranches(
 }
 
 /**
- * Realtime dashboard aggregator for one restaurant (optional branch filter).
+ * Agregador en tiempo real del dashboard (Firestore).
  */
 export function subscribeDashboard(
   restaurantId: string,
   branchId: string | null,
-  cb: (metrics: DashboardMetrics) => void,
+  cb: (metrics: DashboardMetrics, deltas: DashboardDeltas) => void,
 ): Unsubscribe {
   if (!isFirebaseConfigured()) {
-    cb(EMPTY_DASHBOARD_METRICS);
+    cb(EMPTY_DASHBOARD_METRICS, { revenuePct: null, ordersPct: null });
     return () => undefined;
   }
 
@@ -182,22 +224,23 @@ export function subscribeDashboard(
   let orders: Order[] = [];
   let tables: Table[] = [];
   let levels: InventoryLevel[] = [];
+  let ingredients: Ingredient[] = [];
   let customers: Customer[] = [];
   let reservations: Reservation[] = [];
   let insights: AiInsight[] = [];
 
   const emit = () => {
-    cb(
-      computeMetrics({
-        orders,
-        tables,
-        levels,
-        customers,
-        reservations,
-        insights,
-        branchId,
-      }),
-    );
+    const { metrics, deltas } = computeMetrics({
+      orders,
+      tables,
+      levels,
+      ingredients,
+      customers,
+      reservations,
+      insights,
+      branchId,
+    });
+    cb(metrics, deltas);
   };
 
   const unsubs: Unsubscribe[] = [
@@ -226,7 +269,9 @@ export function subscribeDashboard(
     onSnapshot(
       collection(db, "restaurants", restaurantId, "inventoryLevels"),
       (snap) => {
-        levels = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as InventoryLevel);
+        levels = snap.docs.map(
+          (d) => ({ id: d.id, ...d.data() }) as InventoryLevel,
+        );
         emit();
       },
       () => {
@@ -235,9 +280,24 @@ export function subscribeDashboard(
       },
     ),
     onSnapshot(
+      collection(db, "restaurants", restaurantId, "ingredients"),
+      (snap) => {
+        ingredients = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }) as Ingredient)
+          .filter((i) => !i.deletedAt);
+        emit();
+      },
+      () => {
+        ingredients = [];
+        emit();
+      },
+    ),
+    onSnapshot(
       collection(db, "restaurants", restaurantId, "customers"),
       (snap) => {
-        customers = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Customer);
+        customers = snap.docs.map(
+          (d) => ({ id: d.id, ...d.data() }) as Customer,
+        );
         emit();
       },
       () => {

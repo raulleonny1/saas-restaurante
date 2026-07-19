@@ -6,8 +6,8 @@ interface KpiCardProps {
   label: string;
   value: string;
   hint?: string;
-  /** Percent vs yesterday; positive = up. */
-  deltaPct?: number;
+  /** Percent vs yesterday; positive = up. null = sin dato previo. */
+  deltaPct?: number | null;
   icon: LucideIcon;
   className?: string;
 }
