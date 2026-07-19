@@ -219,7 +219,24 @@ export function PrinterSetupPanel({
         </p>
       </div>
 
-      <BridgeBanner floor={floor} bridgeUp={bridgeUp} />
+      <BridgeBanner
+        floor={floor}
+        bridgeUp={bridgeUp}
+        onRecheck={() => {
+          void (async () => {
+            const up = await checkPrintBridge();
+            setBridgeUp(up);
+            if (up) {
+              toast("Asistente encendido · ya puedes Buscar", "success");
+            } else {
+              toast(
+                "Sigue apagado. Abre start-windows.bat y deja la ventana negra abierta",
+                "error",
+              );
+            }
+          })();
+        }}
+      />
 
       {showKitchenMode ? (
         floor ? (
@@ -337,9 +354,11 @@ export function PrinterSetupPanel({
 function BridgeBanner({
   floor,
   bridgeUp,
+  onRecheck,
 }: {
   floor: boolean;
   bridgeUp: boolean | null;
+  onRecheck: () => void;
 }) {
   const box = floor
     ? "rounded-2xl border border-white/10 bg-white/[0.04] p-4"
@@ -347,50 +366,76 @@ function BridgeBanner({
   const text = floor ? "text-[#a8b5a4]" : "text-fg-muted";
   const title = floor ? "text-[#e7efe4]" : "text-fg";
 
-  if (bridgeUp !== false) return null;
+  if (bridgeUp === true) {
+    return (
+      <div
+        className={
+          floor
+            ? "rounded-2xl border border-emerald-500/40 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-100"
+            : "rounded-[var(--radius-lg)] border border-emerald-500/30 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+        }
+      >
+        Asistente <strong>encendido</strong> en este PC. Usa «Buscar» en ventas
+        y en cocina (impresoras distintas).
+      </div>
+    );
+  }
 
   return (
     <div className={box}>
       <p className={`text-sm font-medium ${title}`}>
-        Asistente de impresoras (una vez en este PC)
+        Paso 1 · Encender el asistente en este PC
       </p>
-      <div className={`mt-3 space-y-2 text-xs ${text}`}>
-        <ol className="list-decimal space-y-1 pl-4">
-          <li>
-            Descarga estos dos archivos en la misma carpeta:
-            <span className="mt-1 flex flex-wrap gap-2">
-              <a
-                href={PRINT_BRIDGE_DOWNLOAD_BAT}
-                download
-                className={
-                  floor
-                    ? "text-emerald-400 underline"
-                    : "text-accent underline"
-                }
-              >
-                start-windows.bat
-              </a>
-              <a
-                href={PRINT_BRIDGE_DOWNLOAD_PS1}
-                download
-                className={
-                  floor
-                    ? "text-emerald-400 underline"
-                    : "text-accent underline"
-                }
-              >
-                smartserve-print-bridge.ps1
-              </a>
-            </span>
-          </li>
-          <li>
-            Haz doble clic en <strong>start-windows.bat</strong>.
-          </li>
-          <li>
-            En cada tarjeta pulsa «Buscar» y elige una impresora distinta.
-          </li>
-        </ol>
-      </div>
+      <p className={`mt-1 text-xs ${text}`}>
+        Sin esto, «Buscar» no puede ver impresoras (el navegador no tiene
+        permiso). No es instalar SmartServe: solo una ventana negra que debe
+        quedarse abierta.
+      </p>
+      <ol className={`mt-3 list-decimal space-y-2 pl-4 text-xs ${text}`}>
+        <li>
+          Descarga <strong>los dos</strong> en la misma carpeta (Escritorio):
+          <span className="mt-1.5 flex flex-wrap gap-2">
+            <a
+              href={PRINT_BRIDGE_DOWNLOAD_BAT}
+              download
+              className={
+                floor
+                  ? "rounded-lg bg-emerald-700 px-3 py-1.5 font-medium text-white"
+                  : "rounded-lg bg-accent px-3 py-1.5 font-medium text-white"
+              }
+            >
+              1 · start-windows.bat
+            </a>
+            <a
+              href={PRINT_BRIDGE_DOWNLOAD_PS1}
+              download
+              className={
+                floor
+                  ? "rounded-lg border border-white/20 px-3 py-1.5 text-emerald-300"
+                  : "rounded-lg border border-border px-3 py-1.5"
+              }
+            >
+              2 · smartserve-print-bridge.ps1
+            </a>
+          </span>
+        </li>
+        <li>
+          Doble clic en <strong>start-windows.bat</strong>. Debe decir{" "}
+          <strong>ESTADO: ENCENDIDO</strong>.
+        </li>
+        <li>Vuelve aquí, pulsa el botón de abajo y luego «Buscar» en cada tarjeta.</li>
+      </ol>
+      <button
+        type="button"
+        onClick={onRecheck}
+        className={
+          floor
+            ? "mt-3 w-full rounded-xl border border-emerald-400/40 py-2.5 text-sm font-medium text-emerald-200"
+            : "mt-3 w-full rounded-[var(--radius-md)] border border-border py-2.5 text-sm font-medium"
+        }
+      >
+        Ya lo abrí · comprobar si está encendido
+      </button>
     </div>
   );
 }

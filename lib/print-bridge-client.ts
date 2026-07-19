@@ -17,9 +17,10 @@ export type PrinterBridgeStatus =
   | { available: false; reason: "offline" | "error"; message?: string };
 
 function normalizePrinters(raw: unknown): InstalledPrinter[] {
-  if (!Array.isArray(raw)) return [];
+  // PowerShell a veces devuelve un solo objeto en vez de array
+  const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? [raw] : [];
   const out: InstalledPrinter[] = [];
-  for (const item of raw) {
+  for (const item of list) {
     if (!item || typeof item !== "object") continue;
     const row = item as Record<string, unknown>;
     const name = String(row.name ?? row.Name ?? "").trim();
@@ -45,17 +46,29 @@ function normalizePrinters(raw: unknown): InstalledPrinter[] {
   return out.sort((a, b) => a.name.localeCompare(b.name, "es"));
 }
 
+async function bridgeFetch(
+  path: string,
+  timeoutMs: number,
+): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = window.setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(`${PRINT_BRIDGE_URL}${path}`, {
+      method: "GET",
+      mode: "cors",
+      cache: "no-store",
+      signal: ctrl.signal,
+    });
+  } finally {
+    window.clearTimeout(t);
+  }
+}
+
 export async function checkPrintBridge(
-  timeoutMs = 1500,
+  timeoutMs = 2500,
 ): Promise<boolean> {
   try {
-    const ctrl = new AbortController();
-    const t = window.setTimeout(() => ctrl.abort(), timeoutMs);
-    const res = await fetch(`${PRINT_BRIDGE_URL}/health`, {
-      signal: ctrl.signal,
-      cache: "no-store",
-    });
-    window.clearTimeout(t);
+    const res = await bridgeFetch("/health", timeoutMs);
     return res.ok;
   } catch {
     return false;
@@ -64,27 +77,22 @@ export async function checkPrintBridge(
 
 /** Lista impresoras instaladas vía el asistente local (127.0.0.1). */
 export async function listInstalledPrinters(
-  timeoutMs = 4000,
+  timeoutMs = 6000,
 ): Promise<PrinterBridgeStatus> {
   try {
-    const ctrl = new AbortController();
-    const t = window.setTimeout(() => ctrl.abort(), timeoutMs);
-    const res = await fetch(`${PRINT_BRIDGE_URL}/printers`, {
-      signal: ctrl.signal,
-      cache: "no-store",
-    });
-    window.clearTimeout(t);
+    const res = await bridgeFetch("/printers", timeoutMs);
     if (!res.ok) {
       return {
         available: false,
         reason: "error",
-        message: `Asistente respondió ${res.status}`,
+        message: `Asistente respondió ${res.status}. Reinicia start-windows.bat`,
       };
     }
     const data = (await res.json()) as {
       ok?: boolean;
       printers?: unknown;
       error?: string;
+      version?: string;
     };
     if (data.ok === false) {
       return {
@@ -96,6 +104,7 @@ export async function listInstalledPrinters(
     return {
       available: true,
       printers: normalizePrinters(data.printers),
+      version: data.version,
     };
   } catch (e) {
     const aborted =
@@ -104,8 +113,8 @@ export async function listInstalledPrinters(
       available: false,
       reason: "offline",
       message: aborted
-        ? "El asistente no respondió a tiempo"
-        : "Asistente no iniciado en este PC",
+        ? "El asistente no respondió. ¿Está abierta la ventana negra?"
+        : "Asistente apagado. Abre start-windows.bat y deja la ventana abierta; luego Buscar.",
     };
   }
 }
