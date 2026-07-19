@@ -1,6 +1,7 @@
 "use client";
 
 import { getDb } from "@/lib/firebase";
+import { stripUndefined } from "@/lib/firestore-safe";
 import { newId, nowIso } from "@/modules/inventory/domain/ids";
 import type {
   Ingredient,
@@ -93,21 +94,23 @@ export async function upsertIngredient(input: {
 }): Promise<Ingredient> {
   const stamp = nowIso();
   const id = input.ingredient?.id ?? newId("ing");
-  const row: Ingredient = {
+  const sku = (input.sku ?? input.ingredient?.sku)?.trim() || undefined;
+  const row = stripUndefined({
     id,
     restaurantId: input.restaurantId,
     name: input.name.trim(),
     unit: input.unit,
     costPerUnit: input.costPerUnit,
     currency: input.currency,
-    sku: input.sku,
-    defaultSupplierId: input.defaultSupplierId,
-    shelfLifeDays: input.shelfLifeDays,
-    status: "active",
+    sku,
+    defaultSupplierId:
+      input.defaultSupplierId ?? input.ingredient?.defaultSupplierId,
+    shelfLifeDays: input.shelfLifeDays ?? input.ingredient?.shelfLifeDays,
+    status: "active" as const,
     createdAt: input.ingredient?.createdAt ?? stamp,
     updatedAt: stamp,
     deletedAt: null,
-  };
+  }) as Ingredient;
   const batch = writeBatch(getDb());
   batch.set(
     doc(getDb(), "restaurants", input.restaurantId, "ingredients", id),
@@ -133,6 +136,52 @@ export async function saveProductRecipe(input: {
   await batch.commit();
 }
 
+export async function upsertCategory(input: {
+  restaurantId: string;
+  category?: ProductCategory | null;
+  name: string;
+  sortOrder?: number;
+}): Promise<ProductCategory> {
+  const stamp = nowIso();
+  const id = input.category?.id ?? newId("cat");
+  const row: ProductCategory = {
+    id,
+    restaurantId: input.restaurantId,
+    name: input.name.trim(),
+    sortOrder:
+      input.sortOrder ??
+      input.category?.sortOrder ??
+      Date.now() % 100000,
+    status: "active",
+    createdAt: input.category?.createdAt ?? stamp,
+    updatedAt: stamp,
+    deletedAt: null,
+  };
+  const batch = writeBatch(getDb());
+  batch.set(
+    doc(getDb(), "restaurants", input.restaurantId, "categories", id),
+    row,
+  );
+  await batch.commit();
+  return row;
+}
+
+export async function archiveProduct(input: {
+  restaurantId: string;
+  productId: string;
+}): Promise<void> {
+  const batch = writeBatch(getDb());
+  batch.update(
+    doc(getDb(), "restaurants", input.restaurantId, "products", input.productId),
+    {
+      status: "inactive",
+      deletedAt: nowIso(),
+      updatedAt: nowIso(),
+    },
+  );
+  await batch.commit();
+}
+
 export async function upsertProductBasic(input: {
   restaurantId: string;
   product?: Product | null;
@@ -140,19 +189,39 @@ export async function upsertProductBasic(input: {
   categoryId: string;
   price: number;
   currency: CurrencyCode;
+  brand?: string;
+  wholesalePrice?: number;
+  stockQty?: number;
   recipe?: RecipeIngredient[];
   kitchenStation?: Product["kitchenStation"];
 }): Promise<Product> {
   const stamp = nowIso();
   const id = input.product?.id ?? newId("prd");
-  const row: Product = {
+  const brand =
+    (input.brand ?? input.product?.brand)?.trim() || undefined;
+  const wholesale =
+    input.wholesalePrice ?? input.product?.wholesalePrice;
+  const stockQty =
+    input.stockQty !== undefined
+      ? input.stockQty
+      : input.product?.stockQty;
+  const row = stripUndefined({
     id,
     restaurantId: input.restaurantId,
     categoryId: input.categoryId,
     name: input.name.trim(),
+    brand,
     price: input.price,
+    wholesalePrice:
+      wholesale != null && !Number.isNaN(Number(wholesale))
+        ? Number(wholesale)
+        : undefined,
+    stockQty:
+      stockQty != null && !Number.isNaN(Number(stockQty))
+        ? Number(stockQty)
+        : undefined,
     currency: input.currency,
-    status: "active",
+    status: "active" as const,
     branchIds: input.product?.branchIds ?? [],
     recipe: input.recipe ?? input.product?.recipe ?? [],
     kitchenStation: input.kitchenStation ?? input.product?.kitchenStation,
@@ -161,7 +230,7 @@ export async function upsertProductBasic(input: {
     createdAt: input.product?.createdAt ?? stamp,
     updatedAt: stamp,
     deletedAt: null,
-  };
+  }) as Product;
   const batch = writeBatch(getDb());
   batch.set(
     doc(getDb(), "restaurants", input.restaurantId, "products", id),

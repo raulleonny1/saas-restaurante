@@ -1,19 +1,23 @@
 "use client";
 
+import { useAuth } from "@/context/AuthProvider";
 import { formatCurrency } from "@/lib/format";
 import {
   Badge,
+  Button,
   PageHeader,
   Select,
   Skeleton,
 } from "@/ui";
 import {
   CalendarDays,
+  Package,
   ShoppingBag,
   TriangleAlert,
   UtensilsCrossed,
   Wallet,
 } from "lucide-react";
+import Link from "next/link";
 import { AiPulse } from "./components/AiPulse";
 import { AlertsPanel } from "./components/AlertsPanel";
 import { KpiCard } from "./components/KpiCard";
@@ -22,6 +26,7 @@ import { SalesChart } from "./components/SalesChart";
 import { useDashboard } from "./hooks/useDashboard";
 
 export function DashboardView() {
+  const { can } = useAuth();
   const {
     restaurantName,
     currency,
@@ -33,6 +38,8 @@ export function DashboardView() {
     loading,
     isSimulated,
   } = useDashboard();
+  const showCatalog =
+    can("catalog.products.manage") || can("catalog.categories.manage");
 
   if (loading) {
     return (
@@ -67,6 +74,13 @@ export function DashboardView() {
                 Datos simulados
               </Badge>
             ) : null}
+            {showCatalog ? (
+              <Link href="/inventory?tab=products">
+                <Button size="sm" variant="secondary">
+                  <Package className="h-3.5 w-3.5" /> Carta / productos
+                </Button>
+              </Link>
+            ) : null}
             <Select
               aria-label="Sucursal"
               className="w-full min-w-0 sm:min-w-[200px]"
@@ -85,6 +99,23 @@ export function DashboardView() {
           </div>
         }
       />
+
+      {showCatalog ? (
+        <section className="mb-4 rounded-[var(--radius-xl)] border border-border bg-bg-elevated p-4 sm:p-5">
+          <h2 className="text-sm font-medium">Gestión de carta</h2>
+          <p className="mt-1 text-sm text-fg-muted">
+            Categorías, marca, cantidad, precio unitario y precio por mayor.
+            Entra en{" "}
+            <Link
+              href="/inventory?tab=products"
+              className="font-medium text-accent underline-offset-2 hover:underline"
+            >
+              Carta / Inventario
+            </Link>
+            .
+          </p>
+        </section>
+      ) : null}
 
       {/* KPIs: 2×2 mobile → 4 cols desktop (wireframe) */}
       <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">

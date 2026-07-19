@@ -29,10 +29,12 @@ import {
   TabsTrigger,
   toast,
 } from "@/ui";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 function InventoryWorkspace() {
   const { can } = useAuth();
+  const searchParams = useSearchParams();
   const {
     ready,
     error,
@@ -43,7 +45,19 @@ function InventoryWorkspace() {
     ingredients,
     bootstrap,
   } = useInventory();
-  const [tab, setTab] = useState("alerts");
+
+  const canInventory = can("inventory.read") || can("inventory.adjust");
+  const canCatalog =
+    can("catalog.products.manage") ||
+    can("catalog.categories.manage") ||
+    can("catalog.read");
+
+  const tabFromUrl = searchParams.get("tab");
+  const defaultTab =
+    tabFromUrl === "products" || (!canInventory && canCatalog)
+      ? "products"
+      : "alerts";
+  const [tab, setTab] = useState(defaultTab);
   const [booting, setBooting] = useState(false);
 
   if (!ready) {
@@ -55,10 +69,10 @@ function InventoryWorkspace() {
     );
   }
 
-  if (!can("inventory.read") && !can("inventory.adjust")) {
+  if (!canInventory && !canCatalog) {
     return (
-      <Alert tone="warning" title="Sin acceso a inventario">
-        Tu rol no tiene permiso `inventory.read`.
+      <Alert tone="warning" title="Sin acceso">
+        Necesitas permiso de inventario o de catálogo.
       </Alert>
     );
   }
@@ -66,15 +80,17 @@ function InventoryWorkspace() {
   return (
     <div className="space-y-4 pb-16 lg:pb-0">
       <PageHeader
-        title="Inventario"
-        description="Productos, recetas, stock, compras, merma, transferencias y predicción IA. Las ventas descuentan ingredientes automáticamente."
+        title="Inventario y carta"
+        description="Crea categorías y productos (marca, cantidad, precio unitario y por mayor). Recetas y stock de ingredientes."
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            {alerts.length ? (
-              <Badge tone="danger">{alerts.length} alertas</Badge>
-            ) : (
-              <Badge tone="success">Stock OK</Badge>
-            )}
+            {canInventory ? (
+              alerts.length ? (
+                <Badge tone="danger">{alerts.length} alertas</Badge>
+              ) : (
+                <Badge tone="success">Stock OK</Badge>
+              )
+            ) : null}
             {branchId && branches.length > 0 ? (
               <Select
                 aria-label="Sucursal"
@@ -89,7 +105,7 @@ function InventoryWorkspace() {
                 ))}
               </Select>
             ) : null}
-            {!ingredients.length ? (
+            {canInventory && !ingredients.length ? (
               <Button
                 size="sm"
                 disabled={booting}
@@ -128,44 +144,64 @@ function InventoryWorkspace() {
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
-          <TabsTrigger value="alerts">Alertas</TabsTrigger>
-          <TabsTrigger value="ingredients">Ingredientes</TabsTrigger>
-          <TabsTrigger value="products">Productos / Recetas</TabsTrigger>
-          <TabsTrigger value="suppliers">Proveedores</TabsTrigger>
-          <TabsTrigger value="purchases">Compras</TabsTrigger>
-          <TabsTrigger value="waste">Merma</TabsTrigger>
-          <TabsTrigger value="transfers">Transferencias</TabsTrigger>
-          <TabsTrigger value="movements">Movimientos</TabsTrigger>
-          <TabsTrigger value="ai">Predicción IA</TabsTrigger>
+          {canInventory ? (
+            <TabsTrigger value="alerts">Alertas</TabsTrigger>
+          ) : null}
+          {canInventory ? (
+            <TabsTrigger value="ingredients">Ingredientes</TabsTrigger>
+          ) : null}
+          <TabsTrigger value="products">Carta / Productos</TabsTrigger>
+          {canInventory ? (
+            <>
+              <TabsTrigger value="suppliers">Proveedores</TabsTrigger>
+              <TabsTrigger value="purchases">Compras</TabsTrigger>
+              <TabsTrigger value="waste">Merma</TabsTrigger>
+              <TabsTrigger value="transfers">Transferencias</TabsTrigger>
+              <TabsTrigger value="movements">Movimientos</TabsTrigger>
+              <TabsTrigger value="ai">Predicción IA</TabsTrigger>
+            </>
+          ) : null}
         </TabsList>
 
-        <TabsContent value="alerts">
-          <AlertsPanel />
-        </TabsContent>
-        <TabsContent value="ingredients">
-          <IngredientsPanel />
-        </TabsContent>
+        {canInventory ? (
+          <TabsContent value="alerts">
+            <AlertsPanel />
+          </TabsContent>
+        ) : null}
+        {canInventory ? (
+          <TabsContent value="ingredients">
+            <IngredientsPanel />
+          </TabsContent>
+        ) : null}
         <TabsContent value="products">
-          <ProductsRecipesPanel />
+          <ProductsRecipesPanel
+            mode={
+              can("catalog.categories.manage") ? "full" : "kitchen"
+            }
+          />
         </TabsContent>
-        <TabsContent value="suppliers">
-          <SuppliersPanel />
-        </TabsContent>
-        <TabsContent value="purchases">
-          <PurchasesPanel />
-        </TabsContent>
-        <TabsContent value="waste">
-          <WastePanel />
-        </TabsContent>
-        <TabsContent value="transfers">
-          <TransfersPanel />
-        </TabsContent>
-        <TabsContent value="movements">
-          <MovementsPanel />
-        </TabsContent>
-        <TabsContent value="ai">
-          <AiForecastPanel />
-        </TabsContent>
+        {canInventory ? (
+          <>
+            <TabsContent value="suppliers">
+              <SuppliersPanel />
+            </TabsContent>
+            <TabsContent value="purchases">
+              <PurchasesPanel />
+            </TabsContent>
+            <TabsContent value="waste">
+              <WastePanel />
+            </TabsContent>
+            <TabsContent value="transfers">
+              <TransfersPanel />
+            </TabsContent>
+            <TabsContent value="movements">
+              <MovementsPanel />
+            </TabsContent>
+            <TabsContent value="ai">
+              <AiForecastPanel />
+            </TabsContent>
+          </>
+        ) : null}
       </Tabs>
     </div>
   );
@@ -174,7 +210,16 @@ function InventoryWorkspace() {
 export function InventoryView() {
   return (
     <InventoryProvider>
-      <InventoryWorkspace />
+      <Suspense
+        fallback={
+          <div className="space-y-4">
+            <Skeleton className="h-10 w-56" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        }
+      >
+        <InventoryWorkspace />
+      </Suspense>
     </InventoryProvider>
   );
 }

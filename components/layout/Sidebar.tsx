@@ -16,7 +16,9 @@ export function Sidebar() {
       </div>
       <nav className="flex flex-1 flex-col gap-1" aria-label="Principal">
         {APP_NAV.map((link) => {
-          const active = pathname.startsWith(link.href);
+          const pathOnly = link.href.split("?")[0] ?? link.href;
+          const active =
+            pathname === pathOnly || pathname.startsWith(`${pathOnly}/`);
           const Icon = link.icon;
           return (
             <Link

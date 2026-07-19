@@ -135,8 +135,8 @@ export function WaiterOrderPage() {
       </div>
 
       {tab === "carta" ? (
-        <div className="waiter-product-grid [&_button]:min-h-11">
-          <ProductGrid />
+        <div className="[&_button]:min-h-11">
+          <ProductGrid tone="waiter" />
         </div>
       ) : (
         <div className="space-y-3">

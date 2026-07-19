@@ -5,10 +5,12 @@ import { useRestaurant } from "@/context/RestaurantProvider";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { ensureInventoryBootstrap } from "@/modules/inventory/services/bootstrap.service";
 import {
+  archiveProduct,
   subscribeCategories,
   subscribeIngredients,
   subscribeProducts,
   saveProductRecipe,
+  upsertCategory,
   upsertIngredient,
   upsertProductBasic,
 } from "@/modules/inventory/services/catalog-inventory.service";
@@ -108,8 +110,18 @@ interface InventoryContextValue {
     name: string;
     categoryId: string;
     price: number;
+    brand?: string;
+    wholesalePrice?: number;
+    stockQty?: number;
+    kitchenStation?: Product["kitchenStation"];
     recipe?: RecipeIngredient[];
   }) => Promise<void>;
+  saveCategory: (input: {
+    category?: ProductCategory | null;
+    name: string;
+  }) => Promise<void>;
+  /** Solo roles con gestión plena de catálogo (no cocina). */
+  removeProduct: (productId: string) => Promise<void>;
   saveRecipe: (product: Product, recipe: RecipeIngredient[]) => Promise<void>;
   updateMinStock: (ingredientId: string, minStock: number) => Promise<void>;
   saveSupplier: (input: {
@@ -309,9 +321,25 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         name: input.name,
         categoryId: input.categoryId,
         price: input.price,
+        brand: input.brand,
+        wholesalePrice: input.wholesalePrice,
+        stockQty: input.stockQty,
+        kitchenStation: input.kitchenStation,
         currency,
         recipe: input.recipe,
       });
+    },
+    saveCategory: async (input) => {
+      const { restaurantId: rid } = requireCtx();
+      await upsertCategory({
+        restaurantId: rid,
+        category: input.category,
+        name: input.name,
+      });
+    },
+    removeProduct: async (productId) => {
+      const { restaurantId: rid } = requireCtx();
+      await archiveProduct({ restaurantId: rid, productId });
     },
     saveRecipe: async (product, recipe) => {
       const { restaurantId: rid } = requireCtx();

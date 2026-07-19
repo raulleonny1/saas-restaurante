@@ -27,7 +27,8 @@ import {
   Skeleton,
   toast,
 } from "@/ui";
-import { Plus, RotateCcw, Settings2, Trash2, UsersRound } from "lucide-react";
+import { Package, Plus, RotateCcw, Settings2, Trash2, UsersRound } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 function AdminSalaWorkspace() {
@@ -131,7 +132,7 @@ function AdminSalaWorkspace() {
     <div className="space-y-6 pb-16">
       <PageHeader
         title="Administración de sala"
-        description="Activa mesas, da de alta meseros y asígnales las mesas que deben atender."
+        description="Mesas, meseros y carta. Productos y categorías se gestionan en Carta / Inventario."
         actions={
           <div className="flex flex-wrap gap-2">
             {branches.length > 1 ? (
@@ -149,9 +150,32 @@ function AdminSalaWorkspace() {
             ) : null}
             <Badge tone="accent">{activeTables.length} mesas activas</Badge>
             <Badge tone="neutral">{waiters.length} meseros</Badge>
+            {can("catalog.products.manage") || can("catalog.read") ? (
+              <Link href="/inventory?tab=products">
+                <Button size="sm" variant="secondary">
+                  <Package className="h-3.5 w-3.5" /> Carta / productos
+                </Button>
+              </Link>
+            ) : null}
           </div>
         }
       />
+
+      {(can("catalog.products.manage") || can("catalog.categories.manage")) ? (
+        <section className="rounded-[var(--radius-xl)] border border-accent/30 bg-accent-soft/20 p-4 sm:p-5">
+          <h2 className="text-sm font-medium">Carta del restaurante</h2>
+          <p className="mt-1 text-sm text-fg-muted">
+            Crea categorías y productos: marca, cantidad (stock), precio
+            unitario y precio por mayor. Meseros y cocina ven la carta; cocina
+            puede añadir platos pero no quitarlos.
+          </p>
+          <Link href="/inventory?tab=products" className="mt-3 inline-block">
+            <Button size="sm">
+              <Package className="h-3.5 w-3.5" /> Ir a Carta / productos
+            </Button>
+          </Link>
+        </section>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Mesas */}

@@ -7,9 +7,10 @@ import { usePathname } from "next/navigation";
 
 export function MobileNav() {
   const pathname = usePathname();
-  const links = APP_NAV.filter((item) =>
-    (MOBILE_NAV_HREFS as readonly string[]).includes(item.href),
-  );
+  const links = APP_NAV.filter((item) => {
+    const pathOnly = item.href.split("?")[0] ?? item.href;
+    return (MOBILE_NAV_HREFS as readonly string[]).includes(pathOnly);
+  });
 
   return (
     <nav
@@ -18,7 +19,9 @@ export function MobileNav() {
     >
       {links.map((link) => {
         const Icon = link.icon;
-        const active = pathname.startsWith(link.href);
+        const pathOnly = link.href.split("?")[0] ?? link.href;
+        const active =
+          pathname === pathOnly || pathname.startsWith(`${pathOnly}/`);
         return (
           <Link
             key={link.href}

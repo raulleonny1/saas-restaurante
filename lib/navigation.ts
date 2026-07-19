@@ -37,7 +37,12 @@ export const APP_NAV: NavItem[] = [
   /** Vista sala (dueño); el mesero entra directo a /waiter, no ve este menú. */
   { href: "/waiter", label: "Sala meseros", icon: Smartphone, module: "waiter" },
   { href: "/kitchen", label: "Cocina", icon: ChefHat, module: "kitchen" },
-  { href: "/inventory", label: "Inventario", icon: Package, module: "inventory" },
+  {
+    href: "/inventory?tab=products",
+    label: "Carta / Inventario",
+    icon: Package,
+    module: "inventory",
+  },
   { href: "/customers", label: "Clientes", icon: Users, module: "customers" },
   { href: "/reservations", label: "Reservas", icon: CalendarDays, module: "reservations" },
   { href: "/marketing", label: "Marketing", icon: Megaphone, module: "marketing" },

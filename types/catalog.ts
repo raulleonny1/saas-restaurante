@@ -45,7 +45,14 @@ export interface Product extends Timestamps, SoftDelete {
   name: string;
   description?: string;
   sku?: string;
+  /** Marca / fabricante (opcional). */
+  brand?: string;
+  /** Precio de venta unitario (carta / sala). */
   price: number;
+  /** Precio por mayor (caja / pack). */
+  wholesalePrice?: number;
+  /** Unidades disponibles a la venta (stock de producto). */
+  stockQty?: number;
   cost?: number;
   currency: CurrencyCode;
   status: EntityStatus;

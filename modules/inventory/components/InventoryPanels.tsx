@@ -1,7 +1,13 @@
 "use client";
 
+import { useAuth } from "@/context/AuthProvider";
 import { useInventory } from "@/modules/inventory/context/InventoryProvider";
-import type { IngredientUnit, RecipeIngredient } from "@/types/catalog";
+import type {
+  Ingredient,
+  IngredientUnit,
+  Product,
+  RecipeIngredient,
+} from "@/types/catalog";
 import type { WasteReason } from "@/types/inventory";
 import {
   Alert,
@@ -44,15 +50,31 @@ export function AlertsPanel() {
 export function IngredientsPanel() {
   const { ingredients, levels, saveIngredient, updateMinStock, currency } =
     useInventory();
+  const [editing, setEditing] = useState<Ingredient | null>(null);
   const [name, setName] = useState("");
   const [unit, setUnit] = useState<IngredientUnit>("kg");
   const [cost, setCost] = useState("1");
   const [minEdits, setMinEdits] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
 
   const levelByIng = useMemo(
     () => new Map(levels.map((l) => [l.ingredientId, l])),
     [levels],
   );
+
+  function resetForm() {
+    setEditing(null);
+    setName("");
+    setUnit("kg");
+    setCost("1");
+  }
+
+  function startEdit(ing: Ingredient) {
+    setEditing(ing);
+    setName(ing.name);
+    setUnit(ing.unit);
+    setCost(String(ing.costPerUnit));
+  }
 
   return (
     <div className="space-y-4">
@@ -60,20 +82,30 @@ export function IngredientsPanel() {
         className="grid gap-2 rounded-[var(--radius-lg)] border border-border p-3 sm:grid-cols-4"
         onSubmit={(e) => {
           e.preventDefault();
+          if (!name.trim()) {
+            toast("Nombre obligatorio", "error");
+            return;
+          }
+          setBusy(true);
           void saveIngredient({
-            name,
+            ingredient: editing,
+            name: name.trim(),
             unit,
             costPerUnit: Number(cost) || 0,
           })
             .then(() => {
-              toast("Ingrediente guardado", "success");
-              setName("");
+              toast(
+                editing ? "Ingrediente actualizado" : "Ingrediente guardado",
+                "success",
+              );
+              resetForm();
             })
-            .catch((err) => toast(err.message, "error"));
+            .catch((err) => toast(err.message, "error"))
+            .finally(() => setBusy(false));
         }}
       >
         <Input
-          label="Nombre"
+          label={editing ? "Editar nombre" : "Nombre"}
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
@@ -96,12 +128,24 @@ export function IngredientsPanel() {
           value={cost}
           onChange={(e) => setCost(e.target.value)}
         />
-        <div className="flex items-end">
-          <Button type="submit" className="w-full">
-            Añadir
+        <div className="flex flex-wrap items-end gap-2">
+          <Button type="submit" className="flex-1" disabled={busy}>
+            {editing ? "Guardar cambios" : "Añadir"}
           </Button>
+          {editing ? (
+            <Button type="button" variant="secondary" onClick={resetForm}>
+              Cancelar
+            </Button>
+          ) : null}
         </div>
       </form>
+
+      {editing ? (
+        <p className="text-sm text-fg-muted">
+          Editando <strong>{editing.name}</strong>. Cambia nombre, unidad o
+          coste y pulsa Guardar cambios.
+        </p>
+      ) : null}
 
       <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-border">
         <table className="w-full text-left text-sm">
@@ -111,15 +155,19 @@ export function IngredientsPanel() {
               <th className="px-3 py-2">Stock</th>
               <th className="px-3 py-2">Mínimo</th>
               <th className="px-3 py-2">Coste</th>
+              <th className="px-3 py-2">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {ingredients.map((ing) => {
               const level = levelByIng.get(ing.id);
-              const low =
-                level && level.quantity <= level.minStock;
+              const low = level && level.quantity <= level.minStock;
+              const selected = editing?.id === ing.id;
               return (
-                <tr key={ing.id}>
+                <tr
+                  key={ing.id}
+                  className={selected ? "bg-accent-soft/30" : undefined}
+                >
                   <td className="px-3 py-2 font-medium">
                     {ing.name}{" "}
                     {low ? <Badge tone="danger">Bajo</Badge> : null}
@@ -163,6 +211,15 @@ export function IngredientsPanel() {
                   <td className="px-3 py-2">
                     {ing.costPerUnit} / {ing.unit}
                   </td>
+                  <td className="px-3 py-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => startEdit(ing)}
+                    >
+                      Editar
+                    </Button>
+                  </td>
                 </tr>
               );
             })}
@@ -173,195 +230,411 @@ export function IngredientsPanel() {
   );
 }
 
-export function ProductsRecipesPanel() {
+export function ProductsRecipesPanel({
+  /** Cocina: añadir/editar, sin quitar ni gestionar categorías. */
+  mode = "full",
+}: {
+  mode?: "full" | "kitchen";
+}) {
+  const { can } = useAuth();
   const {
     products,
     categories,
     ingredients,
     saveProduct,
+    saveCategory,
+    removeProduct,
     saveRecipe,
   } = useInventory();
+
+  const canManageProducts = can("catalog.products.manage");
+  const canManageCategories = can("catalog.categories.manage");
+  const canDelete =
+    mode === "full" &&
+    canManageCategories &&
+    canManageProducts;
+
   const [name, setName] = useState("");
+  const [brand, setBrand] = useState("");
   const [categoryId, setCategoryId] = useState("");
-  const [price, setPrice] = useState("5");
+  const [price, setPrice] = useState("");
+  const [wholesalePrice, setWholesalePrice] = useState("");
+  const [stockQty, setStockQty] = useState("");
+  const [kitchenStation, setKitchenStation] = useState<
+    Product["kitchenStation"] | ""
+  >("");
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [newCategory, setNewCategory] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [recipeLines, setRecipeLines] = useState<RecipeIngredient[]>([]);
+  const [busy, setBusy] = useState(false);
 
   const editing = products.find((p) => p.id === editId) ?? null;
 
+  function resetForm() {
+    setName("");
+    setBrand("");
+    setPrice("");
+    setWholesalePrice("");
+    setStockQty("");
+    setKitchenStation("");
+    setEditingProduct(null);
+  }
+
+  function loadProductIntoForm(p: Product) {
+    setEditingProduct(p);
+    setName(p.name);
+    setBrand(p.brand ?? "");
+    setCategoryId(p.categoryId);
+    setPrice(String(p.price ?? ""));
+    setWholesalePrice(
+      p.wholesalePrice != null ? String(p.wholesalePrice) : "",
+    );
+    setStockQty(p.stockQty != null ? String(p.stockQty) : "");
+    setKitchenStation(p.kitchenStation ?? "");
+  }
+
+  if (!canManageProducts && !can("catalog.read")) {
+    return (
+      <Alert tone="warning" title="Sin acceso al catálogo">
+        Necesitas permiso de productos o lectura de catálogo.
+      </Alert>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <form
-        className="grid gap-2 rounded-[var(--radius-lg)] border border-border p-3 sm:grid-cols-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const cat = categoryId || categories[0]?.id;
-          if (!cat) {
-            toast("Crea una categoría (Preparar POS) antes", "error");
-            return;
-          }
-          void saveProduct({
-            name,
-            categoryId: cat,
-            price: Number(price) || 0,
-          })
-            .then(() => {
-              toast("Producto guardado", "success");
-              setName("");
-            })
-            .catch((err) => toast(err.message, "error"));
-        }}
-      >
-        <Input
-          label="Producto"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <Select
-          label="Categoría"
-          value={categoryId || categories[0]?.id || ""}
-          onChange={(e) => setCategoryId(e.target.value)}
+      {mode === "full" && canManageCategories ? (
+        <form
+          className="flex flex-wrap items-end gap-2 rounded-[var(--radius-lg)] border border-border p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!newCategory.trim()) return;
+            setBusy(true);
+            void saveCategory({ name: newCategory.trim() })
+              .then(() => {
+                toast("Categoría creada", "success");
+                setNewCategory("");
+              })
+              .catch((err) => toast(err.message, "error"))
+              .finally(() => setBusy(false));
+          }}
         >
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </Select>
-        <Input
-          label="Precio"
-          type="number"
-          step="0.01"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-        />
-        <div className="flex items-end">
-          <Button type="submit" className="w-full">
-            Añadir producto
+          <Input
+            label="Nueva categoría"
+            className="min-w-[180px] flex-1"
+            value={newCategory}
+            onChange={(e) => setNewCategory(e.target.value)}
+            placeholder="Ej. Platos, Bebidas, Café"
+          />
+          <Button type="submit" disabled={busy || !newCategory.trim()}>
+            Crear categoría
           </Button>
-        </div>
-      </form>
+        </form>
+      ) : null}
+
+      {canManageProducts ? (
+        <form
+          className="grid gap-2 rounded-[var(--radius-lg)] border border-border p-3 sm:grid-cols-2 lg:grid-cols-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const cat = categoryId || categories[0]?.id;
+            if (!cat) {
+              toast("Crea una categoría primero", "error");
+              return;
+            }
+            if (!name.trim()) {
+              toast("Nombre obligatorio", "error");
+              return;
+            }
+            setBusy(true);
+            void saveProduct({
+              product: editingProduct,
+              name: name.trim(),
+              categoryId: cat,
+              brand: brand.trim() || undefined,
+              price: Number(price) || 0,
+              wholesalePrice:
+                wholesalePrice === ""
+                  ? undefined
+                  : Number(wholesalePrice) || 0,
+              stockQty:
+                stockQty === "" ? undefined : Number(stockQty) || 0,
+              kitchenStation: kitchenStation || undefined,
+            })
+              .then(() => {
+                toast(
+                  editingProduct ? "Producto actualizado" : "Producto creado",
+                  "success",
+                );
+                resetForm();
+              })
+              .catch((err) => toast(err.message, "error"))
+              .finally(() => setBusy(false));
+          }}
+        >
+          <Input
+            label="Producto"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            placeholder="Ej. Cappuccino"
+          />
+          <Input
+            label="Marca"
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+            placeholder="Opcional"
+          />
+          <Select
+            label="Categoría"
+            value={categoryId || categories[0]?.id || ""}
+            onChange={(e) => setCategoryId(e.target.value)}
+          >
+            {!categories.length ? (
+              <option value="">Sin categorías</option>
+            ) : null}
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+          <Input
+            label="Precio unitario"
+            type="number"
+            step="0.01"
+            min="0"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            required
+          />
+          <Input
+            label="Precio por mayor"
+            type="number"
+            step="0.01"
+            min="0"
+            value={wholesalePrice}
+            onChange={(e) => setWholesalePrice(e.target.value)}
+            placeholder="Opcional"
+          />
+          <Input
+            label="Cantidad (stock)"
+            type="number"
+            step="1"
+            min="0"
+            value={stockQty}
+            onChange={(e) => setStockQty(e.target.value)}
+            placeholder="Unidades"
+          />
+          <Select
+            label="Estación cocina"
+            value={kitchenStation}
+            onChange={(e) =>
+              setKitchenStation(
+                e.target.value as Product["kitchenStation"] | "",
+              )
+            }
+          >
+            <option value="">Sin estación</option>
+            <option value="cocina">Cocina</option>
+            <option value="bar">Bar</option>
+            <option value="bebidas">Bebidas</option>
+            <option value="postres">Postres</option>
+          </Select>
+          <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-3">
+            <Button type="submit" disabled={busy}>
+              {editingProduct ? "Guardar cambios" : "Añadir producto"}
+            </Button>
+            {editingProduct ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={resetForm}
+              >
+                Cancelar edición
+              </Button>
+            ) : null}
+          </div>
+        </form>
+      ) : (
+        <Alert tone="info" title="Solo lectura">
+          Puedes ver la carta. Pedir a gerente/supervisor para crear productos.
+        </Alert>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ul className="max-h-[420px] space-y-2 overflow-y-auto">
           {products.map((p) => (
-            <li key={p.id}>
+            <li
+              key={p.id}
+              className={`rounded-[var(--radius-md)] border px-3 py-2 text-sm ${
+                editId === p.id
+                  ? "border-accent bg-accent-soft/40"
+                  : "border-border"
+              }`}
+            >
               <button
                 type="button"
                 onClick={() => {
                   setEditId(p.id);
                   setRecipeLines(p.recipe?.length ? [...p.recipe] : []);
+                  if (canManageProducts) loadProductIntoForm(p);
                 }}
-                className={`w-full rounded-[var(--radius-md)] border px-3 py-2 text-left text-sm ${
-                  editId === p.id
-                    ? "border-accent bg-accent-soft/40"
-                    : "border-border"
-                }`}
+                className="w-full text-left"
               >
                 <span className="font-medium">{p.name}</span>
+                {p.brand ? (
+                  <span className="text-fg-muted"> · {p.brand}</span>
+                ) : null}
                 <span className="mt-0.5 block text-caption">
-                  Receta: {p.recipe?.length ?? 0} ingrediente(s)
+                  Unit. {p.price.toFixed(2)}
+                  {p.wholesalePrice != null
+                    ? ` · Mayor ${p.wholesalePrice.toFixed(2)}`
+                    : ""}
+                  {p.stockQty != null ? ` · Stock ${p.stockQty}` : ""}
+                  {mode === "full"
+                    ? ` · Receta: ${p.recipe?.length ?? 0}`
+                    : ""}
                 </span>
               </button>
-            </li>
-          ))}
-        </ul>
-
-        <div className="rounded-[var(--radius-lg)] border border-border p-3">
-          {!editing ? (
-            <p className="text-sm text-fg-muted">
-              Selecciona un producto para editar su receta (BOM). Cada venta
-              descontará estos ingredientes.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              <p className="font-medium">Receta · {editing.name}</p>
-              {recipeLines.map((line, idx) => (
-                <div key={idx} className="grid grid-cols-3 gap-2">
-                  <Select
-                    value={line.ingredientId}
-                    onChange={(e) => {
-                      const ing = ingredients.find(
-                        (i) => i.id === e.target.value,
-                      );
-                      setRecipeLines((rows) =>
-                        rows.map((r, i) =>
-                          i === idx
-                            ? {
-                                ingredientId: e.target.value,
-                                quantity: r.quantity,
-                                unit: ing?.unit ?? r.unit,
-                              }
-                            : r,
-                        ),
-                      );
-                    }}
-                  >
-                    {ingredients.map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.name}
-                      </option>
-                    ))}
-                  </Select>
-                  <Input
-                    type="number"
-                    step="0.001"
-                    value={String(line.quantity)}
-                    onChange={(e) =>
-                      setRecipeLines((rows) =>
-                        rows.map((r, i) =>
-                          i === idx
-                            ? { ...r, quantity: Number(e.target.value) || 0 }
-                            : r,
-                        ),
-                      )
-                    }
-                  />
+              {canDelete ? (
+                <div className="mt-2">
                   <Button
-                    variant="ghost"
                     size="sm"
-                    onClick={() =>
-                      setRecipeLines((rows) => rows.filter((_, i) => i !== idx))
-                    }
+                    variant="danger"
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          `¿Quitar «${p.name}» de la carta?`,
+                        )
+                      ) {
+                        return;
+                      }
+                      void removeProduct(p.id)
+                        .then(() => {
+                          toast("Producto quitado", "success");
+                          if (editingProduct?.id === p.id) resetForm();
+                        })
+                        .catch((err) => toast(err.message, "error"));
+                    }}
                   >
                     Quitar
                   </Button>
                 </div>
-              ))}
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  const first = ingredients[0];
-                  if (!first) {
-                    toast("Añade ingredientes antes", "error");
-                    return;
+              ) : null}
+            </li>
+          ))}
+          {!products.length ? (
+            <li className="py-6 text-center text-sm text-fg-muted">
+              Aún no hay productos en la carta.
+            </li>
+          ) : null}
+        </ul>
+
+        {mode === "full" ? (
+          <div className="rounded-[var(--radius-lg)] border border-border p-3">
+            {!editing ? (
+              <p className="text-sm text-fg-muted">
+                Selecciona un producto para editar su receta (BOM). Cada venta
+                descontará estos ingredientes.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <p className="font-medium">Receta · {editing.name}</p>
+                {recipeLines.map((line, idx) => (
+                  <div key={idx} className="grid grid-cols-3 gap-2">
+                    <Select
+                      value={line.ingredientId}
+                      onChange={(e) => {
+                        const ing = ingredients.find(
+                          (i) => i.id === e.target.value,
+                        );
+                        setRecipeLines((rows) =>
+                          rows.map((r, i) =>
+                            i === idx
+                              ? {
+                                  ingredientId: e.target.value,
+                                  quantity: r.quantity,
+                                  unit: ing?.unit ?? r.unit,
+                                }
+                              : r,
+                          ),
+                        );
+                      }}
+                    >
+                      {ingredients.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <Input
+                      type="number"
+                      step="0.001"
+                      value={String(line.quantity)}
+                      onChange={(e) =>
+                        setRecipeLines((rows) =>
+                          rows.map((r, i) =>
+                            i === idx
+                              ? { ...r, quantity: Number(e.target.value) || 0 }
+                              : r,
+                          ),
+                        )
+                      }
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setRecipeLines((rows) =>
+                          rows.filter((_, i) => i !== idx),
+                        )
+                      }
+                    >
+                      Quitar
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    const first = ingredients[0];
+                    if (!first) {
+                      toast("Añade ingredientes antes", "error");
+                      return;
+                    }
+                    setRecipeLines((rows) => [
+                      ...rows,
+                      {
+                        ingredientId: first.id,
+                        quantity: 0.01,
+                        unit: first.unit,
+                      },
+                    ]);
+                  }}
+                >
+                  + Línea
+                </Button>
+                <Button
+                  onClick={() =>
+                    void saveRecipe(editing, recipeLines)
+                      .then(() => toast("Receta guardada", "success"))
+                      .catch((err) => toast(err.message, "error"))
                   }
-                  setRecipeLines((rows) => [
-                    ...rows,
-                    {
-                      ingredientId: first.id,
-                      quantity: 0.01,
-                      unit: first.unit,
-                    },
-                  ]);
-                }}
-              >
-                + Línea
-              </Button>
-              <Button
-                onClick={() =>
-                  void saveRecipe(editing, recipeLines)
-                    .then(() => toast("Receta guardada", "success"))
-                    .catch((err) => toast(err.message, "error"))
-                }
-              >
-                Guardar receta
-              </Button>
-            </div>
-          )}
-        </div>
+                >
+                  Guardar receta
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-fg-muted">
+            Cocina puede añadir o editar productos. Solo gerente/supervisor
+            puede quitarlos o crear categorías.
+          </p>
+        )}
       </div>
     </div>
   );
