@@ -14,6 +14,7 @@ import {
   collection,
   doc,
   onSnapshot,
+  orderBy,
   query,
   Unsubscribe,
   where,
@@ -44,30 +45,51 @@ export function subscribePaymentsForOrder(
   );
 }
 
-/** Pagos de la sucursal (mesero/caja filtran el día en cliente). */
+/** Pagos recientes de la sucursal (últimos ~3 días en servidor). */
 export function subscribePaymentsForBranch(
   restaurantId: string,
   branchId: string,
   onData: (payments: Payment[]) => void,
   onError?: (error: Error) => void,
 ): Unsubscribe {
-  const q = query(
-    collection(getDb(), "restaurants", restaurantId, "payments"),
+  const col = collection(getDb(), "restaurants", restaurantId, "payments");
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 3);
+  cutoff.setHours(0, 0, 0, 0);
+  const since = cutoff.toISOString();
+
+  const mapPay = (snap: { docs: { id: string; data: () => object }[] }) =>
+    snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }) as Payment)
+      .filter((p) => (p.paidAt ?? p.createdAt) >= since)
+      .sort((a, b) =>
+        (b.paidAt ?? b.createdAt).localeCompare(a.paidAt ?? a.createdAt),
+      );
+
+  let unsub: Unsubscribe = () => {};
+  const prefer = query(
+    col,
     where("branchId", "==", branchId),
+    where("paidAt", ">=", since),
+    orderBy("paidAt", "desc"),
   );
-  return onSnapshot(
-    q,
-    (snap) => {
-      onData(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }) as Payment)
-          .sort((a, b) =>
-            (b.paidAt ?? b.createdAt).localeCompare(a.paidAt ?? a.createdAt),
-          ),
+  unsub = onSnapshot(
+    prefer,
+    (snap) => onData(mapPay(snap)),
+    (err) => {
+      if (!/index|failed-precondition/i.test(err.message)) {
+        onError?.(err);
+        return;
+      }
+      unsub();
+      unsub = onSnapshot(
+        query(col, where("branchId", "==", branchId)),
+        (snap) => onData(mapPay(snap)),
+        (e2) => onError?.(e2),
       );
     },
-    (err) => onError?.(err),
   );
+  return () => unsub();
 }
 
 export interface ChargeInput {

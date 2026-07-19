@@ -44,6 +44,8 @@ import {
   updateOrderItem,
   markPrinted,
 } from "@/modules/pos/services/orders.service";
+import { applyPaidOrderToCrm } from "@/modules/customers/services/orders-crm.service";
+import { deductOrderFromInventory } from "@/modules/inventory/services/sale-deduction.service";
 import {
   chargeOrder,
   refundPayment,
@@ -633,7 +635,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
       meta?: { chargedFrom?: "waiter" | "caja" | "pos" },
     ) => {
       const { order, restaurantId: rid, uid } = requireOrder();
-      await chargeOrder({
+      const { order: next } = await chargeOrder({
         restaurantId: rid,
         order,
         tables,
@@ -647,6 +649,19 @@ export function PosProvider({ children }: { children: ReactNode }) {
         chargedFrom: meta?.chargedFrom,
         taxPercent,
       });
+      // Side-effects en el cobro (idempotentes): no hace falta sync global en mesero/caja
+      if (next.status === "paid" || next.paidAt) {
+        void deductOrderFromInventory({
+          restaurantId: rid,
+          order: next,
+          actorUid: uid,
+        }).catch(() => undefined);
+        void applyPaidOrderToCrm({
+          restaurantId: rid,
+          order: next,
+          actorUid: uid,
+        }).catch(() => undefined);
+      }
     },
     [requireOrder, tables, taxPercent, user?.displayName, user?.email],
   );

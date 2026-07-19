@@ -17,7 +17,9 @@ import {
   collection,
   doc,
   getDoc,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   Unsubscribe,
   where,
@@ -61,21 +63,35 @@ export function subscribeOpenOrders(
   onData: (orders: Order[]) => void,
   onError?: (error: Error) => void,
 ): Unsubscribe {
-  const q = query(
-    collection(getDb(), "restaurants", restaurantId, "orders"),
+  const col = collection(getDb(), "restaurants", restaurantId, "orders");
+  const mapOpen = (snap: { docs: { id: string; data: () => object }[] }) =>
+    snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }) as Order)
+      .filter((o) => !o.deletedAt && OPEN_STATUSES.includes(o.status));
+
+  let unsub: Unsubscribe = () => {};
+  const prefer = query(
+    col,
     where("branchId", "==", branchId),
+    where("status", "in", OPEN_STATUSES),
   );
-  return onSnapshot(
-    q,
-    (snap) => {
-      onData(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }) as Order)
-          .filter((o) => !o.deletedAt && OPEN_STATUSES.includes(o.status)),
+  unsub = onSnapshot(
+    prefer,
+    (snap) => onData(mapOpen(snap)),
+    (err) => {
+      if (!/index|failed-precondition/i.test(err.message)) {
+        onError?.(err);
+        return;
+      }
+      unsub();
+      unsub = onSnapshot(
+        query(col, where("branchId", "==", branchId)),
+        (snap) => onData(mapOpen(snap)),
+        (e2) => onError?.(e2),
       );
     },
-    (err) => onError?.(err),
   );
+  return () => unsub();
 }
 
 export function subscribeOrder(
@@ -104,29 +120,50 @@ export function subscribeRecentPaidOrders(
   onData: (orders: Order[]) => void,
   onError?: (error: Error) => void,
 ): Unsubscribe {
-  const q = query(
-    collection(getDb(), "restaurants", restaurantId, "orders"),
+  const col = collection(getDb(), "restaurants", restaurantId, "orders");
+  const mapHistory = (snap: { docs: { id: string; data: () => object }[] }) =>
+    snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }) as Order)
+      .filter(
+        (o) =>
+          !o.deletedAt &&
+          (o.status === "paid" ||
+            o.status === "cancelled" ||
+            Boolean(o.refundedAt)),
+      )
+      .sort((a, b) =>
+        (b.paidAt ?? b.updatedAt ?? "").localeCompare(
+          a.paidAt ?? a.updatedAt ?? "",
+        ),
+      )
+      .slice(0, 80);
+
+  let unsub: Unsubscribe = () => {};
+  // Solo cobrados recientes (limit en servidor) — evita cargar años de pedidos
+  const prefer = query(
+    col,
     where("branchId", "==", branchId),
+    where("status", "==", "paid"),
+    orderBy("paidAt", "desc"),
+    limit(80),
   );
-  return onSnapshot(
-    q,
-    (snap) => {
-      onData(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }) as Order)
-          .filter(
-            (o) =>
-              !o.deletedAt &&
-              (o.status === "paid" ||
-                o.status === "cancelled" ||
-                Boolean(o.refundedAt)),
-          )
-          .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
-          .slice(0, 80),
+  unsub = onSnapshot(
+    prefer,
+    (snap) => onData(mapHistory(snap)),
+    (err) => {
+      if (!/index|failed-precondition/i.test(err.message)) {
+        onError?.(err);
+        return;
+      }
+      unsub();
+      unsub = onSnapshot(
+        query(col, where("branchId", "==", branchId), limit(200)),
+        (snap) => onData(mapHistory(snap)),
+        (e2) => onError?.(e2),
       );
     },
-    (err) => onError?.(err),
   );
+  return () => unsub();
 }
 
 export interface OpenTableInput {

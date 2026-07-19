@@ -1,8 +1,6 @@
 "use client";
 
-import { CrmOrderSync } from "@/modules/customers";
-import { InventorySaleSync } from "@/modules/inventory";
-import { MarketingSchedulerSync } from "@/modules/marketing";
+import { BackofficeSyncs } from "@/components/BackofficeSyncs";
 import { ToastViewport } from "@/ui";
 import { ReactNode } from "react";
 import { AuthProvider } from "./AuthProvider";
@@ -17,9 +15,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <RestaurantProvider>
           <TenantProvider>
             {children}
-            <InventorySaleSync />
-            <CrmOrderSync />
-            <MarketingSchedulerSync />
+            <BackofficeSyncs />
             <ToastViewport />
           </TenantProvider>
         </RestaurantProvider>

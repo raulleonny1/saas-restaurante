@@ -124,6 +124,7 @@ export function KitchenProvider({
 
   const seenKeysRef = useRef<Set<string>>(new Set());
   const primedRef = useRef(false);
+  const lastUrgentBucketRef = useRef(-1);
 
   const allowedStations = useMemo(
     () =>
@@ -191,7 +192,8 @@ export function KitchenProvider({
   }, [mode]);
 
   useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    // 15s basta para tiempos en pantalla; 1s quemaba CPU con el tablero entero
+    const t = window.setInterval(() => setNow(Date.now()), 15_000);
     return () => window.clearInterval(t);
   }, []);
 
@@ -349,8 +351,12 @@ export function KitchenProvider({
 
     if (hasNewQueued) playNewTicketSound();
     else if (hasNewReady) playReadySound();
-    else if (hasUrgent && Math.floor(now / 15000) !== Math.floor((now - 1000) / 15000)) {
-      playUrgentSound();
+    else if (hasUrgent) {
+      const bucket = Math.floor(now / 15_000);
+      if (bucket !== lastUrgentBucketRef.current) {
+        lastUrgentBucketRef.current = bucket;
+        playUrgentSound();
+      }
     }
 
     seenKeysRef.current = keys;

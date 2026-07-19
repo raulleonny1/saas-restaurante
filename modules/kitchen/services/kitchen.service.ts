@@ -118,27 +118,41 @@ export function subscribeKitchenOrders(
   onData: (orders: Order[]) => void,
   onError?: (e: Error) => void,
 ): Unsubscribe {
-  const q = query(
-    collection(getDb(), "restaurants", restaurantId, "orders"),
+  const col = collection(getDb(), "restaurants", restaurantId, "orders");
+  const mapActive = (snap: { docs: { id: string; data: () => object }[] }) =>
+    snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }) as Order)
+      .filter(
+        (o) =>
+          !o.deletedAt &&
+          ACTIVE_ORDER_STATUSES.includes(o.status) &&
+          o.status !== "paid" &&
+          o.status !== "cancelled",
+      );
+
+  let unsub: Unsubscribe = () => {};
+  const prefer = query(
+    col,
     where("branchId", "==", branchId),
+    where("status", "in", ACTIVE_ORDER_STATUSES),
   );
-  return onSnapshot(
-    q,
-    (snap) => {
-      onData(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }) as Order)
-          .filter(
-            (o) =>
-              !o.deletedAt &&
-              ACTIVE_ORDER_STATUSES.includes(o.status) &&
-              o.status !== "paid" &&
-              o.status !== "cancelled",
-          ),
+  unsub = onSnapshot(
+    prefer,
+    (snap) => onData(mapActive(snap)),
+    (err) => {
+      if (!/index|failed-precondition/i.test(err.message)) {
+        onError?.(err);
+        return;
+      }
+      unsub();
+      unsub = onSnapshot(
+        query(col, where("branchId", "==", branchId)),
+        (snap) => onData(mapActive(snap)),
+        (e2) => onError?.(e2),
       );
     },
-    (err) => onError?.(err),
   );
+  return () => unsub();
 }
 
 export function buildKitchenTickets(input: {
