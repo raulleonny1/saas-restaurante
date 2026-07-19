@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
-import { ROLE_LABELS } from "@/lib/roles";
+import { homePathForRole, isKitchenStaffRole, ROLE_LABELS } from "@/lib/roles";
 import { Badge, Button, Select } from "@/ui";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -12,17 +12,19 @@ export function Topbar() {
   const { user, role, signOut } = useAuth();
   const { restaurants, restaurantId, setRestaurantId } = useRestaurant();
   const { resolvedTheme, setTheme } = useTheme();
+  const home = homePathForRole(role);
+  const kitchenStaff = isKitchenStaffRole(role);
 
   return (
     <header className="flex items-center justify-between gap-4 border-b border-border bg-bg-elevated/70 px-4 py-3 backdrop-blur md:px-6">
       <div className="flex items-center gap-3 md:hidden">
-        <Link href="/dashboard" className="font-display text-lg">
+        <Link href={home} className="font-display text-lg">
           SmartServe
         </Link>
       </div>
 
       <div className="ml-auto flex items-center gap-2 sm:gap-3">
-        {restaurants.length > 0 ? (
+        {restaurants.length > 1 && !kitchenStaff ? (
           <Select
             aria-label="Restaurante activo"
             className="min-w-[160px]"

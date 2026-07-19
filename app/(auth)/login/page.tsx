@@ -2,7 +2,11 @@
 
 import { AuthShell } from "@/modules/auth";
 import { isFirebaseConfigured } from "@/lib/firebase";
-import { homePathForRole, isWaiterOnlyRole } from "@/lib/roles";
+import {
+  homePathForRole,
+  isKitchenStaffRole,
+  isWaiterOnlyRole,
+} from "@/lib/roles";
 import { signInOrActivate } from "@/services/auth.service";
 import type { RoleId } from "@/types/rbac";
 import { Button, Input, toast } from "@/ui";
@@ -21,6 +25,7 @@ function resolvePostLogin(
   next: string | null,
 ): string {
   if (isWaiterOnlyRole(role as RoleId)) return "/waiter";
+  if (isKitchenStaffRole(role as RoleId)) return homePathForRole(role);
   if (role === "cliente") {
     if (typeof window !== "undefined") {
       const slug = localStorage.getItem("customerSlug");

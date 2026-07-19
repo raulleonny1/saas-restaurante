@@ -53,8 +53,9 @@ export function resolveTableFloorTone(
   if (!order || order.items.length === 0) return "occupied";
 
   // Pedido ya cobrado / cerrado → no parpadear «Listo»
+  // (dirty/reserved ya se resolvieron arriba)
   if (order.status === "paid" || order.status === "cancelled") {
-    return table.status === "dirty" ? "dirty" : "free";
+    return "free";
   }
 
   const pending = order.items.filter(itemPendingSend);

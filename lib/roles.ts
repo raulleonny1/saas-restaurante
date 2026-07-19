@@ -66,6 +66,13 @@ export function isWaiterOnlyRole(role: RoleId | null | undefined): boolean {
   return !!role && WAITER_ONLY_ROLES.includes(role);
 }
 
+/** Cocina / barra: solo KDS + carta (sin panel del dueño). */
+export const KITCHEN_STAFF_ROLES: RoleId[] = ["cocinero", "barista"];
+
+export function isKitchenStaffRole(role: RoleId | null | undefined): boolean {
+  return !!role && KITCHEN_STAFF_ROLES.includes(role);
+}
+
 /** Dueño / gerente / supervisor: gestionan sala (mesas + meseros + asignación). */
 export function isSalaAdminRole(role: RoleId | null | undefined): boolean {
   return hasRole(role ?? undefined, [

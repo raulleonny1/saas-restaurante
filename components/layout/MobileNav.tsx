@@ -1,16 +1,17 @@
 "use client";
 
-import { APP_NAV, MOBILE_NAV_HREFS } from "@/lib/navigation";
+import { useAuth } from "@/context/AuthProvider";
 import { cn } from "@/lib/cn";
+import { filterAppNav } from "@/lib/navigation";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 export function MobileNav() {
   const pathname = usePathname();
-  const links = APP_NAV.filter((item) => {
-    const pathOnly = item.href.split("?")[0] ?? item.href;
-    return (MOBILE_NAV_HREFS as readonly string[]).includes(pathOnly);
-  });
+  const { can } = useAuth();
+  const links = filterAppNav(can, { mobileOnly: true });
+
+  if (!links.length) return null;
 
   return (
     <nav

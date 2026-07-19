@@ -6,6 +6,7 @@ import { useTenant } from "@/context/TenantProvider";
 import {
   canCreateVenue,
   homePathForRole,
+  isKitchenStaffRole,
   isWaiterOnlyRole,
 } from "@/lib/roles";
 import { reloadCurrentUser } from "@/services/auth.service";
@@ -44,6 +45,20 @@ export function AppShell({ children }: { children: ReactNode }) {
       router.replace(homePathForRole(role));
     }
   }, [ready, loading, user, role, router]);
+
+  // Cocinero / barista: solo cocina|barra + carta (nada de dashboard admin)
+  useEffect(() => {
+    if (!ready || loading || !user || !role) return;
+    if (!isKitchenStaffRole(role)) return;
+    const allowed =
+      pathname.startsWith("/kitchen") ||
+      pathname.startsWith("/bar") ||
+      pathname.startsWith("/inventory") ||
+      pathname.startsWith("/login");
+    if (!allowed) {
+      router.replace(homePathForRole(role));
+    }
+  }, [ready, loading, user, role, pathname, router]);
 
   // Solo el dueño crea restaurante. Gerente/supervisor/staff invitado NUNCA /onboarding.
   useEffect(() => {
