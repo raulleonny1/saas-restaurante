@@ -6,6 +6,7 @@ import { Volume2, VolumeX } from "lucide-react";
 
 export function KitchenToolbar() {
   const {
+    mode,
     branches,
     branchId,
     setBranchId,
@@ -19,24 +20,40 @@ export function KitchenToolbar() {
     unlockAudio,
   } = useKitchen();
 
+  const allLabel = mode === "bar" ? "Todas las bebidas" : "Toda la cocina";
+  const showStationTabs = mode === "kitchen" || stations.length > 1;
+
   return (
     <div className="space-y-3">
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        {stations.map((s) => (
+      {showStationTabs ? (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
           <button
-            key={s.id}
             type="button"
-            onClick={() => setStation(s.id)}
+            onClick={() => setStation("all")}
             className={`shrink-0 rounded-[var(--radius-md)] px-4 py-2 text-sm font-medium transition-colors ${
-              station === s.id
+              station === "all"
                 ? "bg-accent text-accent-fg shadow-[var(--shadow-sm)]"
                 : "bg-bg-muted text-fg-muted hover:text-fg"
             }`}
           >
-            {s.label}
+            {allLabel}
           </button>
-        ))}
-      </div>
+          {stations.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setStation(s.id)}
+              className={`shrink-0 rounded-[var(--radius-md)] px-4 py-2 text-sm font-medium transition-colors ${
+                station === s.id
+                  ? "bg-accent text-accent-fg shadow-[var(--shadow-sm)]"
+                  : "bg-bg-muted text-fg-muted hover:text-fg"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <SearchInput

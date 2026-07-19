@@ -428,7 +428,7 @@ export function ProductsRecipesPanel({
             placeholder="Unidades"
           />
           <Select
-            label="Estación cocina"
+            label="Estación (cocina / bar)"
             value={kitchenStation}
             onChange={(e) =>
               setKitchenStation(
@@ -436,11 +436,10 @@ export function ProductsRecipesPanel({
               )
             }
           >
-            <option value="">Sin estación</option>
-            <option value="cocina">Cocina</option>
-            <option value="bar">Bar</option>
-            <option value="bebidas">Bebidas</option>
-            <option value="postres">Postres</option>
+            <option value="">Auto (por nombre)</option>
+            <option value="cocina">Cocina · comida</option>
+            <option value="bar">Barra · bebidas</option>
+            <option value="postres">Cocina · postres</option>
           </Select>
           <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-3">
             <Button type="submit" disabled={busy}>

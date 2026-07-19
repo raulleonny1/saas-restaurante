@@ -1,2 +1,2 @@
-export { KitchenView } from "./KitchenView";
+export { BarView, KitchenView } from "./KitchenView";
 export { KitchenProvider, useKitchen } from "./context/KitchenProvider";

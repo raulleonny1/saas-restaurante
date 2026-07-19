@@ -10,6 +10,10 @@ import {
   unlockKitchenAudio,
 } from "@/modules/kitchen/domain/sound";
 import {
+  BOARD_STATIONS,
+  type KitchenBoardMode,
+} from "@/modules/kitchen/domain/stations";
+import {
   advanceKitchenItem,
   advanceTicketColumn,
   buildKitchenTickets,
@@ -38,7 +42,6 @@ import {
 } from "react";
 
 const BRANCH_KEY = "smartserve_kitchen_branch";
-const STATION_KEY = "smartserve_kitchen_station";
 const SOUND_KEY = "smartserve_kitchen_sound";
 
 interface KitchenFilters {
@@ -48,13 +51,14 @@ interface KitchenFilters {
 }
 
 interface KitchenContextValue {
+  mode: KitchenBoardMode;
   ready: boolean;
   error: string | null;
   branches: Branch[];
   branchId: string | null;
   setBranchId: (id: string) => void;
-  station: KitchenStationId;
-  setStation: (id: KitchenStationId) => void;
+  station: KitchenStationId | "all";
+  setStation: (id: KitchenStationId | "all") => void;
   stations: typeof KITCHEN_STATIONS;
   filters: KitchenFilters;
   setFilters: (patch: Partial<KitchenFilters>) => void;
@@ -80,12 +84,22 @@ export function useKitchen() {
   return ctx;
 }
 
-export function KitchenProvider({ children }: { children: ReactNode }) {
+function stationStorageKey(mode: KitchenBoardMode) {
+  return `smartserve_${mode}_station`;
+}
+
+export function KitchenProvider({
+  children,
+  mode = "kitchen",
+}: {
+  children: ReactNode;
+  mode?: KitchenBoardMode;
+}) {
   const { user } = useAuth();
   const { restaurant, restaurantId } = useRestaurant();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchIdState] = useState<string | null>(null);
-  const [station, setStationState] = useState<KitchenStationId>("cocina");
+  const [station, setStationState] = useState<KitchenStationId | "all">("all");
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -102,17 +116,28 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
   const seenKeysRef = useRef<Set<string>>(new Set());
   const primedRef = useRef(false);
 
+  const allowedStations = useMemo(
+    () =>
+      KITCHEN_STATIONS.filter((s) =>
+        (BOARD_STATIONS[mode] as readonly string[]).includes(s.id),
+      ),
+    [mode],
+  );
+
   const setBranchId = useCallback((id: string) => {
     setBranchIdState(id);
     localStorage.setItem(BRANCH_KEY, id);
   }, []);
 
-  const setStation = useCallback((id: KitchenStationId) => {
-    setStationState(id);
-    localStorage.setItem(STATION_KEY, id);
-    primedRef.current = false;
-    seenKeysRef.current = new Set();
-  }, []);
+  const setStation = useCallback(
+    (id: KitchenStationId | "all") => {
+      setStationState(id);
+      localStorage.setItem(stationStorageKey(mode), id);
+      primedRef.current = false;
+      seenKeysRef.current = new Set();
+    },
+    [mode],
+  );
 
   const setSoundEnabled = useCallback((on: boolean) => {
     setSoundEnabledState(on);
@@ -124,12 +149,21 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const storedStation = localStorage.getItem(STATION_KEY) as KitchenStationId | null;
-    if (storedStation && KITCHEN_STATIONS.some((s) => s.id === storedStation)) {
-      setStationState(storedStation);
+    const stored = localStorage.getItem(stationStorageKey(mode));
+    if (stored === "all") {
+      setStationState("all");
+    } else if (
+      stored &&
+      (BOARD_STATIONS[mode] as readonly string[]).includes(stored)
+    ) {
+      setStationState(stored as KitchenStationId);
+    } else {
+      setStationState("all");
     }
     setSoundEnabledState(localStorage.getItem(SOUND_KEY) !== "0");
-  }, []);
+    primedRef.current = false;
+    seenKeysRef.current = new Set();
+  }, [mode]);
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 1000);
@@ -197,7 +231,8 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
       orders,
       products,
       categories,
-      station,
+      board: mode,
+      station: station === "all" ? undefined : station,
       includeDelivered: filters.includeDelivered,
       now,
     });
@@ -214,7 +249,7 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
       );
     }
     return list;
-  }, [orders, products, categories, station, filters, now]);
+  }, [orders, products, categories, mode, station, filters, now]);
 
   const ticketsByColumn = useMemo(() => {
     const empty: Record<KitchenColumnId, KitchenTicket[]> = {
@@ -249,7 +284,6 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
     return empty;
   }, [tickets]);
 
-  // Sounds: new tickets + urgent
   useEffect(() => {
     if (!soundEnabled) return;
     const keys = new Set<string>();
@@ -326,6 +360,7 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
   );
 
   const value: KitchenContextValue = {
+    mode,
     ready,
     error,
     branches,
@@ -333,7 +368,7 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
     setBranchId,
     station,
     setStation,
-    stations: KITCHEN_STATIONS,
+    stations: allowedStations,
     filters,
     setFilters,
     soundEnabled,

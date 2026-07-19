@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChefHat,
   ClipboardList,
+  GlassWater,
   Globe,
   LayoutDashboard,
   Megaphone,
@@ -37,6 +38,7 @@ export const APP_NAV: NavItem[] = [
   /** Vista sala (dueño); el mesero entra directo a /waiter, no ve este menú. */
   { href: "/waiter", label: "Sala meseros", icon: Smartphone, module: "waiter" },
   { href: "/kitchen", label: "Cocina", icon: ChefHat, module: "kitchen" },
+  { href: "/bar", label: "Barra", icon: GlassWater, module: "bar" },
   {
     href: "/inventory?tab=products",
     label: "Carta / Inventario",
@@ -58,5 +60,6 @@ export const MOBILE_NAV_HREFS = [
   "/waiter",
   "/pos",
   "/kitchen",
+  "/bar",
   "/customers",
 ] as const;

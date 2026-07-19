@@ -6,8 +6,11 @@ import {
   itemToColumn,
 } from "@/modules/kitchen/domain/priority";
 import {
+  isDrinkStation,
   resolveItemStation,
+  stationMatchesBoard,
   targetPrepMinutes,
+  type KitchenBoardMode,
 } from "@/modules/kitchen/domain/stations";
 import type { Product, ProductCategory } from "@/types/catalog";
 import type {
@@ -141,7 +144,9 @@ export function buildKitchenTickets(input: {
   orders: Order[];
   products: Product[];
   categories: ProductCategory[];
-  station: KitchenStationId;
+  /** Estación concreta, o todas las del tablero (cocina / bar). */
+  station?: KitchenStationId;
+  board?: KitchenBoardMode;
   includeDelivered: boolean;
   now?: number;
 }): KitchenTicket[] {
@@ -149,6 +154,7 @@ export function buildKitchenTickets(input: {
   const productById = new Map(input.products.map((p) => [p.id, p]));
   const categoryById = new Map(input.categories.map((c) => [c.id, c]));
   const tickets: KitchenTicket[] = [];
+  const board = input.board ?? "kitchen";
 
   for (const order of input.orders) {
     const stationItems: KitchenTicketItem[] = [];
@@ -159,7 +165,15 @@ export function buildKitchenTickets(input: {
         ? categoryById.get(product.categoryId)
         : undefined;
       const station = resolveItemStation(item, product, category);
-      if (station !== input.station) continue;
+      if (input.station) {
+        const match =
+          input.station === "bar"
+            ? isDrinkStation(station)
+            : station === input.station;
+        if (!match) continue;
+      } else if (!stationMatchesBoard(station, board)) {
+        continue;
+      }
 
       // Only show lines that were sent to kitchen (or already in KDS flow)
       const column = itemToColumn(item.status);
@@ -208,7 +222,7 @@ export function buildKitchenTickets(input: {
 
     tickets.push({
       order,
-      station: input.station,
+      station: input.station ?? stationItems[0]!.station,
       items: stationItems,
       bumpedAt,
       priority,

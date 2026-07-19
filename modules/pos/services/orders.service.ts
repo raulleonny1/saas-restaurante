@@ -2,7 +2,9 @@
 
 import { getDb } from "@/lib/firebase";
 import { stripUndefined } from "@/lib/firestore-safe";
+import { resolveItemStation } from "@/modules/kitchen/domain/stations";
 import { recalculateOrder, roundMoney } from "@/modules/pos/domain/totals";
+import type { Product, ProductCategory } from "@/types/catalog";
 import type { CurrencyCode } from "@/types/common";
 import type {
   Order,
@@ -362,13 +364,26 @@ export async function sendToKitchen(
   order: Order,
   taxPercent: number,
   actorUid: string,
+  products: Product[] = [],
+  categories: ProductCategory[] = [],
 ): Promise<Order> {
   const stamp = nowIso();
-  const items = order.items.map((item) =>
-    item.status === "open" || !item.sentAt
-      ? { ...item, status: "sent" as OrderStatus, sentAt: item.sentAt ?? stamp }
-      : item,
-  );
+  const productById = new Map(products.map((p) => [p.id, p]));
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  const items = order.items.map((item) => {
+    if (item.status !== "open" && item.sentAt) return item;
+    const product = productById.get(item.productId);
+    const category = product
+      ? categoryById.get(product.categoryId)
+      : undefined;
+    return {
+      ...item,
+      status: "sent" as OrderStatus,
+      sentAt: item.sentAt ?? stamp,
+      kitchenStation:
+        item.kitchenStation ?? resolveItemStation(item, product, category),
+    };
+  });
   return saveOrder(
     restaurantId,
     {

@@ -3,6 +3,7 @@
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { isFirebaseConfigured } from "@/lib/firebase";
+import { resolveItemStation } from "@/modules/kitchen/domain/stations";
 import { printOrderReceipt } from "@/modules/pos/domain/print";
 import { balanceDue } from "@/modules/pos/domain/totals";
 import {
@@ -382,6 +383,22 @@ export function PosProvider({ children }: { children: ReactNode }) {
       const unitPrice =
         variant?.price ??
         input.product.price + (variant?.priceDelta ?? 0);
+      const category = categories.find(
+        (c) => c.id === input.product.categoryId,
+      );
+      const kitchenStation = resolveItemStation(
+        {
+          id: "",
+          productId: input.product.id,
+          name: input.product.name,
+          quantity: 1,
+          unitPrice,
+          status: "open",
+          kitchenStation: input.product.kitchenStation,
+        },
+        input.product,
+        category,
+      );
       const item: OrderItem = {
         id: newId("li"),
         productId: input.product.id,
@@ -389,6 +406,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
         quantity: input.quantity ?? 1,
         unitPrice,
         status: "open",
+        kitchenStation,
         ...(variant?.id ? { variantId: variant.id } : {}),
         ...(variant?.name ? { variantName: variant.name } : {}),
         ...(input.modifiers?.length ? { modifiers: input.modifiers } : {}),
@@ -404,7 +422,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
         { orderId: order.id, item },
       );
     },
-    [requireOrder, taxPercent, runOrQueue],
+    [requireOrder, taxPercent, runOrQueue, categories],
   );
 
   const setItemQty = useCallback(
@@ -479,8 +497,8 @@ export function PosProvider({ children }: { children: ReactNode }) {
 
   const sendKitchen = useCallback(async () => {
     const { order, restaurantId: rid, uid } = requireOrder();
-    await sendToKitchen(rid, order, taxPercent, uid);
-  }, [requireOrder, taxPercent]);
+    await sendToKitchen(rid, order, taxPercent, uid, products, categories);
+  }, [requireOrder, taxPercent, products, categories]);
 
   const moveToTable = useCallback(
     async (targetTableId: string) => {

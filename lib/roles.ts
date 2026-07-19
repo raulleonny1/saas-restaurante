@@ -80,7 +80,8 @@ export function isSalaAdminRole(role: RoleId | null | undefined): boolean {
 export function homePathForRole(role: RoleId | string | null | undefined): string {
   if (role === "cliente") return "/";
   if (isWaiterOnlyRole(role as RoleId)) return "/waiter";
-  if (role === "cocinero" || role === "barista") return "/kitchen";
+  if (role === "cocinero") return "/kitchen";
+  if (role === "barista") return "/bar";
   // Administrador de sala (gerente/supervisor) → su panel, no el KPI del dueño
   if (role === "gerente" || role === "supervisor") return "/admin";
   return "/dashboard";

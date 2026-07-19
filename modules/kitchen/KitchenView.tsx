@@ -9,17 +9,26 @@ import {
   KitchenProvider,
   useKitchen,
 } from "@/modules/kitchen/context/KitchenProvider";
+import type { KitchenBoardMode } from "@/modules/kitchen/domain/stations";
 import { Alert, Badge, Button, PageHeader, Skeleton } from "@/ui";
 import { Package } from "lucide-react";
 import { useState } from "react";
 
-function KitchenWorkspace() {
+function KitchenWorkspace({ mode }: { mode: KitchenBoardMode }) {
   const { can } = useAuth();
   const { ready, error, station, stations, tickets, unlockAudio } = useKitchen();
   const [showCatalog, setShowCatalog] = useState(false);
-  const stationLabel =
-    stations.find((s) => s.id === station)?.label ?? station;
+  const isBar = mode === "bar";
+  const accessOk = isBar
+    ? can("bar.access") || can("bar.update_status")
+    : can("kitchen.access") || can("kitchen.update_status");
   const canAddProducts = can("catalog.products.manage");
+  const stationLabel =
+    station === "all"
+      ? isBar
+        ? "bebidas"
+        : "comida"
+      : (stations.find((s) => s.id === station)?.label ?? station);
 
   if (!ready) {
     return (
@@ -30,10 +39,13 @@ function KitchenWorkspace() {
     );
   }
 
-  if (!can("kitchen.access") && !can("kitchen.update_status")) {
+  if (!accessOk) {
     return (
-      <Alert tone="warning" title="Sin acceso a cocina">
-        Tu rol no tiene permiso `kitchen.access`.
+      <Alert
+        tone="warning"
+        title={isBar ? "Sin acceso a barra" : "Sin acceso a cocina"}
+      >
+        Tu rol no tiene permiso `{isBar ? "bar.access" : "kitchen.access"}`.
       </Alert>
     );
   }
@@ -44,8 +56,12 @@ function KitchenWorkspace() {
       onPointerDown={() => void unlockAudio()}
     >
       <PageHeader
-        title="Cocina"
-        description={`Estación ${stationLabel}: tickets en tiempo real. Puedes añadir productos a la carta; no quitarlos.`}
+        title={isBar ? "Barra" : "Cocina"}
+        description={
+          isBar
+            ? `Solo bebidas (sodas, cafés, licores…). Estación ${stationLabel}.`
+            : `Solo comida. Estación ${stationLabel}. Las bebidas van a Barra.`
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone="accent">
@@ -86,10 +102,14 @@ function KitchenWorkspace() {
   );
 }
 
-export function KitchenView() {
+export function KitchenView({ mode = "kitchen" }: { mode?: KitchenBoardMode }) {
   return (
-    <KitchenProvider>
-      <KitchenWorkspace />
+    <KitchenProvider mode={mode}>
+      <KitchenWorkspace mode={mode} />
     </KitchenProvider>
   );
+}
+
+export function BarView() {
+  return <KitchenView mode="bar" />;
 }
