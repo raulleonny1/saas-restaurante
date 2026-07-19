@@ -9,6 +9,8 @@ import {
   isStaff,
   resolveDisplayRole,
 } from "@/lib/roles";
+import { clearDeviceSessionArtifacts } from "@/lib/session-prefs";
+import { clearQueuedMutations } from "@/modules/pos/offline/queue";
 import {
   bindAuthProfileHook,
   reloadCurrentUser,
@@ -111,6 +113,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status,
       loading: status === "loading",
       signOut: async () => {
+        clearDeviceSessionArtifacts();
+        try {
+          clearQueuedMutations();
+        } catch {
+          /* ignore */
+        }
         await doSignOut();
         setUser(null);
         setStatus("unauthenticated");

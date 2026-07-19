@@ -74,6 +74,14 @@ export function WaiterNotificationsProvider({
   const primedRef = useRef(false);
 
   useEffect(() => {
+    // Nueva sesión de usuario: no mezclar avisos descartados del anterior
+    setDismissed(new Set());
+    seenReadyRef.current = new Set();
+    primedRef.current = false;
+    setRemote([]);
+  }, [user?.uid]);
+
+  useEffect(() => {
     if (!user || !restaurantId) {
       setRemote([]);
       return;

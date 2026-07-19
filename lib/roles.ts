@@ -96,7 +96,10 @@ export function isSalaAdminRole(role: RoleId | null | undefined): boolean {
   ]);
 }
 
-/** Destino post-login / home según rol. */
+/**
+ * Destino post-login / home según rol del selector de empleados.
+ * Cada rol = cuenta Auth propia; no se mezclan sesiones en el mismo dispositivo.
+ */
 export function homePathForRole(role: RoleId | string | null | undefined): string {
   if (role === "cliente") return "/";
   if (isWaiterOnlyRole(role as RoleId)) return "/waiter";
@@ -105,6 +108,7 @@ export function homePathForRole(role: RoleId | string | null | undefined): strin
   if (role === "barista") return "/bar";
   // Administrador de sala (gerente/supervisor) → su panel, no el KPI del dueño
   if (role === "gerente" || role === "supervisor") return "/admin";
+  // propietario / super_admin / repartidor → panel general
   return "/dashboard";
 }
 

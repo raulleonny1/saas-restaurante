@@ -27,22 +27,27 @@ import {
   updateDoc,
 } from "firebase/firestore";
 
-const ACTIVE_KEY = "smartserve_active_restaurant";
+import {
+  getRestaurantPref,
+  setRestaurantPref,
+} from "@/lib/session-prefs";
 
-export function getStoredRestaurantId(): string | null {
+export function getStoredRestaurantId(uid?: string | null): string | null {
   if (typeof window === "undefined") return null;
   if (!isFirebaseConfigured()) return getLocalActiveRestaurantId();
-  return localStorage.getItem(ACTIVE_KEY);
+  return getRestaurantPref(uid);
 }
 
-export function setStoredRestaurantId(id: string | null): void {
+export function setStoredRestaurantId(
+  id: string | null,
+  uid?: string | null,
+): void {
   if (typeof window === "undefined") return;
   if (!isFirebaseConfigured()) {
     setLocalActiveRestaurantId(id);
     return;
   }
-  if (id) localStorage.setItem(ACTIVE_KEY, id);
-  else localStorage.removeItem(ACTIVE_KEY);
+  setRestaurantPref(uid, id);
 }
 
 export async function listRestaurantsForUser(user: AppUser): Promise<Restaurant[]> {

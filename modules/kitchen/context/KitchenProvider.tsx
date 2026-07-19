@@ -2,7 +2,13 @@
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
+import { useTenant } from "@/context/TenantProvider";
 import { isFirebaseConfigured } from "@/lib/firebase";
+import {
+  getBranchPref,
+  pickAllowedBranchId,
+  setBranchPref,
+} from "@/lib/session-prefs";
 import {
   playNewTicketSound,
   playReadySound,
@@ -42,7 +48,6 @@ import {
   type ReactNode,
 } from "react";
 
-const BRANCH_KEY = "smartserve_kitchen_branch";
 const SOUND_KEY = "smartserve_kitchen_sound";
 
 interface KitchenFilters {
@@ -100,7 +105,8 @@ export function KitchenProvider({
 }) {
   const { user } = useAuth();
   const { restaurant, restaurantId } = useRestaurant();
-  const [branches, setBranches] = useState<Branch[]>([]);
+  const { canAccessBranch } = useTenant();
+  const [allBranches, setAllBranches] = useState<Branch[]>([]);
   const [branchId, setBranchIdState] = useState<string | null>(null);
   const [station, setStationState] = useState<KitchenStationId | "all">("all");
   const [orders, setOrders] = useState<Order[]>([]);
@@ -127,10 +133,26 @@ export function KitchenProvider({
     [mode],
   );
 
-  const setBranchId = useCallback((id: string) => {
-    setBranchIdState(id);
-    localStorage.setItem(BRANCH_KEY, id);
-  }, []);
+  const branches = useMemo(
+    () => allBranches.filter((b) => canAccessBranch(b.id)),
+    [allBranches, canAccessBranch],
+  );
+
+  const setBranchId = useCallback(
+    (id: string) => {
+      if (!canAccessBranch(id)) return;
+      setBranchIdState(id);
+      setBranchPref("kitchen", user?.uid, restaurantId, id);
+    },
+    [canAccessBranch, user?.uid, restaurantId],
+  );
+
+  useEffect(() => {
+    setBranchIdState(null);
+    setOrders([]);
+    primedRef.current = false;
+    seenKeysRef.current = new Set();
+  }, [user?.uid]);
 
   const setStation = useCallback(
     (id: KitchenStationId | "all") => {
@@ -187,23 +209,32 @@ export function KitchenProvider({
     return subscribeKitchenBranches(
       restaurantId,
       (list) => {
-        setBranches(list);
+        setAllBranches(list);
+        const allowed = list.filter((b) => canAccessBranch(b.id));
         setBranchIdState((current) => {
-          if (current && list.some((b) => b.id === current)) return current;
-          const stored = localStorage.getItem(BRANCH_KEY);
-          if (stored && list.some((b) => b.id === stored)) return stored;
-          return (
-            restaurant?.settings.defaultBranchId &&
-            list.some((b) => b.id === restaurant.settings.defaultBranchId)
-              ? restaurant.settings.defaultBranchId
-              : list.find((b) => b.isDefault)?.id ?? list[0]?.id ?? null
-          );
+          const stored = getBranchPref("kitchen", user?.uid, restaurantId);
+          const next = pickAllowedBranchId({
+            allowedIds: allowed.map((b) => b.id),
+            current,
+            stored,
+            defaultBranchId: restaurant?.settings.defaultBranchId,
+            isDefaultId: list.find((b) => b.isDefault)?.id ?? null,
+          });
+          if (next && user?.uid) {
+            setBranchPref("kitchen", user.uid, restaurantId, next);
+          }
+          return next;
         });
         setReady(true);
       },
       (err) => setError(err.message),
     );
-  }, [restaurantId, restaurant?.settings.defaultBranchId]);
+  }, [
+    restaurantId,
+    restaurant?.settings.defaultBranchId,
+    user?.uid,
+    canAccessBranch,
+  ]);
 
   useEffect(() => {
     if (!restaurantId) return;

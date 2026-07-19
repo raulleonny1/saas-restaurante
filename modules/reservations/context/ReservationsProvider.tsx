@@ -2,7 +2,13 @@
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
+import { useTenant } from "@/context/TenantProvider";
 import { getDb, isFirebaseConfigured } from "@/lib/firebase";
+import {
+  getBranchPref,
+  pickAllowedBranchId,
+  setBranchPref,
+} from "@/lib/session-prefs";
 import {
   addMinutes,
   endOfDay,
@@ -42,8 +48,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-
-const BRANCH_KEY = "smartserve_reservations_branch";
 
 interface ReservationsContextValue {
   ready: boolean;
@@ -100,7 +104,8 @@ export function useReservations() {
 export function ReservationsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { restaurant, restaurantId } = useRestaurant();
-  const [branches, setBranches] = useState<Branch[]>([]);
+  const { canAccessBranch } = useTenant();
+  const [allBranches, setAllBranches] = useState<Branch[]>([]);
   const [branchId, setBranchIdState] = useState<string | null>(null);
   const [tables, setTables] = useState<Table[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -128,10 +133,26 @@ export function ReservationsProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const setBranchId = useCallback((id: string) => {
-    setBranchIdState(id);
-    localStorage.setItem(BRANCH_KEY, id);
-  }, []);
+  const branches = useMemo(
+    () => allBranches.filter((b) => canAccessBranch(b.id)),
+    [allBranches, canAccessBranch],
+  );
+
+  const setBranchId = useCallback(
+    (id: string) => {
+      if (!canAccessBranch(id)) return;
+      setBranchIdState(id);
+      setBranchPref("reservations", user?.uid, restaurantId, id);
+    },
+    [canAccessBranch, user?.uid, restaurantId],
+  );
+
+  useEffect(() => {
+    setBranchIdState(null);
+    setReservations([]);
+    setWaitlist([]);
+    setTables([]);
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!restaurantId || !isFirebaseConfigured()) {
@@ -150,23 +171,32 @@ export function ReservationsProvider({ children }: { children: ReactNode }) {
         const list = snap.docs
           .map((d) => ({ id: d.id, ...d.data() }) as Branch)
           .filter((b) => !b.deletedAt);
-        setBranches(list);
+        setAllBranches(list);
+        const allowed = list.filter((b) => canAccessBranch(b.id));
         setBranchIdState((current) => {
-          if (current && list.some((b) => b.id === current)) return current;
-          const stored = localStorage.getItem(BRANCH_KEY);
-          if (stored && list.some((b) => b.id === stored)) return stored;
-          return (
-            restaurant?.settings.defaultBranchId &&
-            list.some((b) => b.id === restaurant.settings.defaultBranchId)
-              ? restaurant.settings.defaultBranchId
-              : list.find((b) => b.isDefault)?.id ?? list[0]?.id ?? null
-          );
+          const stored = getBranchPref("reservations", user?.uid, restaurantId);
+          const next = pickAllowedBranchId({
+            allowedIds: allowed.map((b) => b.id),
+            current,
+            stored,
+            defaultBranchId: restaurant?.settings.defaultBranchId,
+            isDefaultId: list.find((b) => b.isDefault)?.id ?? null,
+          });
+          if (next && user?.uid) {
+            setBranchPref("reservations", user.uid, restaurantId, next);
+          }
+          return next;
         });
         setReady(true);
       },
       (err) => setError(err.message),
     );
-  }, [restaurantId, restaurant?.settings.defaultBranchId]);
+  }, [
+    restaurantId,
+    restaurant?.settings.defaultBranchId,
+    user?.uid,
+    canAccessBranch,
+  ]);
 
   useEffect(() => {
     if (!restaurantId || !branchId) return;

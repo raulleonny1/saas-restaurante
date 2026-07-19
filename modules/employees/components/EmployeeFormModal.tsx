@@ -26,6 +26,15 @@ const DOC_TYPES: { id: EmployeeIdDocumentType; label: string }[] = [
   { id: "pasaporte", label: "Pasaporte" },
 ];
 
+/** Roles de piso: deben tener sucursal(es). Gerente/supervisor sin marcar = todas. */
+const BRANCH_REQUIRED_ROLES: RoleId[] = [
+  "cajero",
+  "mesero",
+  "cocinero",
+  "barista",
+  "repartidor",
+];
+
 export function EmployeeFormModal({
   open,
   onClose,
@@ -50,6 +59,8 @@ export function EmployeeFormModal({
   const [hireDate, setHireDate] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const needsBranch =
+    BRANCH_REQUIRED_ROLES.includes(roleId) && branches.length > 0;
 
   useEffect(() => {
     if (!open) return;
@@ -90,10 +101,22 @@ export function EmployeeFormModal({
             Cancelar
           </Button>
           <Button
-            disabled={busy || !name.trim() || !email.trim()}
+            disabled={
+              busy ||
+              !name.trim() ||
+              !email.trim() ||
+              (needsBranch && branchIds.length === 0)
+            }
             onClick={() => {
               void (async () => {
                 try {
+                  if (needsBranch && branchIds.length === 0) {
+                    toast(
+                      "Elige al menos una sucursal para este rol",
+                      "error",
+                    );
+                    return;
+                  }
                   setBusy(true);
                   await saveEmployee({
                     employee,
@@ -203,7 +226,17 @@ export function EmployeeFormModal({
       </div>
 
       <div className="mt-4">
-        <p className="mb-2 text-sm text-fg-muted">Sucursales</p>
+        <p className="mb-2 text-sm text-fg-muted">
+          Sucursales
+          {needsBranch ? (
+            <span className="text-fg-muted/80"> (obligatorio para este rol)</span>
+          ) : (
+            <span className="text-fg-muted/80">
+              {" "}
+              (vacío = todas las del restaurante)
+            </span>
+          )}
+        </p>
         <div className="flex flex-wrap gap-2">
           {branches.map((b) => (
             <label
@@ -228,6 +261,10 @@ export function EmployeeFormModal({
             </p>
           ) : null}
         </div>
+        <p className="mt-1.5 text-[11px] text-fg-muted">
+          Varios cajeros en la misma sucursal: cada uno entra con su email (sesión
+          propia). En caja ven el mismo turno en vivo para cuadrar.
+        </p>
       </div>
 
       <div className="mt-4">

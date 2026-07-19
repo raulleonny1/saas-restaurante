@@ -2,7 +2,13 @@
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
+import { useTenant } from "@/context/TenantProvider";
 import { isFirebaseConfigured } from "@/lib/firebase";
+import {
+  getBranchPref,
+  pickAllowedBranchId,
+  setBranchPref,
+} from "@/lib/session-prefs";
 import { resolveItemStation } from "@/modules/kitchen/domain/stations";
 import { advanceTicketColumn } from "@/modules/kitchen/services/kitchen.service";
 import { printOrderReceipt } from "@/modules/pos/domain/print";
@@ -69,7 +75,6 @@ import {
   type ReactNode,
 } from "react";
 
-const BRANCH_KEY = "smartserve_pos_branch";
 
 interface PosContextValue {
   ready: boolean;
@@ -152,7 +157,8 @@ export function usePos() {
 export function PosProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { restaurant, restaurantId } = useRestaurant();
-  const [branches, setBranches] = useState<Branch[]>([]);
+  const { canAccessBranch } = useTenant();
+  const [allBranches, setAllBranches] = useState<Branch[]>([]);
   const [branchId, setBranchIdState] = useState<string | null>(null);
   const [tables, setTables] = useState<Table[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -176,11 +182,31 @@ export function PosProvider({ children }: { children: ReactNode }) {
     setQueueSize(listQueuedMutations().length);
   }, []);
 
-  const setBranchId = useCallback((id: string) => {
-    setBranchIdState(id);
-    if (typeof window !== "undefined") localStorage.setItem(BRANCH_KEY, id);
+  const branches = useMemo(
+    () => allBranches.filter((b) => canAccessBranch(b.id)),
+    [allBranches, canAccessBranch],
+  );
+
+  const setBranchId = useCallback(
+    (id: string) => {
+      if (!canAccessBranch(id)) return;
+      setBranchIdState(id);
+      setBranchPref("pos", user?.uid, restaurantId, id);
+      setSelectedTableId(null);
+    },
+    [canAccessBranch, user?.uid, restaurantId],
+  );
+
+  // Cambio de usuario: vaciar estado de sala (no mezclar sesiones)
+  useEffect(() => {
+    setBranchIdState(null);
     setSelectedTableId(null);
-  }, []);
+    setTables([]);
+    setOpenOrders([]);
+    setHistoryOrders([]);
+    setActiveOrder(null);
+    setPayments([]);
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!restaurantId || !isFirebaseConfigured()) {
@@ -194,24 +220,30 @@ export function PosProvider({ children }: { children: ReactNode }) {
     }
     setError(null);
     return subscribeBranches(restaurantId, (list) => {
-      setBranches(list);
+      setAllBranches(list);
+      const allowed = list.filter((b) => canAccessBranch(b.id));
       setBranchIdState((current) => {
-        if (current && list.some((b) => b.id === current)) return current;
-        const stored =
-          typeof window !== "undefined"
-            ? localStorage.getItem(BRANCH_KEY)
-            : null;
-        if (stored && list.some((b) => b.id === stored)) return stored;
-        return (
-          restaurant?.settings.defaultBranchId &&
-          list.some((b) => b.id === restaurant.settings.defaultBranchId)
-            ? restaurant.settings.defaultBranchId
-            : list.find((b) => b.isDefault)?.id ?? list[0]?.id ?? null
-        );
+        const stored = getBranchPref("pos", user?.uid, restaurantId);
+        const next = pickAllowedBranchId({
+          allowedIds: allowed.map((b) => b.id),
+          current,
+          stored,
+          defaultBranchId: restaurant?.settings.defaultBranchId,
+          isDefaultId: list.find((b) => b.isDefault)?.id ?? null,
+        });
+        if (next && user?.uid) {
+          setBranchPref("pos", user.uid, restaurantId, next);
+        }
+        return next;
       });
       setReady(true);
     }, (err) => setError(err.message));
-  }, [restaurantId, restaurant?.settings.defaultBranchId]);
+  }, [
+    restaurantId,
+    restaurant?.settings.defaultBranchId,
+    user?.uid,
+    canAccessBranch,
+  ]);
 
   useEffect(() => {
     if (!restaurantId || !branchId) return;

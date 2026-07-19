@@ -63,14 +63,14 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
         const list = await listRestaurantsForUser(u);
         setRestaurants(list);
 
-        const stored = getStoredRestaurantId();
+        const stored = getStoredRestaurantId(u.uid);
         const nextId =
           (stored && list.some((r) => r.id === stored) && stored) ||
           list[0]?.id ||
           null;
 
         setRestaurantIdState(nextId);
-        if (nextId) setStoredRestaurantId(nextId);
+        if (nextId) setStoredRestaurantId(nextId, u.uid);
         hasLoadedRef.current = true;
       } finally {
         setLoading(false);
@@ -83,10 +83,22 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  const setRestaurantId = useCallback((id: string) => {
-    setRestaurantIdState(id);
-    setStoredRestaurantId(id);
-  }, []);
+  const setRestaurantId = useCallback(
+    (id: string) => {
+      setRestaurantIdState(id);
+      setStoredRestaurantId(id, userRef.current?.uid);
+    },
+    [],
+  );
+
+  // Cambio de usuario: no heredar restaurante activo del anterior
+  useEffect(() => {
+    if (!uid) {
+      setRestaurants([]);
+      setRestaurantIdState(null);
+      hasLoadedRef.current = false;
+    }
+  }, [uid]);
 
   const create = useCallback(
     async (name: string) => {

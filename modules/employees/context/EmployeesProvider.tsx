@@ -28,6 +28,7 @@ import {
 import {
   ensureStaffInvite,
   inviteMember,
+  updateMember,
 } from "@/modules/tenant/services/members.service";
 import { resetPassword } from "@/services/auth.service";
 import type {
@@ -319,6 +320,26 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
           employeeId: row.id,
         });
         row.inviteSentAt = new Date().toISOString();
+      }
+
+      // Empleado ya con cuenta: sincronizar rol/sucursales en membership
+      // (varios cajeros/meseros del mismo local = cuentas Auth distintas)
+      const memberUid = linked?.uid ?? row.uid;
+      if (memberUid) {
+        try {
+          await updateMember({
+            restaurantId,
+            uid: memberUid,
+            patch: {
+              roleId: row.roleId,
+              branchIds: row.branchIds,
+              displayName: row.name,
+            },
+          });
+        } catch (e) {
+          // No tumbar el alta del empleado si falla el sync de member
+          console.warn("[EmployeesProvider] sync member:", e);
+        }
       }
 
       setSelectedId(row.id);
