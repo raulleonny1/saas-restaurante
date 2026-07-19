@@ -6,7 +6,7 @@ import { roundMoney } from "@/modules/pos/domain/totals";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import type { PaymentMethod } from "@/types/orders";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 const METHODS: { id: PaymentMethod; label: string }[] = [
   { id: "cash", label: "Efectivo" },
@@ -51,12 +51,6 @@ export function WaiterPayPage() {
   const cashOk =
     method !== "cash" ||
     (Number.isFinite(tenderedNum) && tenderedNum + 0.001 >= totalDue);
-
-  useEffect(() => {
-    if (method === "cash" && tendered === "" && due > 0) {
-      setTendered(String(due));
-    }
-  }, [method, due, tendered]);
 
   if (!allowed) {
     return (
@@ -147,10 +141,14 @@ export function WaiterPayPage() {
           <label className="block text-xs text-[#8fa08c]">
             Cliente entrega
             <input
-              type="number"
+              type="text"
               inputMode="decimal"
               value={tendered}
-              onChange={(e) => setTendered(e.target.value)}
+              placeholder={String(totalDue)}
+              onChange={(e) => {
+                const v = e.target.value.replace(",", ".");
+                if (v === "" || /^\d*\.?\d*$/.test(v)) setTendered(v);
+              }}
               className="mt-1 w-full rounded-xl border border-white/15 bg-transparent px-3 py-3 text-2xl font-semibold text-[#e7efe4]"
             />
           </label>
