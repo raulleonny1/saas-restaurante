@@ -2,7 +2,7 @@ export { mapAuthError } from "./auth-errors";
 export { cn } from "./cn";
 export { formatCurrency, formatPercent, startOfToday } from "./format";
 export { createId } from "./id";
-export { APP_NAV, MOBILE_NAV_HREFS } from "./navigation";
+export { APP_NAV, filterAppNav, navItemVisible } from "./navigation";
 export type { NavItem } from "./navigation";
 export * from "./rbac";
 export {
