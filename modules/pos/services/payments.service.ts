@@ -51,6 +51,8 @@ export interface ChargeInput {
   amount: number;
   tipAmount?: number;
   splitSeat?: number;
+  /** Efectivo recibido del cliente (solo método cash). */
+  amountTendered?: number;
   uid: string;
   taxPercent: number;
 }
@@ -67,6 +69,7 @@ export async function chargeOrder(input: ChargeInput): Promise<{
     amount,
     tipAmount = 0,
     splitSeat,
+    amountTendered,
     uid,
     taxPercent,
   } = input;
@@ -74,6 +77,20 @@ export async function chargeOrder(input: ChargeInput): Promise<{
   const due = balanceDue(order);
   const payAmount = roundMoney(Math.min(amount, due || amount));
   if (payAmount <= 0) throw new Error("Nada que cobrar");
+
+  const tip = roundMoney(tipAmount);
+  const collectTotal = roundMoney(payAmount + tip);
+  const tendered =
+    method === "cash" && amountTendered != null && amountTendered > 0
+      ? roundMoney(amountTendered)
+      : undefined;
+  if (tendered != null && tendered + 0.001 < collectTotal) {
+    throw new Error("El efectivo entregado no cubre el cobro + propina");
+  }
+  const changeGiven =
+    tendered != null
+      ? roundMoney(Math.max(0, tendered - collectTotal))
+      : undefined;
 
   const stamp = nowIso();
   const paymentId = newId("pay");
@@ -90,6 +107,8 @@ export async function chargeOrder(input: ChargeInput): Promise<{
     processedBy: uid,
     paidAt: stamp,
     splitSeat,
+    ...(tendered != null ? { amountTendered: tendered } : {}),
+    ...(changeGiven != null ? { changeGiven } : {}),
     createdAt: stamp,
     updatedAt: stamp,
   };
@@ -110,7 +129,7 @@ export async function chargeOrder(input: ChargeInput): Promise<{
   const batch = writeBatch(getDb());
   batch.set(
     doc(getDb(), "restaurants", restaurantId, "payments", paymentId),
-    payment,
+    stripUndefined({ ...payment }),
   );
   batch.set(
     doc(getDb(), "restaurants", restaurantId, "orders", order.id),

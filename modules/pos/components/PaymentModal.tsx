@@ -1,10 +1,11 @@
 "use client";
 
 import { formatCurrency } from "@/lib/format";
+import { roundMoney } from "@/modules/pos/domain/totals";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import type { PaymentMethod } from "@/types/orders";
 import { Button, Input, Modal, toast } from "@/ui";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const METHODS: { id: PaymentMethod; label: string }[] = [
   { id: "cash", label: "Efectivo" },
@@ -14,6 +15,8 @@ const METHODS: { id: PaymentMethod; label: string }[] = [
   { id: "other", label: "Otro" },
 ];
 
+const CASH_CHIPS = [5, 10, 20, 50, 100];
+
 export function PaymentModal({
   open,
   onClose,
@@ -21,19 +24,36 @@ export function PaymentModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const { balance, currency, pay, activeOrder, printReceipt } = usePos();
-  const [method, setMethod] = useState<PaymentMethod>("card");
-  const [amount, setAmount] = useState(String(balance));
+  const { balance, currency, pay, activeOrder, printReceipt, payments } =
+    usePos();
+  const [method, setMethod] = useState<PaymentMethod>("cash");
+  const [tendered, setTendered] = useState(String(balance));
   const [tipExtra, setTipExtra] = useState("0");
   const [splitSeat, setSplitSeat] = useState<number | undefined>();
   const [busy, setBusy] = useState(false);
 
+  const tipNum = Number(tipExtra) || 0;
+  const totalDue = roundMoney(balance + tipNum);
+  const tenderedNum = Number(tendered) || 0;
+  const change = useMemo(() => {
+    if (method !== "cash") return 0;
+    return roundMoney(Math.max(0, tenderedNum - totalDue));
+  }, [method, tenderedNum, totalDue]);
+  const cashOk =
+    method !== "cash" || tenderedNum + 0.001 >= totalDue;
+
   useEffect(() => {
     if (open) {
-      setAmount(String(balance));
+      setTendered(String(balance));
       setTipExtra("0");
+      setMethod("cash");
     }
   }, [open, balance]);
+
+  const recentCash = payments
+    .filter((p) => p.method === "cash" && p.changeGiven != null)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 3);
 
   return (
     <Modal
@@ -51,18 +71,26 @@ export function PaymentModal({
             Cancelar
           </Button>
           <Button
-            disabled={busy || balance <= 0}
+            disabled={busy || balance <= 0 || !cashOk}
             onClick={() => {
               void (async () => {
                 try {
                   setBusy(true);
                   await pay(
                     method,
-                    Number(amount) || 0,
-                    Number(tipExtra) || 0,
+                    balance,
+                    tipNum,
                     splitSeat,
+                    method === "cash" ? tenderedNum : undefined,
                   );
-                  toast("Pago registrado", "success");
+                  if (method === "cash" && change > 0) {
+                    toast(
+                      `Pago OK · cambio ${formatCurrency(change, currency)}`,
+                      "success",
+                    );
+                  } else {
+                    toast("Pago registrado", "success");
+                  }
                   try {
                     await printReceipt();
                   } catch {
@@ -77,7 +105,9 @@ export function PaymentModal({
               })();
             }}
           >
-            Confirmar cobro
+            {method === "cash"
+              ? `Cobrar · cambio ${formatCurrency(change, currency)}`
+              : "Confirmar cobro"}
           </Button>
         </>
       }
@@ -88,7 +118,10 @@ export function PaymentModal({
             <button
               key={m.id}
               type="button"
-              onClick={() => setMethod(m.id)}
+              onClick={() => {
+                setMethod(m.id);
+                if (m.id === "cash") setTendered(String(balance));
+              }}
               className={`rounded-[var(--radius-md)] border px-3 py-3 text-sm font-medium ${
                 method === m.id
                   ? "border-accent bg-accent-soft text-accent"
@@ -99,22 +132,69 @@ export function PaymentModal({
             </button>
           ))}
         </div>
+
         <Input
-          label="Importe"
-          type="number"
-          step="0.01"
-          min={0}
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-        />
-        <Input
-          label="Propina adicional (importe)"
+          label="Propina adicional"
           type="number"
           step="0.01"
           min={0}
           value={tipExtra}
           onChange={(e) => setTipExtra(e.target.value)}
         />
+
+        {method === "cash" ? (
+          <div className="space-y-3 rounded-[var(--radius-lg)] border border-border bg-bg-muted/40 p-3">
+            <Input
+              label="Cliente entrega"
+              type="number"
+              step="0.01"
+              min={0}
+              value={tendered}
+              onChange={(e) => setTendered(e.target.value)}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                type="button"
+                onClick={() => setTendered(String(totalDue))}
+              >
+                Exacto
+              </Button>
+              {CASH_CHIPS.map((n) => (
+                <Button
+                  key={n}
+                  size="sm"
+                  variant="ghost"
+                  type="button"
+                  onClick={() => setTendered(String(n))}
+                >
+                  {formatCurrency(n, currency)}
+                </Button>
+              ))}
+            </div>
+            <div className="rounded-[var(--radius-md)] border border-accent/30 bg-accent-soft px-4 py-3 text-center">
+              <p className="text-caption text-fg-muted">Cambio a devolver</p>
+              <p className="text-3xl font-semibold text-accent tabular-nums">
+                {formatCurrency(cashOk ? change : 0, currency)}
+              </p>
+              {!cashOk ? (
+                <p className="mt-1 text-caption text-warning">
+                  Falta{" "}
+                  {formatCurrency(
+                    roundMoney(totalDue - tenderedNum),
+                    currency,
+                  )}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-fg-muted">
+            Cobro de {formatCurrency(totalDue, currency)} con {method}.
+          </p>
+        )}
+
         {activeOrder?.splitParts && activeOrder.splitParts > 1 ? (
           <label className="block text-sm">
             <span className="mb-1 block text-fg-muted">Cobrar parte</span>
@@ -122,7 +202,9 @@ export function PaymentModal({
               className="h-10 w-full rounded-[var(--radius-md)] border border-border bg-bg-elevated px-3"
               value={splitSeat ?? ""}
               onChange={(e) =>
-                setSplitSeat(e.target.value ? Number(e.target.value) : undefined)
+                setSplitSeat(
+                  e.target.value ? Number(e.target.value) : undefined,
+                )
               }
             >
               <option value="">Cuenta completa / restante</option>
@@ -134,27 +216,23 @@ export function PaymentModal({
             </select>
           </label>
         ) : null}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            type="button"
-            onClick={() => setAmount(String(balance))}
-          >
-            Exacto
-          </Button>
-          {[10, 20, 50].map((n) => (
-            <Button
-              key={n}
-              size="sm"
-              variant="ghost"
-              type="button"
-              onClick={() => setAmount(String(n))}
-            >
-              {formatCurrency(n, currency)}
-            </Button>
-          ))}
-        </div>
+
+        {recentCash.length ? (
+          <div className="space-y-1.5">
+            <p className="text-caption text-fg-muted">
+              Últimos cambios (sala / caja · tiempo real)
+            </p>
+            {recentCash.map((p) => (
+              <p key={p.id} className="text-sm">
+                Entregó {formatCurrency(p.amountTendered ?? 0, currency)} →
+                cambio{" "}
+                <span className="font-medium text-accent">
+                  {formatCurrency(p.changeGiven ?? 0, currency)}
+                </span>
+              </p>
+            ))}
+          </div>
+        ) : null}
       </div>
     </Modal>
   );

@@ -125,7 +125,13 @@ interface PosContextValue {
   mergeWithTables: (tableIds: string[]) => Promise<void>;
   applySplit: (parts: number) => Promise<void>;
   assignItemSeat: (itemId: string, seat: number) => Promise<void>;
-  pay: (method: PaymentMethod, amount: number, tipAmount?: number, splitSeat?: number) => Promise<void>;
+  pay: (
+    method: PaymentMethod,
+    amount: number,
+    tipAmount?: number,
+    splitSeat?: number,
+    amountTendered?: number,
+  ) => Promise<void>;
   printReceipt: () => Promise<void>;
   refund: (paymentId: string, amount: number) => Promise<void>;
   clearSelection: () => void;
@@ -588,6 +594,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
       amount: number,
       tipAmount = 0,
       splitSeat?: number,
+      amountTendered?: number,
     ) => {
       const { order, restaurantId: rid, uid } = requireOrder();
       await chargeOrder({
@@ -598,6 +605,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
         amount,
         tipAmount,
         splitSeat,
+        amountTendered,
         uid,
         taxPercent,
       });

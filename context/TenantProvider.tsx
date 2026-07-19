@@ -3,6 +3,7 @@
 import { can as canPermission } from "@/lib/rbac";
 import { resolveEffectivePermissions } from "@/lib/rbac/evaluate";
 import { canManageRestaurant, hasAnyRole, hasRole, isStaff } from "@/lib/roles";
+import { PERMISSION_CATALOG_VERSION } from "@/types/rbac";
 import {
   ensureTenantBilling,
   subscribeBilling,
@@ -129,7 +130,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       return resolveEffectivePermissions({ roleId: "super_admin" });
     }
     if (!member || !member.active || !role) return [];
-    if (member.permissionsCached?.length) {
+    // Cache desactualizado (p. ej. mesero sin payments.charge) → recalcular
+    const cacheFresh =
+      member.permissionsCached?.length &&
+      member.permissionsVersion === PERMISSION_CATALOG_VERSION;
+    if (cacheFresh) {
       return member.permissionsCached;
     }
     return resolveEffectivePermissions({

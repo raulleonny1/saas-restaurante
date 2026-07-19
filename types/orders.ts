@@ -132,6 +132,10 @@ export interface Payment extends Timestamps {
   refundOfPaymentId?: string;
   /** Positive amount refunded (payment rows with status refunded / refund type). */
   refundAmount?: number;
+  /** Efectivo que entregó el cliente (para calcular cambio). */
+  amountTendered?: number;
+  /** Cambio devuelto = max(0, amountTendered − amount). */
+  changeGiven?: number;
 }
 
 /** Immutable-ish timeline for an order (historial de pedido). */

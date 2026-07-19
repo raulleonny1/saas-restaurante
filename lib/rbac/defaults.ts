@@ -273,6 +273,7 @@ export const SYSTEM_ROLE_DEFAULTS: Record<RoleId, RolePermissionMap> = {
     "orders.read",
     "orders.create",
     "orders.update",
+    "payments.charge",
     "customers.read",
     "customers.manage",
     "loyalty.read",
