@@ -33,7 +33,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 function InventoryWorkspace() {
-  const { can } = useAuth();
+  const { can, role } = useAuth();
   const searchParams = useSearchParams();
   const {
     ready,
@@ -51,6 +51,17 @@ function InventoryWorkspace() {
     can("catalog.products.manage") ||
     can("catalog.categories.manage") ||
     can("catalog.read");
+
+  /** Cocina = solo comida; barista = solo bebidas; admin = carta completa. */
+  const catalogMode: "full" | "kitchen" | "bar" = can(
+    "catalog.categories.manage",
+  )
+    ? "full"
+    : role === "barista"
+      ? "bar"
+      : role === "cocinero"
+        ? "kitchen"
+        : "full";
 
   const tabFromUrl = searchParams.get("tab");
   const defaultTab =
@@ -80,8 +91,20 @@ function InventoryWorkspace() {
   return (
     <div className="space-y-4 pb-16 lg:pb-0">
       <PageHeader
-        title="Inventario y carta"
-        description="Crea categorías y productos (marca, cantidad, precio unitario y por mayor). Recetas y stock de ingredientes."
+        title={
+          catalogMode === "kitchen"
+            ? "Carta de cocina"
+            : catalogMode === "bar"
+              ? "Carta de barra"
+              : "Inventario y carta"
+        }
+        description={
+          catalogMode === "kitchen"
+            ? "Solo comidas y postres. Bebidas y licores los gestiona barra."
+            : catalogMode === "bar"
+              ? "Solo bebidas, aguas y licores. La comida la gestiona cocina."
+              : "Crea categorías y productos (marca, cantidad, precio unitario y por mayor). Recetas y stock de ingredientes."
+        }
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             {canInventory ? (
@@ -150,7 +173,13 @@ function InventoryWorkspace() {
           {canInventory ? (
             <TabsTrigger value="ingredients">Ingredientes</TabsTrigger>
           ) : null}
-          <TabsTrigger value="products">Carta / Productos</TabsTrigger>
+          <TabsTrigger value="products">
+            {catalogMode === "kitchen"
+              ? "Carta cocina"
+              : catalogMode === "bar"
+                ? "Carta barra"
+                : "Carta / Productos"}
+          </TabsTrigger>
           {canInventory ? (
             <>
               <TabsTrigger value="suppliers">Proveedores</TabsTrigger>
@@ -174,11 +203,7 @@ function InventoryWorkspace() {
           </TabsContent>
         ) : null}
         <TabsContent value="products">
-          <ProductsRecipesPanel
-            mode={
-              can("catalog.categories.manage") ? "full" : "kitchen"
-            }
-          />
+          <ProductsRecipesPanel mode={catalogMode} />
         </TabsContent>
         {canInventory ? (
           <>

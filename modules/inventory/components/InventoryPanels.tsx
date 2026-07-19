@@ -1,14 +1,20 @@
 "use client";
 
 import { useAuth } from "@/context/AuthProvider";
+import {
+  isDrinkStation,
+  resolveItemStation,
+} from "@/modules/kitchen/domain/stations";
 import { useInventory } from "@/modules/inventory/context/InventoryProvider";
 import type {
   Ingredient,
   IngredientUnit,
   Product,
+  ProductCategory,
   RecipeIngredient,
 } from "@/types/catalog";
 import type { WasteReason } from "@/types/inventory";
+import type { OrderItem } from "@/types/orders";
 import {
   Alert,
   Badge,
@@ -19,6 +25,23 @@ import {
   toast,
 } from "@/ui";
 import { useMemo, useState } from "react";
+
+function resolveProductStation(
+  product: Product,
+  categories: ProductCategory[],
+) {
+  const category = categories.find((c) => c.id === product.categoryId);
+  const stub = {
+    id: product.id,
+    productId: product.id,
+    name: product.name,
+    quantity: 1,
+    unitPrice: product.price,
+    status: "open",
+    kitchenStation: product.kitchenStation,
+  } as OrderItem;
+  return resolveItemStation(stub, product, category);
+}
 
 const UNITS: IngredientUnit[] = ["kg", "g", "L", "ml", "ud", "caja"];
 
@@ -231,10 +254,14 @@ export function IngredientsPanel() {
 }
 
 export function ProductsRecipesPanel({
-  /** Cocina: añadir/editar, sin quitar ni gestionar categorías. */
+  /**
+   * full = admin (toda la carta)
+   * kitchen = cocinero (solo comida/postres)
+   * bar = barista (solo bebidas/licores)
+   */
   mode = "full",
 }: {
-  mode?: "full" | "kitchen";
+  mode?: "full" | "kitchen" | "bar";
 }) {
   const { can } = useAuth();
   const {
@@ -254,6 +281,18 @@ export function ProductsRecipesPanel({
     canManageCategories &&
     canManageProducts;
 
+  const scopedProducts = useMemo(() => {
+    if (mode === "full") return products;
+    return products.filter((p) => {
+      const station = resolveProductStation(p, categories);
+      if (mode === "bar") return isDrinkStation(station);
+      return station === "cocina" || station === "postres";
+    });
+  }, [products, categories, mode]);
+
+  const defaultStation: Product["kitchenStation"] | "" =
+    mode === "bar" ? "bar" : mode === "kitchen" ? "cocina" : "";
+
   const [name, setName] = useState("");
   const [brand, setBrand] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -262,14 +301,14 @@ export function ProductsRecipesPanel({
   const [stockQty, setStockQty] = useState("");
   const [kitchenStation, setKitchenStation] = useState<
     Product["kitchenStation"] | ""
-  >("");
+  >(defaultStation);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [newCategory, setNewCategory] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [recipeLines, setRecipeLines] = useState<RecipeIngredient[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const editing = products.find((p) => p.id === editId) ?? null;
+  const editing = scopedProducts.find((p) => p.id === editId) ?? null;
 
   function resetForm() {
     setName("");
@@ -277,7 +316,7 @@ export function ProductsRecipesPanel({
     setPrice("");
     setWholesalePrice("");
     setStockQty("");
-    setKitchenStation("");
+    setKitchenStation(defaultStation);
     setEditingProduct(null);
   }
 
@@ -291,7 +330,14 @@ export function ProductsRecipesPanel({
       p.wholesalePrice != null ? String(p.wholesalePrice) : "",
     );
     setStockQty(p.stockQty != null ? String(p.stockQty) : "");
-    setKitchenStation(p.kitchenStation ?? "");
+    const station = resolveProductStation(p, categories);
+    if (mode === "bar") {
+      setKitchenStation("bar");
+    } else if (mode === "kitchen") {
+      setKitchenStation(station === "postres" ? "postres" : "cocina");
+    } else {
+      setKitchenStation(p.kitchenStation ?? "");
+    }
   }
 
   if (!canManageProducts && !can("catalog.read")) {
@@ -347,6 +393,14 @@ export function ProductsRecipesPanel({
               toast("Nombre obligatorio", "error");
               return;
             }
+            const forcedStation: Product["kitchenStation"] | undefined =
+              mode === "bar"
+                ? "bar"
+                : mode === "kitchen"
+                  ? kitchenStation === "postres"
+                    ? "postres"
+                    : "cocina"
+                  : kitchenStation || undefined;
             setBusy(true);
             void saveProduct({
               product: editingProduct,
@@ -360,7 +414,7 @@ export function ProductsRecipesPanel({
                   : Number(wholesalePrice) || 0,
               stockQty:
                 stockQty === "" ? undefined : Number(stockQty) || 0,
-              kitchenStation: kitchenStation || undefined,
+              kitchenStation: forcedStation,
             })
               .then(() => {
                 toast(
@@ -427,20 +481,39 @@ export function ProductsRecipesPanel({
             onChange={(e) => setStockQty(e.target.value)}
             placeholder="Unidades"
           />
-          <Select
-            label="Estación (cocina / bar)"
-            value={kitchenStation}
-            onChange={(e) =>
-              setKitchenStation(
-                e.target.value as Product["kitchenStation"] | "",
-              )
-            }
-          >
-            <option value="">Auto (por nombre)</option>
-            <option value="cocina">Cocina · comida</option>
-            <option value="bar">Barra · bebidas</option>
-            <option value="postres">Cocina · postres</option>
-          </Select>
+          {mode === "full" ? (
+            <Select
+              label="Estación (cocina / bar)"
+              value={kitchenStation}
+              onChange={(e) =>
+                setKitchenStation(
+                  e.target.value as Product["kitchenStation"] | "",
+                )
+              }
+            >
+              <option value="">Auto (por nombre)</option>
+              <option value="cocina">Cocina · comida</option>
+              <option value="bar">Barra · bebidas</option>
+              <option value="postres">Cocina · postres</option>
+            </Select>
+          ) : mode === "kitchen" ? (
+            <Select
+              label="Tipo en cocina"
+              value={kitchenStation === "postres" ? "postres" : "cocina"}
+              onChange={(e) =>
+                setKitchenStation(
+                  e.target.value as Product["kitchenStation"],
+                )
+              }
+            >
+              <option value="cocina">Comida</option>
+              <option value="postres">Postres</option>
+            </Select>
+          ) : (
+            <div className="rounded-[var(--radius-md)] border border-border bg-surface-2 px-3 py-2 text-sm text-fg-muted">
+              Estación fija: <span className="font-medium text-fg">Barra · bebidas</span>
+            </div>
+          )}
           <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-3">
             <Button type="submit" disabled={busy}>
               {editingProduct ? "Guardar cambios" : "Añadir producto"}
@@ -464,7 +537,7 @@ export function ProductsRecipesPanel({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ul className="max-h-[420px] space-y-2 overflow-y-auto">
-          {products.map((p) => (
+          {scopedProducts.map((p) => (
             <li
               key={p.id}
               className={`rounded-[var(--radius-md)] border px-3 py-2 text-sm ${
@@ -524,9 +597,13 @@ export function ProductsRecipesPanel({
               ) : null}
             </li>
           ))}
-          {!products.length ? (
+          {!scopedProducts.length ? (
             <li className="py-6 text-center text-sm text-fg-muted">
-              Aún no hay productos en la carta.
+              {mode === "bar"
+                ? "Aún no hay bebidas en la carta de barra."
+                : mode === "kitchen"
+                  ? "Aún no hay platos en la carta de cocina."
+                  : "Aún no hay productos en la carta."}
             </li>
           ) : null}
         </ul>
