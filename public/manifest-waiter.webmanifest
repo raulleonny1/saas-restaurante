@@ -1,0 +1,19 @@
+{
+  "name": "SmartServe Sala",
+  "short_name": "Sala",
+  "description": "App de camareros: pedidos, cobro, QR y mesas",
+  "start_url": "/waiter",
+  "display": "standalone",
+  "background_color": "#0e1410",
+  "theme_color": "#0e1410",
+  "lang": "es",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SmartServe AI — Arquitectura
 
-## Getting Started
+Base multi-tenant para cafeterías, bares y restaurantes.  
+**Sin módulos de negocio implementados** — solo cimientos listos para crecer.
 
-First, run the development server:
+## Stack
+
+Next.js 16 · React 19 · TypeScript estricto · Tailwind CSS v4 · Firebase · PWA
+
+## Arranque
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. Abre http://localhost:3000  
+2. Regístrate (crea usuario + primer restaurante)  
+3. Navega el shell vacío de módulos  
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Sin Firebase → auth local (`localStorage`).  
+Con Firebase → copia `.env.example` → `.env.local` y despliega `firestore.rules`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Estructura
 
-## Learn More
+```text
+app/                 Rutas (auth + shell + placeholders)
+components/          Layout, nav, placeholders
+modules/             Dominios (vacíos, listos para implementar)
+hooks/               Hooks transversales
+services/            Auth + restaurant (sin lógica de POS/etc.)
+types/               Contratos TypeScript globales
+models/              Paths Firestore, colecciones, factories
+lib/                 Utils, navegación, auth local
+firebase/            Config client
+context/             Auth, Restaurant, Theme, Providers
+store/               Zustand UI ligero
+ui/                  Design system
+functions/           Cloud Functions (futuro)
+firestore.rules      Seguridad multi-tenant
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Datos (multi-tenant)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```text
+users/{uid}
+restaurants/{restaurantId}
+  members | tables | menuCategories | menuItems | orders
+  ingredients | suppliers | waste | customers
+  reservations | campaigns | coupons | employees
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Nunca mezclar datos entre `restaurantId`.
 
-## Deploy on Vercel
+## Convención de módulos
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Cada dominio vive en `modules/<name>/`.  
+`app/(app)/<route>/page.tsx` solo monta la vista del módulo.  
+Servicios del dominio → `services/` o `modules/<name>/services/`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Capas listas
+
+| Capa | Estado |
+|------|--------|
+| Tipos globales | `types/` |
+| Modelos / paths | `models/` |
+| Firebase | `firebase/` + rules |
+| Tema claro/oscuro | `globals.css` + ThemeProvider |
+| UI kit | `ui/` |
+| Navegación | `lib/navigation.ts` + Sidebar/Topbar |
+| Auth + restaurant context | `context/` + `services/` |
+| Placeholders módulos | rutas `/dashboard` … `/settings` |

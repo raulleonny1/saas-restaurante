@@ -1,0 +1,621 @@
+"use client";
+
+import { useAuth } from "@/context/AuthProvider";
+import { useRestaurant } from "@/context/RestaurantProvider";
+import { isFirebaseConfigured } from "@/lib/firebase";
+import { printOrderReceipt } from "@/modules/pos/domain/print";
+import { balanceDue } from "@/modules/pos/domain/totals";
+import {
+  enqueueMutation,
+  listQueuedMutations,
+} from "@/modules/pos/offline/queue";
+import {
+  flushOfflineQueue,
+  registerOfflineFlushHandler,
+  setFirestoreConnectivity,
+  type SyncStatus,
+} from "@/modules/pos/offline/sync";
+import { ensurePosBootstrap } from "@/modules/pos/services/bootstrap.service";
+import { subscribeBranches } from "@/modules/pos/services/branches.service";
+import {
+  subscribeCategories,
+  subscribeProducts,
+} from "@/modules/pos/services/catalog.service";
+import {
+  addItemToOrder,
+  mergeTables,
+  moveOrderToTable,
+  newId,
+  openTable,
+  removeOrderItem,
+  saveOrder,
+  sendToKitchen,
+  subscribeOpenOrders,
+  subscribeOrder,
+  subscribeRecentPaidOrders,
+  updateOrderItem,
+  markPrinted,
+} from "@/modules/pos/services/orders.service";
+import {
+  chargeOrder,
+  refundPayment,
+  subscribePaymentsForOrder,
+} from "@/modules/pos/services/payments.service";
+import { subscribeTables } from "@/modules/pos/services/tables.service";
+import type { Product, ProductCategory } from "@/types/catalog";
+import type {
+  Order,
+  OrderItem,
+  OrderItemModifier,
+  Payment,
+  PaymentMethod,
+  Table,
+} from "@/types/orders";
+import type { Branch } from "@/types/restaurant";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+
+const BRANCH_KEY = "smartserve_pos_branch";
+
+interface PosContextValue {
+  ready: boolean;
+  error: string | null;
+  syncStatus: SyncStatus;
+  queueSize: number;
+  branches: Branch[];
+  branchId: string | null;
+  setBranchId: (id: string) => void;
+  tables: Table[];
+  categories: ProductCategory[];
+  products: Product[];
+  openOrders: Order[];
+  historyOrders: Order[];
+  selectedTableId: string | null;
+  selectTable: (tableId: string | null) => void;
+  activeOrder: Order | null;
+  payments: Payment[];
+  taxPercent: number;
+  tipDefault: number;
+  currency: string;
+  restaurantName: string;
+  bootstrap: () => Promise<{ tablesCreated: number; productsCreated: number }>;
+  openSelectedTable: () => Promise<void>;
+  addProduct: (input: {
+    product: Product;
+    variantId?: string;
+    modifiers?: OrderItemModifier[];
+    kitchenNotes?: string;
+    quantity?: number;
+  }) => Promise<void>;
+  setItemQty: (itemId: string, quantity: number) => Promise<void>;
+  setItemNotes: (itemId: string, kitchenNotes: string) => Promise<void>;
+  removeItem: (itemId: string) => Promise<void>;
+  setDiscount: (percent: number, amount?: number) => Promise<void>;
+  setTip: (percent: number, amount?: number) => Promise<void>;
+  sendKitchen: () => Promise<void>;
+  moveToTable: (targetTableId: string) => Promise<void>;
+  mergeWithTables: (tableIds: string[]) => Promise<void>;
+  applySplit: (parts: number) => Promise<void>;
+  assignItemSeat: (itemId: string, seat: number) => Promise<void>;
+  pay: (method: PaymentMethod, amount: number, tipAmount?: number, splitSeat?: number) => Promise<void>;
+  printReceipt: () => Promise<void>;
+  refund: (paymentId: string, amount: number) => Promise<void>;
+  clearSelection: () => void;
+  balance: number;
+}
+
+const PosContext = createContext<PosContextValue | null>(null);
+
+export function usePos() {
+  const ctx = useContext(PosContext);
+  if (!ctx) throw new Error("usePos must be used within PosProvider");
+  return ctx;
+}
+
+export function PosProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const { restaurant, restaurantId } = useRestaurant();
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchId, setBranchIdState] = useState<string | null>(null);
+  const [tables, setTables] = useState<Table[]>([]);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [openOrders, setOpenOrders] = useState<Order[]>([]);
+  const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [activeOrder, setActiveOrder] = useState<Order | null>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("online");
+  const [queueSize, setQueueSize] = useState(0);
+  const [ready, setReady] = useState(false);
+
+  const taxPercent = restaurant?.settings.taxPercent ?? 10;
+  const tipDefault = restaurant?.settings.tipDefaultPercent ?? 10;
+  const currency = restaurant?.currency ?? "EUR";
+  const restaurantName = restaurant?.name ?? "SmartServe";
+
+  const refreshQueueSize = useCallback(() => {
+    setQueueSize(listQueuedMutations().length);
+  }, []);
+
+  const setBranchId = useCallback((id: string) => {
+    setBranchIdState(id);
+    if (typeof window !== "undefined") localStorage.setItem(BRANCH_KEY, id);
+    setSelectedTableId(null);
+  }, []);
+
+  useEffect(() => {
+    if (!restaurantId || !isFirebaseConfigured()) {
+      setReady(true);
+      setError(
+        !isFirebaseConfigured()
+          ? "Firebase no está configurado"
+          : "Selecciona un restaurante",
+      );
+      return;
+    }
+    setError(null);
+    return subscribeBranches(restaurantId, (list) => {
+      setBranches(list);
+      setBranchIdState((current) => {
+        if (current && list.some((b) => b.id === current)) return current;
+        const stored =
+          typeof window !== "undefined"
+            ? localStorage.getItem(BRANCH_KEY)
+            : null;
+        if (stored && list.some((b) => b.id === stored)) return stored;
+        return (
+          restaurant?.settings.defaultBranchId &&
+          list.some((b) => b.id === restaurant.settings.defaultBranchId)
+            ? restaurant.settings.defaultBranchId
+            : list.find((b) => b.isDefault)?.id ?? list[0]?.id ?? null
+        );
+      });
+      setReady(true);
+    }, (err) => setError(err.message));
+  }, [restaurantId, restaurant?.settings.defaultBranchId]);
+
+  useEffect(() => {
+    if (!restaurantId || !branchId) return;
+    const unsubs = [
+      subscribeTables(restaurantId, branchId, setTables, (e) =>
+        setError(e.message),
+      ),
+      subscribeCategories(restaurantId, setCategories, (e) =>
+        setError(e.message),
+      ),
+      subscribeProducts(restaurantId, branchId, setProducts, (e) =>
+        setError(e.message),
+      ),
+      subscribeOpenOrders(restaurantId, branchId, setOpenOrders, (e) =>
+        setError(e.message),
+      ),
+      subscribeRecentPaidOrders(restaurantId, branchId, setHistoryOrders, (e) =>
+        setError(e.message),
+      ),
+    ];
+    return () => unsubs.forEach((u) => u());
+  }, [restaurantId, branchId]);
+
+  const selectedTable = useMemo(
+    () => tables.find((t) => t.id === selectedTableId) ?? null,
+    [tables, selectedTableId],
+  );
+
+  const orderIdForSelection = useMemo(() => {
+    if (!selectedTable) return null;
+    if (selectedTable.currentOrderId) return selectedTable.currentOrderId;
+    const byTable = openOrders.find((o) => o.tableId === selectedTable.id);
+    return byTable?.id ?? null;
+  }, [selectedTable, openOrders]);
+
+  useEffect(() => {
+    if (!restaurantId || !orderIdForSelection) {
+      setActiveOrder(null);
+      setPayments([]);
+      return;
+    }
+    const unsubOrder = subscribeOrder(
+      restaurantId,
+      orderIdForSelection,
+      setActiveOrder,
+      (e) => setError(e.message),
+    );
+    const unsubPay = subscribePaymentsForOrder(
+      restaurantId,
+      orderIdForSelection,
+      setPayments,
+      (e) => setError(e.message),
+    );
+    return () => {
+      unsubOrder();
+      unsubPay();
+    };
+  }, [restaurantId, orderIdForSelection]);
+
+  useEffect(() => {
+    const onOnline = () => {
+      setSyncStatus("syncing");
+      void setFirestoreConnectivity(true)
+        .then(() => flushOfflineQueue())
+        .finally(() => {
+          setSyncStatus("online");
+          refreshQueueSize();
+        });
+    };
+    const onOffline = () => {
+      setSyncStatus("offline");
+      void setFirestoreConnectivity(false);
+    };
+    if (typeof window !== "undefined") {
+      setSyncStatus(navigator.onLine ? "online" : "offline");
+      window.addEventListener("online", onOnline);
+      window.addEventListener("offline", onOffline);
+      refreshQueueSize();
+    }
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, [refreshQueueSize]);
+
+  useEffect(() => {
+    registerOfflineFlushHandler(async () => {
+      // Mutations are re-applied by replaying through live services when online;
+      // queue entries created while offline store enough context in payload.
+      // For v1 we rely on Firestore offline cache for most writes; queue is backup.
+    });
+  }, []);
+
+  const runOrQueue = useCallback(
+    async (type: Parameters<typeof enqueueMutation>[0]["type"], fn: () => Promise<void>, payload: Record<string, unknown>) => {
+      if (!restaurantId || !branchId) throw new Error("Sin contexto POS");
+      try {
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          enqueueMutation({
+            type,
+            restaurantId,
+            branchId,
+            payload,
+          });
+          refreshQueueSize();
+          setSyncStatus("offline");
+          // Still attempt — Firestore persistence may accept the write.
+        }
+        await fn();
+      } catch (err) {
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          enqueueMutation({ type, restaurantId, branchId, payload });
+          refreshQueueSize();
+          return;
+        }
+        throw err;
+      }
+    },
+    [restaurantId, branchId, refreshQueueSize],
+  );
+
+  const bootstrap = useCallback(async () => {
+    if (!restaurantId || !branchId) {
+      throw new Error("Selecciona restaurante y sucursal");
+    }
+    return ensurePosBootstrap({
+      restaurantId,
+      branchId,
+      currency: currency as "EUR",
+    });
+  }, [restaurantId, branchId, currency]);
+
+  const openSelectedTable = useCallback(async () => {
+    if (!restaurantId || !branchId || !user || !selectedTable) return;
+    await runOrQueue(
+      "openTable",
+      async () => {
+        const order = await openTable({
+          restaurantId,
+          branchId,
+          table: selectedTable,
+          uid: user.uid,
+          currency: currency as "EUR",
+          taxPercent,
+          tipDefaultPercent: tipDefault,
+        });
+        setActiveOrder(order);
+      },
+      { tableId: selectedTable.id },
+    );
+  }, [
+    restaurantId,
+    branchId,
+    user,
+    selectedTable,
+    currency,
+    taxPercent,
+    tipDefault,
+    runOrQueue,
+  ]);
+
+  const requireOrder = useCallback(() => {
+    if (!activeOrder || !restaurantId || !user) {
+      throw new Error("Abre una mesa primero");
+    }
+    return { order: activeOrder, restaurantId, uid: user.uid };
+  }, [activeOrder, restaurantId, user]);
+
+  const addProduct = useCallback(
+    async (input: {
+      product: Product;
+      variantId?: string;
+      modifiers?: OrderItemModifier[];
+      kitchenNotes?: string;
+      quantity?: number;
+    }) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      const variant = input.product.variants?.find(
+        (v) => v.id === input.variantId,
+      );
+      const unitPrice =
+        variant?.price ??
+        input.product.price + (variant?.priceDelta ?? 0);
+      const item: OrderItem = {
+        id: newId("li"),
+        productId: input.product.id,
+        name: input.product.name,
+        quantity: input.quantity ?? 1,
+        unitPrice,
+        variantId: variant?.id,
+        variantName: variant?.name,
+        modifiers: input.modifiers,
+        kitchenNotes: input.kitchenNotes,
+        status: "open",
+      };
+      await runOrQueue(
+        "updateOrder",
+        async () => {
+          await addItemToOrder(rid, order, item, taxPercent, uid);
+        },
+        { orderId: order.id, item },
+      );
+    },
+    [requireOrder, taxPercent, runOrQueue],
+  );
+
+  const setItemQty = useCallback(
+    async (itemId: string, quantity: number) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      if (quantity <= 0) {
+        await removeOrderItem(rid, order, itemId, taxPercent, uid);
+        return;
+      }
+      await updateOrderItem(
+        rid,
+        order,
+        itemId,
+        { quantity },
+        taxPercent,
+        uid,
+      );
+    },
+    [requireOrder, taxPercent],
+  );
+
+  const setItemNotes = useCallback(
+    async (itemId: string, kitchenNotes: string) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      await updateOrderItem(
+        rid,
+        order,
+        itemId,
+        { kitchenNotes },
+        taxPercent,
+        uid,
+      );
+    },
+    [requireOrder, taxPercent],
+  );
+
+  const removeItem = useCallback(
+    async (itemId: string) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      await removeOrderItem(rid, order, itemId, taxPercent, uid);
+    },
+    [requireOrder, taxPercent],
+  );
+
+  const setDiscount = useCallback(
+    async (percent: number, amount = 0) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      await saveOrder(
+        rid,
+        { ...order, discountPercent: percent, discountAmount: amount },
+        taxPercent,
+        uid,
+        "discount.updated",
+      );
+    },
+    [requireOrder, taxPercent],
+  );
+
+  const setTip = useCallback(
+    async (percent: number, amount = 0) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      await saveOrder(
+        rid,
+        { ...order, tipPercent: percent, tipAmount: amount },
+        taxPercent,
+        uid,
+        "tip.updated",
+      );
+    },
+    [requireOrder, taxPercent],
+  );
+
+  const sendKitchen = useCallback(async () => {
+    const { order, restaurantId: rid, uid } = requireOrder();
+    await sendToKitchen(rid, order, taxPercent, uid);
+  }, [requireOrder, taxPercent]);
+
+  const moveToTable = useCallback(
+    async (targetTableId: string) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      const from = tables.find((t) => t.id === order.tableId);
+      const to = tables.find((t) => t.id === targetTableId);
+      if (!from || !to) throw new Error("Mesa no encontrada");
+      await moveOrderToTable(rid, order, from, to, uid);
+      setSelectedTableId(to.id);
+    },
+    [requireOrder, tables],
+  );
+
+  const mergeWithTables = useCallback(
+    async (tableIds: string[]) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      const primary = tables.find((t) => t.id === order.tableId);
+      if (!primary) throw new Error("Mesa principal no encontrada");
+      const secondary = tableIds
+        .filter((id) => id !== primary.id)
+        .map((id) => {
+          const table = tables.find((t) => t.id === id);
+          if (!table) throw new Error("Mesa no encontrada");
+          const secOrder =
+            openOrders.find((o) => o.id === table.currentOrderId) ?? null;
+          return { table, order: secOrder };
+        });
+      await mergeTables(rid, order, primary, secondary, taxPercent, uid);
+    },
+    [requireOrder, tables, openOrders, taxPercent],
+  );
+
+  const applySplit = useCallback(
+    async (parts: number) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      const seats = Array.from({ length: parts }, (_, i) => ({
+        seat: i + 1,
+        label: `Parte ${i + 1}`,
+        paidAmount: 0,
+      }));
+      await saveOrder(
+        rid,
+        { ...order, splitParts: parts, splitSeats: seats },
+        taxPercent,
+        uid,
+        "split.configured",
+      );
+    },
+    [requireOrder, taxPercent],
+  );
+
+  const assignItemSeat = useCallback(
+    async (itemId: string, seat: number) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      await updateOrderItem(
+        rid,
+        order,
+        itemId,
+        { splitSeat: seat },
+        taxPercent,
+        uid,
+      );
+    },
+    [requireOrder, taxPercent],
+  );
+
+  const pay = useCallback(
+    async (
+      method: PaymentMethod,
+      amount: number,
+      tipAmount = 0,
+      splitSeat?: number,
+    ) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      await chargeOrder({
+        restaurantId: rid,
+        order,
+        tables,
+        method,
+        amount,
+        tipAmount,
+        splitSeat,
+        uid,
+        taxPercent,
+      });
+    },
+    [requireOrder, tables, taxPercent],
+  );
+
+  const printReceipt = useCallback(async () => {
+    const { order, restaurantId: rid, uid } = requireOrder();
+    printOrderReceipt(order, payments, restaurantName);
+    await markPrinted(rid, order, uid);
+  }, [requireOrder, payments, restaurantName]);
+
+  const refund = useCallback(
+    async (paymentId: string, amount: number) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      const payment = payments.find((p) => p.id === paymentId);
+      if (!payment) throw new Error("Pago no encontrado");
+      const table = tables.find((t) => t.id === order.tableId) ?? null;
+      await refundPayment({
+        restaurantId: rid,
+        order,
+        payment,
+        amount,
+        uid,
+        taxPercent,
+        reopenTable: table,
+      });
+    },
+    [requireOrder, payments, tables, taxPercent],
+  );
+
+  const value: PosContextValue = {
+    ready,
+    error,
+    syncStatus,
+    queueSize,
+    branches,
+    branchId,
+    setBranchId,
+    tables,
+    categories,
+    products,
+    openOrders,
+    historyOrders,
+    selectedTableId,
+    selectTable: setSelectedTableId,
+    activeOrder,
+    payments,
+    taxPercent,
+    tipDefault,
+    currency,
+    restaurantName,
+    bootstrap,
+    openSelectedTable,
+    addProduct,
+    setItemQty,
+    setItemNotes,
+    removeItem,
+    setDiscount,
+    setTip,
+    sendKitchen,
+    moveToTable,
+    mergeWithTables,
+    applySplit,
+    assignItemSeat,
+    pay,
+    printReceipt,
+    refund,
+    clearSelection: () => setSelectedTableId(null),
+    balance: activeOrder ? balanceDue(activeOrder) : 0,
+  };
+
+  return <PosContext.Provider value={value}>{children}</PosContext.Provider>;
+}
