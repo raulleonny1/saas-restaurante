@@ -38,9 +38,10 @@ export function CashierPrintersPage() {
           Impresoras
         </h1>
         <p className="mt-1 text-sm text-[#a8b5a4]">
-          Elige cuál es la de <strong className="text-[#e7efe4]">ventas</strong>{" "}
-          (ticket cliente) y cuál la de{" "}
-          <strong className="text-[#e7efe4]">cocina</strong> en este PC de caja.
+          Pulsa <strong className="text-[#e7efe4]">Buscar impresoras</strong>{" "}
+          para ver las instaladas en este PC y elige cuál es de{" "}
+          <strong className="text-[#e7efe4]">ventas</strong> y cuál de{" "}
+          <strong className="text-[#e7efe4]">cocina</strong>.
         </p>
       </div>
 

@@ -4,6 +4,13 @@ import {
   getDevicePrinterPrefs,
   setDevicePrinterPrefs,
 } from "@/lib/printer-device-prefs";
+import {
+  PRINT_BRIDGE_DOWNLOAD_BAT,
+  PRINT_BRIDGE_DOWNLOAD_PS1,
+  checkPrintBridge,
+  listInstalledPrinters,
+  type InstalledPrinter,
+} from "@/lib/print-bridge-client";
 import { printKitchenTestPage } from "@/modules/pos/domain/print-kitchen";
 import { printTpvTestPage } from "@/modules/pos/domain/print";
 import { updateTenantSettings } from "@/modules/tenant/services/settings.service";
@@ -13,7 +20,7 @@ import type {
   ThermalPaperWidth,
 } from "@/types/restaurant";
 import { Button, Input, Select, toast } from "@/ui";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type StationDraft = {
   label: string;
@@ -63,6 +70,10 @@ export function PrinterSetupPanel({
     toDraft(printers?.kitchen, "Cocina · comanda"),
   );
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [bridgeUp, setBridgeUp] = useState<boolean | null>(null);
+  const [installed, setInstalled] = useState<InstalledPrinter[]>([]);
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (storage === "device") {
@@ -86,6 +97,50 @@ export function PrinterSetupPanel({
     setTpv(toDraft(printers?.tpv, "Ventas · ticket cliente"));
     setKitchen(toDraft(printers?.kitchen, "Cocina · comanda"));
   }, [kitchenOutput, printers, restaurantId, storage]);
+
+  const scanPrinters = useCallback(async () => {
+    setScanning(true);
+    setScanMsg(null);
+    try {
+      const up = await checkPrintBridge();
+      setBridgeUp(up);
+      if (!up) {
+        setInstalled([]);
+        setScanMsg(
+          "Asistente apagado. Descarga e inicia el asistente en este PC y vuelve a buscar.",
+        );
+        return;
+      }
+      const result = await listInstalledPrinters();
+      if (!result.available) {
+        setInstalled([]);
+        setBridgeUp(false);
+        setScanMsg(result.message || "No se pudieron leer las impresoras");
+        return;
+      }
+      setInstalled(result.printers);
+      if (result.printers.length === 0) {
+        setScanMsg(
+          "Asistente activo, pero Windows no tiene impresoras instaladas.",
+        );
+      } else {
+        setScanMsg(
+          `${result.printers.length} impresora(s) encontrada(s). Elige ventas y cocina abajo.`,
+        );
+        toast(`${result.printers.length} impresoras encontradas`, "success");
+      }
+    } finally {
+      setScanning(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      const up = await checkPrintBridge();
+      setBridgeUp(up);
+      if (up) void scanPrinters();
+    })();
+  }, [scanPrinters]);
 
   async function save() {
     if (!canEdit) return;
@@ -140,25 +195,19 @@ export function PrinterSetupPanel({
         <p
           className={`mt-1 text-sm ${floor ? "text-[#a8b5a4]" : "text-fg-muted"}`}
         >
-          {storage === "device"
-            ? "En este PC de caja: indica cuál es la impresora de ventas (ticket cliente) y cuál la de cocina. Se guarda solo en este equipo."
-            : "Configura dos destinos: ticket de ventas (TPV) y comanda de cocina. Usa impresoras ya instaladas en Windows (USB o red)."}
+          La app busca las impresoras instaladas en este PC. Elige cuál es de
+          ventas (ticket) y cuál de cocina.
         </p>
       </div>
 
-      <ol
-        className={`list-decimal space-y-1.5 pl-5 text-xs ${floor ? "text-[#8fa08c]" : "text-fg-muted"}`}
-      >
-        <li>
-          Instala cada impresora en Windows (USB o red Ethernet/Wi‑Fi).
-        </li>
-        <li>
-          Copia el nombre exacto (Configuración → Impresoras) y pégalo abajo.
-        </li>
-        <li>
-          Pulsa «Probar» y elige esa impresora en el diálogo de Windows.
-        </li>
-      </ol>
+      <BridgeBanner
+        floor={floor}
+        bridgeUp={bridgeUp}
+        scanning={scanning}
+        scanMsg={scanMsg}
+        count={installed.length}
+        onScan={() => void scanPrinters()}
+      />
 
       {showKitchenMode ? (
         floor ? (
@@ -199,6 +248,7 @@ export function PrinterSetupPanel({
           onChange={setTpv}
           canEdit={canEdit}
           floor={floor}
+          installed={installed}
           onTest={() =>
             printTpvTestPage({
               restaurantName,
@@ -215,6 +265,7 @@ export function PrinterSetupPanel({
           onChange={setKitchen}
           canEdit={canEdit}
           floor={floor}
+          installed={installed}
           onTest={() =>
             printKitchenTestPage({
               restaurantName,
@@ -246,6 +297,115 @@ export function PrinterSetupPanel({
   );
 }
 
+function BridgeBanner({
+  floor,
+  bridgeUp,
+  scanning,
+  scanMsg,
+  count,
+  onScan,
+}: {
+  floor: boolean;
+  bridgeUp: boolean | null;
+  scanning: boolean;
+  scanMsg: string | null;
+  count: number;
+  onScan: () => void;
+}) {
+  const box = floor
+    ? "rounded-2xl border border-white/10 bg-white/[0.04] p-4"
+    : "rounded-[var(--radius-lg)] border border-border bg-bg-muted/40 p-4";
+  const text = floor ? "text-[#a8b5a4]" : "text-fg-muted";
+  const title = floor ? "text-[#e7efe4]" : "text-fg";
+
+  return (
+    <div className={box}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className={`text-sm font-medium ${title}`}>
+            Impresoras de este PC
+          </p>
+          <p className={`mt-0.5 text-xs ${text}`}>
+            {bridgeUp === true
+              ? count > 0
+                ? `${count} detectada(s) · elige en los selectores`
+                : "Asistente activo · pulsa buscar"
+              : bridgeUp === false
+                ? "Asistente no iniciado (necesario para listar)"
+                : "Comprobando asistente…"}
+          </p>
+        </div>
+        {floor ? (
+          <button
+            type="button"
+            disabled={scanning}
+            onClick={onScan}
+            className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
+          >
+            {scanning ? "Buscando…" : "Buscar impresoras"}
+          </button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            disabled={scanning}
+            onClick={onScan}
+          >
+            {scanning ? "Buscando…" : "Buscar impresoras"}
+          </Button>
+        )}
+      </div>
+
+      {scanMsg ? (
+        <p className={`mt-2 text-xs ${floor ? "text-[#c5d0c2]" : "text-fg-muted"}`}>
+          {scanMsg}
+        </p>
+      ) : null}
+
+      {bridgeUp === false ? (
+        <div className={`mt-3 space-y-2 text-xs ${text}`}>
+          <p className={title}>Una sola vez en este PC:</p>
+          <ol className="list-decimal space-y-1 pl-4">
+            <li>
+              Descarga estos dos archivos en la misma carpeta:
+              <span className="mt-1 flex flex-wrap gap-2">
+                <a
+                  href={PRINT_BRIDGE_DOWNLOAD_BAT}
+                  download
+                  className={
+                    floor
+                      ? "text-emerald-400 underline"
+                      : "text-accent underline"
+                  }
+                >
+                  start-windows.bat
+                </a>
+                <a
+                  href={PRINT_BRIDGE_DOWNLOAD_PS1}
+                  download
+                  className={
+                    floor
+                      ? "text-emerald-400 underline"
+                      : "text-accent underline"
+                  }
+                >
+                  smartserve-print-bridge.ps1
+                </a>
+              </span>
+            </li>
+            <li>Haz doble clic en <strong>start-windows.bat</strong>.</li>
+            <li>Deja la ventana negra abierta y pulsa «Buscar impresoras».</li>
+          </ol>
+          <p>
+            El asistente solo lee impresoras de Windows en este PC; no se
+            publica en internet.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function StationCard({
   title,
   subtitle,
@@ -253,6 +413,7 @@ function StationCard({
   onChange,
   canEdit,
   floor,
+  installed,
   onTest,
 }: {
   title: string;
@@ -261,27 +422,71 @@ function StationCard({
   onChange: (next: StationDraft) => void;
   canEdit: boolean;
   floor: boolean;
+  installed: InstalledPrinter[];
   onTest: () => void;
 }) {
+  const selectValue =
+    draft.systemName &&
+    installed.some((p) => p.name === draft.systemName)
+      ? draft.systemName
+      : draft.systemName
+        ? "__custom__"
+        : "";
+
+  const printerSelect = (
+    <label className="block space-y-1.5">
+      <span
+        className={`text-xs font-medium ${floor ? "text-[#c5d0c2]" : "text-fg-muted"}`}
+      >
+        Impresora instalada
+      </span>
+      <select
+        value={selectValue}
+        disabled={!canEdit || installed.length === 0}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === "__custom__") return;
+          onChange({ ...draft, systemName: v });
+        }}
+        className={
+          floor
+            ? "w-full rounded-xl border border-white/15 bg-[#152018] px-3 py-2.5 text-sm text-[#e7efe4] disabled:opacity-50"
+            : "flex h-10 w-full rounded-[var(--radius-md)] border border-border bg-bg px-3 text-sm disabled:opacity-50"
+        }
+      >
+        <option value="">
+          {installed.length
+            ? "— Selecciona impresora —"
+            : "— Busca impresoras arriba —"}
+        </option>
+        {installed.map((p) => (
+          <option key={p.name} value={p.name}>
+            {p.name}
+            {p.isDefault ? " (predeterminada)" : ""}
+            {p.portName ? ` · ${p.portName}` : ""}
+          </option>
+        ))}
+        {draft.systemName &&
+        !installed.some((p) => p.name === draft.systemName) ? (
+          <option value="__custom__">{draft.systemName} (guardada)</option>
+        ) : null}
+      </select>
+    </label>
+  );
+
   if (floor) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
         <h3 className="text-sm font-medium text-[#e7efe4]">{title}</h3>
         <p className="mt-0.5 text-xs text-[#8fa08c]">{subtitle}</p>
         <div className="mt-3 space-y-3">
+          {printerSelect}
           <FloorField
             label="Nombre amigable"
             value={draft.label}
             disabled={!canEdit}
             onChange={(v) => onChange({ ...draft, label: v })}
             placeholder={title}
-          />
-          <FloorField
-            label="Nombre en Windows (elije esta)"
-            value={draft.systemName}
-            disabled={!canEdit}
-            onChange={(v) => onChange({ ...draft, systemName: v })}
-            placeholder="Ej. EPSON TM-T20 Ventas"
           />
           <label className="block space-y-1.5">
             <span className="text-xs font-medium text-[#c5d0c2]">
@@ -319,19 +524,13 @@ function StationCard({
       <h3 className="text-sm font-medium">{title}</h3>
       <p className="mt-0.5 text-xs text-fg-muted">{subtitle}</p>
       <div className="mt-3 space-y-3">
+        {printerSelect}
         <Input
           label="Nombre amigable"
           value={draft.label}
           onChange={(e) => onChange({ ...draft, label: e.target.value })}
           disabled={!canEdit}
           placeholder={title}
-        />
-        <Input
-          label="Nombre en Windows / macOS"
-          value={draft.systemName}
-          onChange={(e) => onChange({ ...draft, systemName: e.target.value })}
-          disabled={!canEdit}
-          placeholder="Ej. EPSON TM-T20 Kitchen"
         />
         <Select
           label="Ancho del papel"
