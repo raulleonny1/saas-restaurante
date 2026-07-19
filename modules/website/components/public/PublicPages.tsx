@@ -15,6 +15,10 @@ import { Button, Input, Textarea, toast } from "@/ui";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+/**
+ * Home público del cliente — sin registro.
+ * Presenta lo que ofrece el bar/restaurante (carta) y CTAs de reserva/pedido.
+ */
 export function HomeExtras() {
   const {
     settings,
@@ -25,48 +29,56 @@ export function HomeExtras() {
     categories,
     products,
     slug,
+    reviews,
   } = usePublicSite();
 
-  const featured = useMemo(() => {
+  const menuGroups = useMemo(() => {
     const byCat = categories
       .map((c) => ({
         category: c,
-        items: products.filter((p) => p.categoryId === c.id).slice(0, 4),
+        items: products.filter((p) => p.categoryId === c.id),
       }))
-      .filter((g) => g.items.length)
-      .slice(0, 4);
+      .filter((g) => g.items.length);
     if (byCat.length) return byCat;
     if (!products.length) return [];
     return [
       {
         category: { id: "carta", name: "Nuestra carta" },
-        items: products.slice(0, 8),
+        items: products,
       },
     ];
   }, [categories, products]);
 
+  const avgRating = useMemo(() => {
+    if (!reviews.length) return null;
+    const sum = reviews.reduce((s, r) => s + (r.rating || 0), 0);
+    return Math.round((sum / reviews.length) * 10) / 10;
+  }, [reviews]);
+
   return (
     <div className="space-y-14">
-      <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-transparent px-6 py-10 sm:px-10">
+      {/* Presentación del local */}
+      <section className="space-y-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--site-accent)]">
-          Bienvenido
+          Bienvenido · sin registro
         </p>
-        <h1 className="mt-2 max-w-xl font-[family-name:var(--font-display)] text-4xl tracking-tight sm:text-5xl">
-          {restaurant?.name}
-        </h1>
-        <p className="mt-3 max-w-lg text-[#c5d0c2]">
+        <h2 className="max-w-2xl font-[family-name:var(--font-display)] text-3xl tracking-tight sm:text-4xl">
+          {settings?.tagline ||
+            `Esto es lo que ofrece ${restaurant?.name ?? "nuestro local"}`}
+        </h2>
+        <p className="max-w-2xl text-base leading-relaxed text-[#c5d0c2]">
           {settings?.about ||
             settings?.seo?.description ||
-            "Descubre la carta, reserva mesa y pide online."}
+            "Consulta nuestra carta, reserva mesa o pide para llevar. Todo desde aquí, sin crear cuenta."}
         </p>
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3">
           {sectionEnabled("menu") ? (
-            <Link
-              href={publicSitePath(slug, "/menu")}
+            <a
+              href="#carta"
               className="rounded-full bg-[var(--site-accent)] px-5 py-2.5 text-sm font-semibold text-white"
             >
-              Ver carta
-            </Link>
+              Ver la carta
+            </a>
           ) : null}
           {sectionEnabled("reservations") ? (
             <Link
@@ -81,72 +93,89 @@ export function HomeExtras() {
               href={publicSitePath(slug, "/pedir")}
               className="rounded-full border border-white/15 px-5 py-2.5 text-sm text-[#c5d0c2]"
             >
-              Pedir online
+              Pedir para llevar
             </Link>
           ) : null}
         </div>
+        {(restaurant?.address || restaurant?.phone || avgRating) && (
+          <p className="text-sm text-[#8fa08c]">
+            {[
+              restaurant?.address,
+              restaurant?.phone ? `Tel. ${restaurant.phone}` : null,
+              avgRating != null
+                ? `${avgRating}★ (${reviews.length} opiniones)`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        )}
       </section>
 
-      {featured.length ? (
-        <section className="space-y-8">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <h2 className="font-[family-name:var(--font-display)] text-3xl">
-                Lo que ofrecemos
-              </h2>
-              <p className="mt-1 text-sm text-[#a8b5a4]">
-                Carta del local · actualizada desde el inventario
-              </p>
-            </div>
-            {sectionEnabled("menu") ? (
-              <Link
-                href={publicSitePath(slug, "/menu")}
-                className="text-sm text-[var(--site-accent)] hover:underline"
-              >
-                Carta completa
-              </Link>
-            ) : null}
+      {/* Carta completa en el home */}
+      <section id="carta" className="scroll-mt-24 space-y-8">
+        <div>
+          <h2 className="font-[family-name:var(--font-display)] text-3xl">
+            Nuestra carta
+          </h2>
+          <p className="mt-1 text-sm text-[#a8b5a4]">
+            Platos, bebidas y más · precios actuales
+          </p>
+        </div>
+
+        {!menuGroups.length ? (
+          <div className="rounded-2xl border border-dashed border-white/15 px-6 py-10 text-center text-sm text-[#8fa08c]">
+            La carta se está preparando. Vuelve pronto.
           </div>
-          {featured.map((g) => (
+        ) : (
+          menuGroups.map((g) => (
             <div key={g.category.id}>
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#8fa08c]">
+              <h3 className="mb-3 border-b border-white/10 pb-2 font-[family-name:var(--font-display)] text-xl">
                 {g.category.name}
               </h3>
-              <ul className="grid gap-3 sm:grid-cols-2">
+              <ul className="divide-y divide-white/10">
                 {g.items.map((p) => (
                   <li
                     key={p.id}
-                    className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"
+                    className="flex flex-col gap-1 py-3.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium">{p.name}</p>
-                        {p.description ? (
-                          <p className="mt-1 line-clamp-2 text-xs text-[#a8b5a4]">
-                            {p.description}
-                          </p>
-                        ) : null}
-                      </div>
-                      <span className="shrink-0 tabular-nums text-[var(--site-accent)]">
-                        {formatCurrency(p.price, restaurant?.currency)}
-                      </span>
+                    <div className="min-w-0">
+                      <p className="font-medium text-[#e8efe6]">{p.name}</p>
+                      {p.description ? (
+                        <p className="mt-0.5 text-sm leading-snug text-[#a8b5a4]">
+                          {p.description}
+                        </p>
+                      ) : null}
+                      {p.brand ? (
+                        <p className="mt-0.5 text-[11px] text-[#6b7a68]">
+                          {p.brand}
+                        </p>
+                      ) : null}
                     </div>
+                    <span className="shrink-0 text-base font-semibold tabular-nums text-[var(--site-accent)]">
+                      {formatCurrency(p.price, restaurant?.currency)}
+                    </span>
                   </li>
                 ))}
               </ul>
             </div>
-          ))}
-        </section>
-      ) : (
-        <p className="text-[#8fa08c]">
-          La carta se está preparando. Vuelve pronto.
-        </p>
-      )}
+          ))
+        )}
+
+        {sectionEnabled("menu") && menuGroups.length ? (
+          <Link
+            href={publicSitePath(slug, "/menu")}
+            className="inline-block text-sm text-[var(--site-accent)] hover:underline"
+          >
+            Abrir carta en página completa
+          </Link>
+        ) : null}
+      </section>
 
       {sectionEnabled("promotions") && promotions[0] ? (
         <section className="rounded-2xl border border-[var(--site-accent)]/30 bg-[var(--site-accent)]/10 p-6">
           <h2 className="font-[family-name:var(--font-display)] text-2xl">
-            Promoción destacada
+            Promoción
           </h2>
           <p className="mt-2 text-lg text-[var(--site-accent)]">
             {promotions[0].name}
@@ -172,8 +201,21 @@ export function HomeExtras() {
         </section>
       ) : null}
 
-      {restaurant?.phone ? (
-        <p className="text-sm text-[#8fa08c]">Tel. {restaurant.phone}</p>
+      {sectionEnabled("reservations") ? (
+        <section className="rounded-2xl border border-white/15 bg-white/[0.04] p-6 text-center">
+          <h2 className="font-[family-name:var(--font-display)] text-2xl">
+            ¿Quieres mesa?
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-[#a8b5a4]">
+            Reserva en el horario que quieras. No hace falta registrarse.
+          </p>
+          <Link
+            href={publicSitePath(slug, "/reservas")}
+            className="mt-5 inline-block rounded-full bg-[var(--site-accent)] px-6 py-3 text-sm font-semibold text-white"
+          >
+            Reservar ahora
+          </Link>
+        </section>
       ) : null}
     </div>
   );
@@ -199,54 +241,57 @@ export function MenuPage() {
     <div className="space-y-10">
       <header>
         <h1 className="font-[family-name:var(--font-display)] text-4xl">Menú</h1>
-        <p className="mt-2 text-[#c5d0c2]">Carta actualizada en tiempo real.</p>
+        <p className="mt-2 text-[#c5d0c2]">Carta del local.</p>
       </header>
       {!grouped.length && !orphan.length ? (
         <p className="text-[#8fa08c]">Menú en preparación.</p>
       ) : null}
-      {[...grouped, ...(orphan.length ? [{ category: { id: "otros", name: "Otros" }, items: orphan }] : [])].map(
-        (g) => (
-          <section key={g.category.id}>
-            <h2 className="mb-4 font-[family-name:var(--font-display)] text-2xl">
-              {g.category.name}
-            </h2>
-            <ul className="divide-y divide-white/10 border-y border-white/10">
-              {g.items.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div>
-                    <p className="font-medium">{p.name}</p>
-                    {p.description ? (
-                      <p className="mt-1 text-sm text-[#a8b5a4]">
-                        {p.description}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="tabular-nums text-[var(--site-accent)]">
-                      {formatCurrency(p.price, restaurant?.currency)}
-                    </span>
-                    {sectionEnabled("orders") ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          addToCart(p);
-                          toast("Añadido al pedido", "success");
-                        }}
-                        className="rounded-md border border-white/20 px-3 py-1 text-xs"
-                      >
-                        Añadir
-                      </button>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ),
-      )}
+      {[
+        ...grouped,
+        ...(orphan.length
+          ? [{ category: { id: "otros", name: "Otros" }, items: orphan }]
+          : []),
+      ].map((g) => (
+        <section key={g.category.id}>
+          <h2 className="mb-4 font-[family-name:var(--font-display)] text-2xl">
+            {g.category.name}
+          </h2>
+          <ul className="divide-y divide-white/10 border-y border-white/10">
+            {g.items.map((p) => (
+              <li
+                key={p.id}
+                className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="font-medium">{p.name}</p>
+                  {p.description ? (
+                    <p className="mt-1 text-sm text-[#a8b5a4]">
+                      {p.description}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="tabular-nums text-[var(--site-accent)]">
+                    {formatCurrency(p.price, restaurant?.currency)}
+                  </span>
+                  {sectionEnabled("orders") ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        addToCart(p);
+                        toast("Añadido al pedido", "success");
+                      }}
+                      className="rounded-md border border-white/20 px-3 py-1 text-xs"
+                    >
+                      Añadir
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }
@@ -303,7 +348,10 @@ export function OrderPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {cart.map((l) => (
-              <li key={l.productId} className="flex items-center justify-between gap-2 text-sm">
+              <li
+                key={l.productId}
+                className="flex items-center justify-between gap-2 text-sm"
+              >
                 <span>
                   {l.name} ×
                   <input
@@ -436,7 +484,7 @@ export function ReservationsPage() {
         </h1>
         <p className="mt-2 text-[#c5d0c2]">
           {settings?.reservationSettings?.note ||
-            "Elige fecha, comensales y una mesa libre. El local lo ve al instante."}
+            "Sin registro. Elige fecha, comensales y mesa libre."}
         </p>
       </header>
 
@@ -505,19 +553,10 @@ export function ReservationsPage() {
               ))}
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => setTableId("")}
-            className={`text-xs ${
-              !tableId ? "text-[var(--site-accent)]" : "text-[#8fa08c]"
-            }`}
-          >
-            Sin preferencia de mesa (asignamos la primera libre)
-          </button>
         </div>
       ) : (
         <p className="text-sm text-[#8fa08c]">
-          Elige fecha y hora para ver mesas libres en tiempo real.
+          Elige fecha y hora para ver mesas libres.
         </p>
       )}
 
@@ -619,7 +658,7 @@ export function BlogListPage() {
                 {p.title}
               </Link>
               {p.excerpt ? (
-                <p className="mt-1 text-[#c5d0c2]">{p.excerpt}</p>
+                <p className="mt-1 text-sm text-[#a8b5a4]">{p.excerpt}</p>
               ) : null}
             </li>
           ))}
@@ -632,18 +671,15 @@ export function BlogListPage() {
 export function BlogPostPage({ postSlug }: { postSlug: string }) {
   const { posts } = usePublicSite();
   const post = posts.find((p) => p.slug === postSlug);
-  if (!post) return <p>Entrada no encontrada.</p>;
+  if (!post) {
+    return <p className="text-[#8fa08c]">Post no encontrado.</p>;
+  }
   return (
     <article className="prose prose-invert max-w-2xl">
       <h1 className="font-[family-name:var(--font-display)] text-4xl">
         {post.title}
       </h1>
-      <p className="text-sm text-[#8fa08c]">
-        {post.publishedAt
-          ? new Date(post.publishedAt).toLocaleDateString("es")
-          : ""}
-      </p>
-      <div className="mt-6 whitespace-pre-wrap text-[#d5dfd2]">{post.body}</div>
+      <div className="mt-6 whitespace-pre-wrap text-[#c5d0c2]">{post.body}</div>
     </article>
   );
 }
@@ -660,16 +696,15 @@ export function EventsPage() {
       ) : (
         <ul className="space-y-4">
           {events.map((e) => (
-            <li key={e.id} className="border-b border-white/10 pb-4">
+            <li key={e.id}>
               <Link
                 href={publicSitePath(slug, `/eventos/${e.slug}`)}
                 className="text-xl text-[var(--site-accent)] hover:underline"
               >
                 {e.title}
               </Link>
-              <p className="mt-1 text-sm text-[#c5d0c2]">
+              <p className="text-sm text-[#a8b5a4]">
                 {new Date(e.startsAt).toLocaleString("es")}
-                {e.locationLabel ? ` · ${e.locationLabel}` : ""}
               </p>
             </li>
           ))}
@@ -682,33 +717,30 @@ export function EventsPage() {
 export function EventDetailPage({ eventSlug }: { eventSlug: string }) {
   const { events } = usePublicSite();
   const event = events.find((e) => e.slug === eventSlug);
-  if (!event) return <p>Evento no encontrado.</p>;
+  if (!event) {
+    return <p className="text-[#8fa08c]">Evento no encontrado.</p>;
+  }
   return (
-    <article className="max-w-2xl space-y-3">
+    <article>
       <h1 className="font-[family-name:var(--font-display)] text-4xl">
         {event.title}
       </h1>
-      <p className="text-[#c5d0c2]">
+      <p className="mt-2 text-[#a8b5a4]">
         {new Date(event.startsAt).toLocaleString("es")}
-        {event.endsAt
-          ? ` → ${new Date(event.endsAt).toLocaleString("es")}`
-          : ""}
       </p>
-      <p className="whitespace-pre-wrap">{event.description}</p>
+      <p className="mt-6 whitespace-pre-wrap text-[#c5d0c2]">
+        {event.description}
+      </p>
     </article>
   );
 }
 
 export function ReviewsPage() {
   const { reviews, leaveReview } = usePublicSite();
-  const [name, setName] = useState("");
+  const [authorName, setAuthorName] = useState("");
   const [rating, setRating] = useState("5");
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
-  const avg =
-    reviews.length === 0
-      ? 0
-      : reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
 
   return (
     <div className="grid gap-10 lg:grid-cols-2">
@@ -716,25 +748,29 @@ export function ReviewsPage() {
         <h1 className="font-[family-name:var(--font-display)] text-4xl">
           Opiniones
         </h1>
-        <p className="mt-2 text-[#c5d0c2]">
-          Media {avg.toFixed(1)} / 5 · {reviews.length} reseñas
-        </p>
         <ul className="mt-6 space-y-4">
           {reviews.map((r) => (
             <li key={r.id} className="border-b border-white/10 pb-3">
               <p className="font-medium">
                 {r.authorName} · {"★".repeat(r.rating)}
               </p>
-              <p className="mt-1 text-[#c5d0c2]">{r.comment}</p>
+              <p className="mt-1 text-sm text-[#c5d0c2]">{r.comment}</p>
             </li>
           ))}
+          {!reviews.length ? (
+            <li className="text-[#8fa08c]">Sé el primero en opinar.</li>
+          ) : null}
         </ul>
       </div>
-      <div className="space-y-3 rounded-xl border border-white/15 bg-white/5 p-4">
+      <div className="space-y-3 rounded-xl border border-white/15 p-4">
         <h2 className="text-lg font-medium">Deja tu opinión</h2>
-        <Input label="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
         <Input
-          label="Valoración (1-5)"
+          label="Nombre"
+          value={authorName}
+          onChange={(e) => setAuthorName(e.target.value)}
+        />
+        <Input
+          label="Nota (1-5)"
           type="number"
           min={1}
           max={5}
@@ -748,17 +784,18 @@ export function ReviewsPage() {
           onChange={(e) => setComment(e.target.value)}
         />
         <Button
-          disabled={busy || !name.trim() || !comment.trim()}
+          disabled={busy || !authorName.trim() || !comment.trim()}
           onClick={() => {
             void (async () => {
               try {
                 setBusy(true);
                 await leaveReview({
-                  authorName: name,
+                  authorName,
                   rating: Number(rating) || 5,
                   comment,
                 });
-                toast("Gracias — pendiente de moderación", "success");
+                toast("Opinión enviada (pendiente de moderación)", "success");
+                setAuthorName("");
                 setComment("");
               } catch (e) {
                 toast(e instanceof Error ? e.message : "Error", "error");
@@ -776,11 +813,11 @@ export function ReviewsPage() {
 }
 
 export function LocationPage() {
-  const { restaurant, branches, settings } = usePublicSite();
-  const maps =
+  const { restaurant, settings } = usePublicSite();
+  const mapUrl =
     settings?.social?.googleMapsUrl ||
     (restaurant?.address
-      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.address)}`
+      ? `https://www.google.com/maps?q=${encodeURIComponent(restaurant.address)}&output=embed`
       : null);
 
   return (
@@ -788,36 +825,20 @@ export function LocationPage() {
       <h1 className="font-[family-name:var(--font-display)] text-4xl">
         Ubicación
       </h1>
-      <p className="text-lg text-[#c5d0c2]">
-        {restaurant?.address || "Dirección próximamente"}
+      <p className="text-[#c5d0c2]">
+        {restaurant?.address || "Dirección no publicada aún."}
       </p>
-      {restaurant?.phone ? <p>Tel. {restaurant.phone}</p> : null}
-      {restaurant?.email ? <p>{restaurant.email}</p> : null}
-      {branches.map((b) => (
-        <div key={b.id} className="border-t border-white/10 pt-4">
-          <p className="font-medium">{b.name}</p>
-          <p className="text-[#c5d0c2]">{b.address || restaurant?.address}</p>
-          {b.openingHours ? (
-            <ul className="mt-2 text-sm text-[#8fa08c]">
-              {Object.entries(b.openingHours).map(([day, hours]) => (
-                <li key={day}>
-                  {day}:{" "}
-                  {hours ? `${hours.open} – ${hours.close}` : "Cerrado"}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ))}
-      {maps ? (
-        <a
-          href={maps}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex text-[var(--site-accent)] underline"
-        >
-          Abrir en Google Maps
-        </a>
+      {restaurant?.phone ? (
+        <p className="text-sm text-[#8fa08c]">Tel. {restaurant.phone}</p>
+      ) : null}
+      {mapUrl ? (
+        <iframe
+          title="Mapa"
+          src={mapUrl}
+          className="h-80 w-full rounded-xl border border-white/15"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
       ) : null}
     </div>
   );

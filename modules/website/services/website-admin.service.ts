@@ -65,7 +65,17 @@ export async function ensureWebsiteSettings(input: {
     await setDoc(ref, settings);
   }
 
+  // Home del cliente siempre publicable: si no hay slug, crear uno y publicar.
   let slug = input.slug;
+  const shouldPublish = true;
+  if (!settings.published) {
+    await setDoc(
+      ref,
+      { published: true, updatedAt: nowIso() },
+      { merge: true },
+    );
+    settings = { ...settings, published: true };
+  }
   if (!slug) {
     const base = slugify(input.restaurantName) || "restaurante";
     slug = `${base}-${input.restaurantId.slice(-6).toLowerCase()}`;
@@ -74,14 +84,14 @@ export async function ensureWebsiteSettings(input: {
       restaurantName: input.restaurantName,
       slug,
       previousSlug: null,
-      published: settings.published,
+      published: shouldPublish,
     });
   } else {
     await syncSlugIndex({
       restaurantId: input.restaurantId,
       restaurantName: input.restaurantName,
       slug,
-      published: settings.published,
+      published: shouldPublish,
     });
   }
 

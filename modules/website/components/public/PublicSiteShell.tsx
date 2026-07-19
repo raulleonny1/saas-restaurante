@@ -37,11 +37,24 @@ export function PublicSiteShell({ children }: { children: ReactNode }) {
 
   if (error || !restaurant) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#0f1410] px-6 text-center text-[#e8efe6]">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#0f1410] px-6 text-center text-[#e8efe6]">
         <p className="font-[family-name:var(--font-display)] text-3xl">
-          Sitio no disponible
+          Este local aún no tiene página
         </p>
-        <p className="text-[#a8b5a4]">{error ?? "No encontrado"}</p>
+        <p className="max-w-md text-sm leading-relaxed text-[#a8b5a4]">
+          {error ??
+            "El enlace no existe. Entra como dueño a Sitio web, pulsa «Guardar y publicar» y usa el enlace que te aparece ahí (no inventes el slug)."}
+        </p>
+        <Link
+          href="/website"
+          className="rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white"
+        >
+          Ir a Sitio web (admin)
+        </Link>
+        <p className="max-w-sm text-xs text-[#6b7a68]">
+          Ejemplo correcto: /r/tu-slug-real · Si escribiste /r/mi-bar a mano y
+          no lo guardaste en admin, no funcionará.
+        </p>
       </div>
     );
   }
@@ -81,12 +94,14 @@ export function PublicSiteShell({ children }: { children: ReactNode }) {
             })}
           </nav>
           <div className="flex items-center gap-2">
-            <Link
-              href={`/c/${slug}`}
-              className="rounded-md border border-white/25 px-3 py-1.5 text-sm text-[#c5d0c2] hover:text-white"
-            >
-              App
-            </Link>
+            {sectionEnabled("reservations") ? (
+              <Link
+                href={publicSitePath(slug, "/reservas")}
+                className="rounded-md border border-white/25 px-3 py-1.5 text-sm text-[#c5d0c2] hover:text-white"
+              >
+                Reservar
+              </Link>
+            ) : null}
             {sectionEnabled("orders") ? (
               <Link
                 href={publicSitePath(slug, "/pedir")}
@@ -131,14 +146,12 @@ export function PublicSiteShell({ children }: { children: ReactNode }) {
               {settings?.tagline || "Carta, reservas y pedidos online."}
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              {sectionEnabled("menu") ? (
-                <Link
-                  href={publicSitePath(slug, "/menu")}
-                  className="rounded-md bg-[var(--site-accent)] px-5 py-2.5 text-sm font-medium text-white"
-                >
-                  Ver menú
-                </Link>
-              ) : null}
+              <a
+                href="#carta"
+                className="rounded-md bg-[var(--site-accent)] px-5 py-2.5 text-sm font-medium text-white"
+              >
+                Ver la carta
+              </a>
               {sectionEnabled("reservations") ? (
                 <Link
                   href={publicSitePath(slug, "/reservas")}
@@ -147,12 +160,14 @@ export function PublicSiteShell({ children }: { children: ReactNode }) {
                   Reservar mesa
                 </Link>
               ) : null}
-              <Link
-                href={`/c/${slug}`}
-                className="rounded-md border border-white/25 px-5 py-2.5 text-sm font-medium text-white"
-              >
-                Abrir app cliente
-              </Link>
+              {sectionEnabled("orders") ? (
+                <Link
+                  href={publicSitePath(slug, "/pedir")}
+                  className="rounded-md border border-white/25 px-5 py-2.5 text-sm font-medium text-white"
+                >
+                  Pedir para llevar
+                </Link>
+              ) : null}
             </div>
           </div>
         </section>

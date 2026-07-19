@@ -165,12 +165,61 @@ export function WebsiteAdminView() {
         </TabsList>
 
         <TabsContent value="general" className="space-y-4">
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+              Home del cliente (sin registro)
+            </p>
+            <p className="mt-1 text-sm text-[#a8b5a4]">
+              Esta es la página pública donde tus clientes ven la carta, reservan
+              mesa y piden. No necesitan crear cuenta.
+            </p>
+            {slug ? (
+              <>
+                <p className="mt-3 break-all rounded-xl bg-black/30 px-3 py-2 font-mono text-sm text-emerald-100">
+                  {typeof window !== "undefined"
+                    ? `${window.location.origin}/r/${slug}`
+                    : `/r/${slug}`}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link href={`/r/${slug}`} target="_blank">
+                    <Button size="sm">
+                      <ExternalLink className="h-3.5 w-3.5" /> Abrir home del
+                      cliente
+                    </Button>
+                  </Link>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      const url =
+                        typeof window !== "undefined"
+                          ? `${window.location.origin}/r/${slug}`
+                          : `/r/${slug}`;
+                      void navigator.clipboard.writeText(url).then(
+                        () => toast("Enlace copiado", "success"),
+                        () => toast(url, "info"),
+                      );
+                    }}
+                  >
+                    Copiar enlace
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="mt-3 text-sm text-amber-200">
+                Primero guarda un slug abajo (ej. nombre de tu bar) y pulsa
+                «Guardar y publicar».
+              </p>
+            )}
+          </div>
+
           <div className="grid gap-4 lg:grid-cols-2">
             <Input
               label="Slug público (/r/…)"
               value={slugInput}
               disabled={!canManage}
               onChange={(e) => setSlugInput(e.target.value)}
+              placeholder="ej. mi-bar"
             />
             <div className="flex items-end gap-2">
               <Button
@@ -185,10 +234,16 @@ export function WebsiteAdminView() {
                         restaurantName: restaurant.name,
                         slug: slugInput,
                         previousSlug: restaurant.slug,
-                        published: settings?.published ?? true,
+                        published: true,
                       });
                       setSlugInput(next);
-                      toast(`Slug: ${next}`, "success");
+                      await saveWebsiteSettings(restaurantId, {
+                        published: true,
+                      });
+                      toast(
+                        `Listo · home del cliente: /r/${next}`,
+                        "success",
+                      );
                     } catch (e) {
                       toast(e instanceof Error ? e.message : "Error", "error");
                     } finally {
@@ -197,7 +252,7 @@ export function WebsiteAdminView() {
                   })();
                 }}
               >
-                Guardar slug
+                Guardar y publicar
               </Button>
             </div>
           </div>
@@ -213,7 +268,7 @@ export function WebsiteAdminView() {
                 );
               }}
             />
-            Sitio publicado
+            Sitio publicado (recomendado: ON)
           </label>
 
           <Input

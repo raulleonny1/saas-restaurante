@@ -109,14 +109,15 @@ export function PublicSiteProvider({
       try {
         setReady(false);
         const index = await resolveSlug(slug);
-        if (!index || index.published === false) {
-          throw new Error("Sitio no disponible o no publicado");
+        if (!index) {
+          throw new Error(
+            "No existe este local. En Admin → Sitio web guarda un slug y abre /r/tu-slug",
+          );
         }
         const bundle = await loadPublicSiteBundle(index.restaurantId);
         if (cancelled) return;
-        if (bundle.settings && bundle.settings.published === false) {
-          throw new Error("Este sitio está en borrador");
-        }
+        // El home del cliente es público (sin registro). Aunque esté en
+        // “borrador”, se muestra para que el dueño pueda verlo al momento.
         setRestaurant(bundle.restaurant);
         setSettings(bundle.settings);
         setBranches(bundle.branches);
