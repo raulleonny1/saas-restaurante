@@ -224,11 +224,7 @@ export function WaiterPayPage() {
               } else {
                 setLastChange(null);
               }
-              try {
-                await printReceipt();
-              } catch {
-                /* optional */
-              }
+              // No abrir impresión automática en el móvil (provocaba about:blank)
               setMsg("Cobro registrado · visible en caja al instante");
               setTendered("");
               setTip("0");
@@ -258,6 +254,19 @@ export function WaiterPayPage() {
       ) : null}
 
       {msg ? <p className="text-center text-sm text-emerald-300">{msg}</p> : null}
+
+      <button
+        type="button"
+        disabled={!activeOrder}
+        onClick={() => {
+          void printReceipt().catch((e) =>
+            setMsg(e instanceof Error ? e.message : "No se pudo imprimir"),
+          );
+        }}
+        className="w-full rounded-xl border border-white/20 py-3 text-sm text-[#c5d0c2]"
+      >
+        Imprimir ticket (opcional)
+      </button>
 
       {recentPays.length ? (
         <div className="space-y-2">
