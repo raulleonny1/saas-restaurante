@@ -4,7 +4,7 @@
 
 $ErrorActionPreference = "Stop"
 $port = 17891
-$version = "1.2.0"
+$version = "1.2.1"
 
 function Get-PrinterListJson {
   $defaultName = $null
@@ -229,11 +229,14 @@ while ($true) {
 
     $method = "GET"
     $path = "/"
+    $query = ""
     if ($requestLine -match '^([A-Z]+)\s+(\S+)') {
       $method = $Matches[1].ToUpperInvariant()
       $uri = $Matches[2]
-      $path = ($uri.Split("?")[0]).TrimEnd("/").ToLowerInvariant()
+      $parts = $uri.Split("?")
+      $path = $parts[0].TrimEnd("/").ToLowerInvariant()
       if (-not $path) { $path = "/" }
+      if ($parts.Count -gt 1) { $query = $parts[1] }
     }
 
     if ($method -eq "OPTIONS") {
@@ -242,11 +245,20 @@ while ($true) {
       continue
     }
 
+    # Si SmartServe pide listar impresoras (origin=...), servir HTML de descubrimiento
+    $wantsDiscover = ($query -match 'origin=') -or ($path -eq "/discover") -or ($path -eq "/picker")
+
+    if ($wantsDiscover -and $path -ne "/printers" -and $path -ne "/health") {
+      Send-HttpResponse -Stream $stream -StatusCode 200 -StatusText "OK" -Body (Get-DiscoverHtml) -Origin $origin -ContentType "text/html; charset=utf-8"
+      $client.Close()
+      continue
+    }
+
     switch ($path) {
       "/" {
         $body = (@{
           ok = $true; service = "smartserve-print-bridge"; version = $version
-          hint = "Abre /discover desde SmartServe o prueba /printers"
+          status = "ENCENDIDO"
         } | ConvertTo-Json -Compress)
         Send-HttpResponse -Stream $stream -StatusCode 200 -StatusText "OK" -Body $body -Origin $origin
       }
@@ -260,8 +272,11 @@ while ($true) {
       "/discover" {
         Send-HttpResponse -Stream $stream -StatusCode 200 -StatusText "OK" -Body (Get-DiscoverHtml) -Origin $origin -ContentType "text/html; charset=utf-8"
       }
+      "/picker" {
+        Send-HttpResponse -Stream $stream -StatusCode 200 -StatusText "OK" -Body (Get-DiscoverHtml) -Origin $origin -ContentType "text/html; charset=utf-8"
+      }
       default {
-        $body = (@{ ok = $false; error = "not_found" } | ConvertTo-Json -Compress)
+        $body = (@{ ok = $false; error = "not_found"; version = $version } | ConvertTo-Json -Compress)
         Send-HttpResponse -Stream $stream -StatusCode 404 -StatusText "Not Found" -Body $body -Origin $origin
       }
     }

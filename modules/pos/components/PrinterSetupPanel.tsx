@@ -388,10 +388,10 @@ function BridgeBanner({
         Paso 1 · Asistente en este PC
       </p>
       <p className={`mt-1 text-xs ${text}`}>
-        Si la ventana negra ya dice ENCENDIDO, igual puede salir «apagado»
-        porque Chrome bloquea la comprobación. Da igual: pulsa{" "}
-        <strong>Buscar</strong> (se abrirá una ventana pequeña) y permite
-        ventanas emergentes. Reinicia el .bat si descargaste archivos nuevos.
+        Si la ventanita dice <code>not_found</code>, el asistente es{" "}
+        <strong>viejo</strong>: ciérralo, descarga de nuevo los 2 archivos,
+        ábrelos (debe decir <strong>v1.2.1</strong>) y pulsa Buscar. Permite
+        ventanas emergentes.
       </p>
       <ol className={`mt-3 list-decimal space-y-2 pl-4 text-xs ${text}`}>
         <li>

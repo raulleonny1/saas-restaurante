@@ -117,6 +117,8 @@ function listPrintersViaPopup(timeoutMs = 12_000): Promise<PrinterBridgeStatus> 
     }
 
     const origin = window.location.origin;
+    // /discover?origin=...  (asistente v1.2+). Si ves JSON not_found,
+    // tienes el asistente VIEJO: cierra y vuelve a abrir start-windows.bat nuevo.
     const url =
       `${PRINT_BRIDGE_URL}/discover?origin=${encodeURIComponent(origin)}` +
       `&t=${Date.now()}`;
@@ -124,7 +126,7 @@ function listPrintersViaPopup(timeoutMs = 12_000): Promise<PrinterBridgeStatus> 
     const popup = window.open(
       url,
       "smartserve-printers",
-      "width=480,height=560,menubar=no,toolbar=no,noopener=no",
+      "width=420,height=320,menubar=no,toolbar=no,noopener=no",
     );
 
     if (!popup) {
@@ -185,7 +187,7 @@ function listPrintersViaPopup(timeoutMs = 12_000): Promise<PrinterBridgeStatus> 
         available: false,
         reason: "offline",
         message:
-          "No hubo respuesta del asistente. ¿Ves «ESTADO: ENCENDIDO» en la ventana negra? Reinicia el .bat y permite la ventana emergente.",
+          "Sin respuesta. Si la ventanita mostró {\"error\":\"not_found\"}: cierra la ventana negra, descarga OTRA VEZ start-windows.bat + el .ps1, ábrelos (debe decir v1.2.1) y pulsa Buscar.",
       });
     }, timeoutMs);
   });
