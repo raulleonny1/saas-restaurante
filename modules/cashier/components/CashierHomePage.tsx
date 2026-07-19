@@ -123,6 +123,44 @@ function countByStation(items: OrderItem[]) {
   return { mesa, cocina, barra, listo, servido };
 }
 
+type LiveFilter =
+  | "all"
+  | "mesero"
+  | "cocina"
+  | "barra"
+  | "listo"
+  | "cobrar";
+
+const FILTER_LABEL: Record<LiveFilter, string> = {
+  all: "Todas las mesas",
+  mesero: "Mesero tomando",
+  cocina: "En cocina",
+  barra: "En barra",
+  listo: "Listo · retirar",
+  cobrar: "Por cobrar",
+};
+
+function matchesLiveFilter(
+  filter: LiveFilter,
+  counts: ReturnType<typeof countByStation>,
+  due: number,
+): boolean {
+  switch (filter) {
+    case "all":
+      return true;
+    case "mesero":
+      return counts.mesa > 0;
+    case "cocina":
+      return counts.cocina > 0;
+    case "barra":
+      return counts.barra > 0;
+    case "listo":
+      return counts.listo > 0;
+    case "cobrar":
+      return due > 0.009;
+  }
+}
+
 export function CashierHomePage() {
   const router = useRouter();
   const routes = useFloorRoutes();
@@ -138,6 +176,7 @@ export function CashierHomePage() {
   const [cashToday, setCashToday] = useState(0);
   const [cardToday, setCardToday] = useState(0);
   const [tipsToday, setTipsToday] = useState(0);
+  const [filter, setFilter] = useState<LiveFilter>("all");
   /** Re-tick every 30s so “hace X min” stays fresh */
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -195,6 +234,18 @@ export function CashierHomePage() {
     }
     return { mesero, cocina, barra, listo, porCobrar, mesas: liveOrders.length };
   }, [liveOrders]);
+
+  const filteredOrders = useMemo(
+    () =>
+      liveOrders.filter((row) =>
+        matchesLiveFilter(filter, row.counts, row.due),
+      ),
+    [liveOrders, filter],
+  );
+
+  function toggleFilter(next: LiveFilter) {
+    setFilter((prev) => (prev === next ? "all" : next));
+  }
 
   function openPay(order: Order) {
     if (order.tableId) selectTable(order.tableId);
@@ -268,33 +319,94 @@ export function CashierHomePage() {
       </div>
 
       <div className="flex flex-wrap gap-1.5 text-[10px]">
-        <span className="rounded-full border border-white/15 px-2 py-1 text-[#c5d0c2]">
+        <button
+          type="button"
+          onClick={() => toggleFilter("all")}
+          className={`rounded-full border px-2 py-1 ${
+            filter === "all"
+              ? "border-white/40 bg-white/10 text-white"
+              : "border-white/15 text-[#c5d0c2]"
+          }`}
+        >
           {liveSummary.mesas} mesas
-        </span>
-        <span className="rounded-full border border-amber-500/30 bg-amber-950/20 px-2 py-1 text-amber-200">
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleFilter("mesero")}
+          className={`rounded-full border px-2 py-1 ${
+            filter === "mesero"
+              ? "border-amber-400/70 bg-amber-950/40 text-amber-100"
+              : "border-amber-500/30 bg-amber-950/20 text-amber-200"
+          }`}
+        >
           Mesero {liveSummary.mesero}
-        </span>
-        <span className="rounded-full border border-sky-500/30 bg-sky-950/20 px-2 py-1 text-sky-200">
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleFilter("cocina")}
+          className={`rounded-full border px-2 py-1 ${
+            filter === "cocina"
+              ? "border-sky-400/70 bg-sky-950/45 text-sky-100"
+              : "border-sky-500/30 bg-sky-950/20 text-sky-200"
+          }`}
+        >
           Cocina {liveSummary.cocina}
-        </span>
-        <span className="rounded-full border border-violet-500/30 bg-violet-950/20 px-2 py-1 text-violet-200">
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleFilter("barra")}
+          className={`rounded-full border px-2 py-1 ${
+            filter === "barra"
+              ? "border-violet-400/70 bg-violet-950/45 text-violet-100"
+              : "border-violet-500/30 bg-violet-950/20 text-violet-200"
+          }`}
+        >
           Barra {liveSummary.barra}
-        </span>
-        <span className="rounded-full border border-cyan-400/35 bg-cyan-950/25 px-2 py-1 text-cyan-200">
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleFilter("listo")}
+          className={`rounded-full border px-2 py-1 ${
+            filter === "listo"
+              ? "border-cyan-300/80 bg-cyan-950/45 text-cyan-100"
+              : "border-cyan-400/35 bg-cyan-950/25 text-cyan-200"
+          }`}
+        >
           Listo {liveSummary.listo}
-        </span>
-        <span className="rounded-full border border-emerald-500/30 bg-emerald-950/20 px-2 py-1 text-emerald-200">
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleFilter("cobrar")}
+          className={`rounded-full border px-2 py-1 ${
+            filter === "cobrar"
+              ? "border-emerald-400/70 bg-emerald-950/45 text-emerald-100"
+              : "border-emerald-500/30 bg-emerald-950/20 text-emerald-200"
+          }`}
+        >
           Por cobrar {liveSummary.porCobrar}
-        </span>
+        </button>
       </div>
 
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium text-[#c5d0c2]">
-          Actividad en sala ({liveOrders.length})
+          {filter === "all"
+            ? `Actividad en sala (${filteredOrders.length})`
+            : `${FILTER_LABEL[filter]} (${filteredOrders.length})`}
         </h2>
-        <Link href={routes.history} className="text-xs text-emerald-400">
-          Caja del día
-        </Link>
+        <div className="flex items-center gap-2">
+          {filter !== "all" ? (
+            <button
+              type="button"
+              onClick={() => setFilter("all")}
+              className="text-xs text-[#8fa08c]"
+            >
+              Ver todas
+            </button>
+          ) : null}
+          <Link href={routes.history} className="text-xs text-emerald-400">
+            Caja del día
+          </Link>
+        </div>
       </div>
 
       {liveOrders.length === 0 ? (
@@ -302,9 +414,20 @@ export function CashierHomePage() {
           No hay pedidos abiertos. Cuando un mesero abra mesa, aparecerá aquí al
           instante.
         </div>
+      ) : filteredOrders.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-white/15 px-4 py-10 text-center text-sm text-[#8fa08c]">
+          Nada en «{FILTER_LABEL[filter]}» ahora.{" "}
+          <button
+            type="button"
+            onClick={() => setFilter("all")}
+            className="text-emerald-400"
+          >
+            Ver todas
+          </button>
+        </div>
       ) : (
         <ul className="space-y-3">
-          {liveOrders.map(({ order, due, phase, counts }) => (
+          {filteredOrders.map(({ order, due, phase, counts }) => (
             <li
               key={order.id}
               className="rounded-2xl border border-white/10 bg-white/[0.04] p-3.5"
