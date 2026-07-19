@@ -108,6 +108,9 @@ export interface Order extends Timestamps, SoftDelete {
   notes?: string;
   printCount?: number;
   lastPrintedAt?: ISODateString;
+  /** Cocina pulsa «Avisar mesero» → el mesero ve aviso flotante + sonido. */
+  waiterAlertAt?: ISODateString;
+  waiterAlertBody?: string;
 }
 
 export interface Payment extends Timestamps {

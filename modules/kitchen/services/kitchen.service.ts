@@ -313,11 +313,25 @@ export async function advanceTicketColumn(input: {
   );
   const orderStatus = deriveOrderStatus(items, order.status);
 
+  const readyBody =
+    toColumn === "ready"
+      ? items
+          .filter((i) => idSet.has(i.id))
+          .map((i) => `${i.quantity}× ${i.name}`)
+          .join(", ")
+      : undefined;
+
   const batch = writeBatch(getDb());
   batch.update(doc(getDb(), "restaurants", restaurantId, "orders", order.id), {
     items,
     status: orderStatus,
     updatedAt: stamp,
+    ...(toColumn === "ready"
+      ? {
+          waiterAlertAt: stamp,
+          waiterAlertBody: readyBody || "Pedido listo para llevar a la mesa",
+        }
+      : {}),
   });
 
   const evtId = `evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -331,6 +345,65 @@ export async function advanceTicketColumn(input: {
     toStatus: orderStatus,
     actorUid,
     payload: { itemIds, toColumn },
+    createdAt: stamp,
+    updatedAt: stamp,
+  });
+
+  await batch.commit();
+}
+
+/**
+ * Cocina avisa al mesero: marca líneas como listas + dispara aviso flotante/sonido.
+ * Se puede repetir (re-alerta) aunque ya estén en «Listo».
+ */
+export async function alertWaiterForOrder(input: {
+  restaurantId: string;
+  order: Order;
+  itemIds: string[];
+  actorUid: string;
+}): Promise<void> {
+  const { restaurantId, order, itemIds, actorUid } = input;
+  if (!itemIds.length) return;
+  const stamp = nowIso();
+  const idSet = new Set(itemIds);
+
+  const items = order.items.map((item) => {
+    if (!idSet.has(item.id)) return item;
+    if (item.status === "delivered" || item.status === "cancelled") return item;
+    if (item.status === "ready") {
+      return { ...item, readyAt: item.readyAt ?? stamp };
+    }
+    return patchItemToColumn(item, "ready", stamp);
+  });
+
+  const alertItems = items.filter(
+    (i) => idSet.has(i.id) && i.status === "ready",
+  );
+  const body =
+    alertItems.map((i) => `${i.quantity}× ${i.name}`).join(", ") ||
+    "Pedido listo para llevar a la mesa";
+  const orderStatus = deriveOrderStatus(items, order.status);
+
+  const batch = writeBatch(getDb());
+  batch.update(doc(getDb(), "restaurants", restaurantId, "orders", order.id), {
+    items,
+    status: orderStatus,
+    updatedAt: stamp,
+    waiterAlertAt: stamp,
+    waiterAlertBody: body,
+  });
+
+  const evtId = `evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  batch.set(doc(getDb(), "restaurants", restaurantId, "orderEvents", evtId), {
+    id: evtId,
+    restaurantId,
+    branchId: order.branchId,
+    orderId: order.id,
+    type: "kitchen.waiter_alert",
+    fromStatus: order.status,
+    toStatus: orderStatus,
+    actorUid,
+    payload: { itemIds, body },
     createdAt: stamp,
     updatedAt: stamp,
   });

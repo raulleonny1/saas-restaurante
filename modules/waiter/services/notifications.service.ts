@@ -61,26 +61,30 @@ export function kitchenReadyAlerts(orders: Order[]): AppNotification[] {
   return orders
     .filter(
       (o) =>
+        Boolean(o.waiterAlertAt) ||
         o.status === "ready" ||
         o.items.some((i) => i.status === "ready"),
     )
     .map((o) => {
       const readyItems = o.items.filter((i) => i.status === "ready");
+      const body =
+        o.waiterAlertBody ||
+        (readyItems.length > 0
+          ? readyItems.map((i) => `${i.quantity}× ${i.name}`).join(", ")
+          : "Pedido listo para llevar a la mesa");
+      const stamp = o.waiterAlertAt ?? "auto";
       return {
-        id: `ready_${o.id}`,
+        id: `ready_${o.id}_${stamp}`,
         restaurantId: o.restaurantId,
         uid: "local",
         type: "order" as const,
         title: `¡Retirar de cocina! · ${o.tableName ?? "Mesa"}`,
-        body:
-          readyItems.length > 0
-            ? readyItems.map((i) => `${i.quantity}× ${i.name}`).join(", ")
-            : "Pedido listo para llevar a la mesa",
+        body,
         href: "/waiter/pedido",
         read: false,
         referenceType: "order" as const,
         referenceId: o.id,
-        createdAt: o.updatedAt,
+        createdAt: o.waiterAlertAt ?? o.updatedAt,
         updatedAt: o.updatedAt,
       };
     });

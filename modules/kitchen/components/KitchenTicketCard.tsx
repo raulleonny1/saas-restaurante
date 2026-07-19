@@ -1,13 +1,15 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import { useKitchen } from "@/modules/kitchen/context/KitchenProvider";
 import {
   PRIORITY_STYLES,
   formatElapsed,
 } from "@/modules/kitchen/domain/priority";
-import { useKitchen } from "@/modules/kitchen/context/KitchenProvider";
 import type { KitchenColumnId, KitchenTicket } from "@/types/kitchen";
 import { Badge, Button, toast } from "@/ui";
+import { BellRing } from "lucide-react";
+import { useState } from "react";
 
 const NEXT: Partial<Record<KitchenColumnId, KitchenColumnId>> = {
   queued: "preparing",
@@ -34,17 +36,34 @@ export function KitchenTicketCard({
   ticket: KitchenTicket;
   column: KitchenColumnId;
 }) {
-  const { moveTicketItems, moveItem } = useKitchen();
+  const { moveTicketItems, moveItem, alertWaiter } = useKitchen();
   const style = PRIORITY_STYLES[ticket.priority];
   const next = NEXT[column];
   const prev = PREV[column];
   const itemIds = ticket.items.map((i) => i.item.id);
+  const [pingBusy, setPingBusy] = useState(false);
+  const canAlertWaiter = column !== "delivered";
 
   const advance = async (to: KitchenColumnId) => {
     try {
       await moveTicketItems(ticket.order.id, itemIds, to);
     } catch (e) {
       toast(e instanceof Error ? e.message : "Error", "error");
+    }
+  };
+
+  const pingWaiter = async () => {
+    try {
+      setPingBusy(true);
+      await alertWaiter(ticket.order.id, itemIds);
+      toast(
+        `Mesero avisado · ${ticket.order.tableName ?? "mesa"}`,
+        "success",
+      );
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Error", "error");
+    } finally {
+      setPingBusy(false);
     }
   };
 
@@ -129,6 +148,21 @@ export function KitchenTicketCard({
             </li>
           ))}
         </ul>
+
+        {canAlertWaiter ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="w-full border-cyan-500/40 bg-cyan-500/10 text-cyan-900 hover:bg-cyan-500/20 dark:text-cyan-100"
+            disabled={pingBusy}
+            onClick={() => void pingWaiter()}
+          >
+            <BellRing className="h-3.5 w-3.5" />
+            {pingBusy
+              ? "Avisando…"
+              : `Avisar mesero · ${ticket.order.tableName ?? "mesa"}`}
+          </Button>
+        ) : null}
 
         <div className="flex gap-2">
           {prev ? (

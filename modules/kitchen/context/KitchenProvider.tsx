@@ -16,6 +16,7 @@ import {
 import {
   advanceKitchenItem,
   advanceTicketColumn,
+  alertWaiterForOrder,
   buildKitchenTickets,
   subscribeKitchenBranches,
   subscribeKitchenCatalog,
@@ -74,6 +75,8 @@ interface KitchenContextValue {
     itemIds: string[],
     to: KitchenColumnId,
   ) => Promise<void>;
+  /** Avisa al mesero (flotante + sonido) por esa mesa/pedido. */
+  alertWaiter: (orderId: string, itemIds: string[]) => Promise<void>;
 }
 
 const KitchenContext = createContext<KitchenContextValue | null>(null);
@@ -359,6 +362,21 @@ export function KitchenProvider({
     [restaurantId, user, findOrder],
   );
 
+  const alertWaiter = useCallback(
+    async (orderId: string, itemIds: string[]) => {
+      if (!restaurantId || !user) throw new Error("Sin sesión");
+      const order = findOrder(orderId);
+      if (!order) throw new Error("Pedido no encontrado");
+      await alertWaiterForOrder({
+        restaurantId,
+        order,
+        itemIds,
+        actorUid: user.uid,
+      });
+    },
+    [restaurantId, user, findOrder],
+  );
+
   const value: KitchenContextValue = {
     mode,
     ready,
@@ -379,6 +397,7 @@ export function KitchenProvider({
     now,
     moveItem,
     moveTicketItems,
+    alertWaiter,
   };
 
   return (

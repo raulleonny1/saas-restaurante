@@ -2,6 +2,7 @@
 
 import { useKitchen } from "@/modules/kitchen/context/KitchenProvider";
 import type { KitchenColumnId } from "@/types/kitchen";
+import { ActiveTablesAlertBar } from "./ActiveTablesAlertBar";
 import { KitchenTicketCard } from "./KitchenTicketCard";
 
 const COLUMNS: { id: KitchenColumnId; title: string }[] = [
@@ -19,13 +20,13 @@ export function KitchenBoard() {
     : COLUMNS.filter((c) => c.id !== "delivered");
 
   return (
-    <div
-      className={`grid min-h-0 flex-1 gap-3 ${
-        visible.length === 4
-          ? "lg:grid-cols-4"
-          : "lg:grid-cols-3"
-      } grid-cols-1 sm:grid-cols-2`}
-    >
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <ActiveTablesAlertBar />
+      <div
+        className={`grid min-h-0 flex-1 gap-3 ${
+          visible.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"
+        } grid-cols-1 sm:grid-cols-2`}
+      >
       {visible.map((col) => {
         const list = ticketsByColumn[col.id];
         return (
@@ -57,6 +58,7 @@ export function KitchenBoard() {
           </section>
         );
       })}
+      </div>
     </div>
   );
 }

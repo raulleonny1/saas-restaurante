@@ -45,6 +45,7 @@ export function useWaiterNotifications() {
 function readyItemKeys(orders: Order[]) {
   const keys = new Set<string>();
   for (const o of orders) {
+    if (o.waiterAlertAt) keys.add(`ping:${o.id}:${o.waiterAlertAt}`);
     for (const i of o.items) {
       if (i.status === "ready") keys.add(`${o.id}:${i.id}`);
     }
