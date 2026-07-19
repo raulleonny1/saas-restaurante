@@ -49,6 +49,8 @@ export function WaiterPayPage() {
     order: Order;
     payments: Payment[];
   } | null>(null);
+  /** En caja/sala: imprimir ticket TPV automáticamente al cobrar */
+  const [printOnCharge, setPrintOnCharge] = useState(true);
 
   const allowed = can("payments.charge");
   const due = balance;
@@ -257,19 +259,38 @@ export function WaiterPayPage() {
                 createdAt: stamp,
                 updatedAt: stamp,
               };
+              const ticketOrder: Order = {
+                ...snapshot,
+                status: "paid",
+                paidAt: stamp,
+                amountPaid: snapshot.total,
+              };
+              const ticketPayments = [...payments, payRow];
               setLastTicket({
-                order: {
-                  ...snapshot,
-                  status: "paid",
-                  paidAt: stamp,
-                  amountPaid: snapshot.total,
-                },
-                payments: [...payments, payRow],
+                order: ticketOrder,
+                payments: ticketPayments,
               });
+              if (printOnCharge) {
+                try {
+                  printOrderReceipt(ticketOrder, ticketPayments, {
+                    restaurantName,
+                    paperWidthMm: tpvPrinter?.paperWidthMm ?? 80,
+                    printerSystemName: tpvPrinter?.systemName,
+                    printerLabel:
+                      tpvPrinter?.label ?? "Ventas · ticket cliente",
+                  });
+                } catch {
+                  /* cobro OK aunque falle el diálogo de impresión */
+                }
+              }
               setMsg(
                 routes.base === "/caja"
-                  ? "Cobrado en caja · queda en Archivo de mesero y cajero"
-                  : "Cobrado · ticket listo · queda en Archivo/Caja",
+                  ? printOnCharge
+                    ? "Cobrado · imprimiendo ticket de ventas…"
+                    : "Cobrado en caja · puedes imprimir el ticket abajo"
+                  : printOnCharge
+                    ? "Cobrado · imprimiendo ticket…"
+                    : "Cobrado · ticket listo · queda en Archivo/Caja",
               );
               setTendered("");
               setTip("0");
@@ -288,6 +309,21 @@ export function WaiterPayPage() {
             ? `Cobrar y dar ${formatCurrency(change, currency)} de cambio`
             : `Cobrar ${formatCurrency(totalDue, currency)}`}
       </button>
+
+      <label className="flex cursor-pointer items-center gap-2 px-1 text-xs text-[#a8b5a4]">
+        <input
+          type="checkbox"
+          checked={printOnCharge}
+          onChange={(e) => setPrintOnCharge(e.target.checked)}
+          className="rounded border-white/30"
+        />
+        Imprimir ticket de ventas al cobrar
+        {tpvPrinter?.systemName ? (
+          <span className="text-[#8fa08c]">
+            ({tpvPrinter.systemName})
+          </span>
+        ) : null}
+      </label>
 
       {lastChange != null && lastChange > 0 ? (
         <div className="rounded-2xl border border-cyan-400/50 bg-cyan-950/50 p-4 text-center">
