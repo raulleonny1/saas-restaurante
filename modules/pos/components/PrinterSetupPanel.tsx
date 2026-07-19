@@ -200,14 +200,42 @@ export function PrinterSetupPanel({
         </p>
       </div>
 
-      <BridgeBanner
-        floor={floor}
-        bridgeUp={bridgeUp}
-        scanning={scanning}
-        scanMsg={scanMsg}
-        count={installed.length}
-        onScan={() => void scanPrinters()}
-      />
+      {/* Botón siempre visible y activo (solo se desactiva mientras busca) */}
+      <div
+        className={
+          floor
+            ? "rounded-2xl border-2 border-emerald-500/50 bg-emerald-950/40 p-4"
+            : "rounded-[var(--radius-lg)] border-2 border-accent/40 bg-accent-soft/30 p-4"
+        }
+      >
+        <button
+          type="button"
+          disabled={scanning}
+          onClick={() => void scanPrinters()}
+          className={
+            floor
+              ? "w-full rounded-xl bg-emerald-600 px-4 py-3.5 text-sm font-semibold text-white shadow-lg disabled:opacity-60"
+              : "w-full rounded-[var(--radius-md)] bg-accent px-4 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
+          }
+        >
+          {scanning
+            ? "Buscando impresoras en este PC…"
+            : installed.length > 0
+              ? `Volver a buscar (${installed.length} encontradas)`
+              : "Buscar impresoras instaladas"}
+        </button>
+        <p
+          className={`mt-2 text-center text-xs ${floor ? "text-[#a8b5a4]" : "text-fg-muted"}`}
+        >
+          {bridgeUp === true
+            ? scanMsg || "Asistente activo · elige ventas y cocina abajo"
+            : bridgeUp === false
+              ? "Si no encuentra nada: inicia el asistente (descarga abajo) y pulsa de nuevo"
+              : "Comprobando asistente local…"}
+        </p>
+      </div>
+
+      <BridgeBanner floor={floor} bridgeUp={bridgeUp} />
 
       {showKitchenMode ? (
         floor ? (
@@ -249,6 +277,8 @@ export function PrinterSetupPanel({
           canEdit={canEdit}
           floor={floor}
           installed={installed}
+          scanning={scanning}
+          onScan={() => void scanPrinters()}
           onTest={() =>
             printTpvTestPage({
               restaurantName,
@@ -266,6 +296,8 @@ export function PrinterSetupPanel({
           canEdit={canEdit}
           floor={floor}
           installed={installed}
+          scanning={scanning}
+          onScan={() => void scanPrinters()}
           onTest={() =>
             printKitchenTestPage({
               restaurantName,
@@ -300,17 +332,9 @@ export function PrinterSetupPanel({
 function BridgeBanner({
   floor,
   bridgeUp,
-  scanning,
-  scanMsg,
-  count,
-  onScan,
 }: {
   floor: boolean;
   bridgeUp: boolean | null;
-  scanning: boolean;
-  scanMsg: string | null;
-  count: number;
-  onScan: () => void;
 }) {
   const box = floor
     ? "rounded-2xl border border-white/10 bg-white/[0.04] p-4"
@@ -318,90 +342,56 @@ function BridgeBanner({
   const text = floor ? "text-[#a8b5a4]" : "text-fg-muted";
   const title = floor ? "text-[#e7efe4]" : "text-fg";
 
+  // Solo instrucciones de descarga si el asistente no está corriendo
+  if (bridgeUp !== false) return null;
+
   return (
     <div className={box}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className={`text-sm font-medium ${title}`}>
-            Impresoras de este PC
-          </p>
-          <p className={`mt-0.5 text-xs ${text}`}>
-            {bridgeUp === true
-              ? count > 0
-                ? `${count} detectada(s) · elige en los selectores`
-                : "Asistente activo · pulsa buscar"
-              : bridgeUp === false
-                ? "Asistente no iniciado (necesario para listar)"
-                : "Comprobando asistente…"}
-          </p>
-        </div>
-        {floor ? (
-          <button
-            type="button"
-            disabled={scanning}
-            onClick={onScan}
-            className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
-          >
-            {scanning ? "Buscando…" : "Buscar impresoras"}
-          </button>
-        ) : (
-          <Button
-            type="button"
-            size="sm"
-            disabled={scanning}
-            onClick={onScan}
-          >
-            {scanning ? "Buscando…" : "Buscar impresoras"}
-          </Button>
-        )}
-      </div>
-
-      {scanMsg ? (
-        <p className={`mt-2 text-xs ${floor ? "text-[#c5d0c2]" : "text-fg-muted"}`}>
-          {scanMsg}
+      <p className={`text-sm font-medium ${title}`}>
+        Asistente de impresoras (una vez en este PC)
+      </p>
+      <div className={`mt-3 space-y-2 text-xs ${text}`}>
+        <ol className="list-decimal space-y-1 pl-4">
+          <li>
+            Descarga estos dos archivos en la misma carpeta:
+            <span className="mt-1 flex flex-wrap gap-2">
+              <a
+                href={PRINT_BRIDGE_DOWNLOAD_BAT}
+                download
+                className={
+                  floor
+                    ? "text-emerald-400 underline"
+                    : "text-accent underline"
+                }
+              >
+                start-windows.bat
+              </a>
+              <a
+                href={PRINT_BRIDGE_DOWNLOAD_PS1}
+                download
+                className={
+                  floor
+                    ? "text-emerald-400 underline"
+                    : "text-accent underline"
+                }
+              >
+                smartserve-print-bridge.ps1
+              </a>
+            </span>
+          </li>
+          <li>
+            Haz doble clic en <strong>start-windows.bat</strong>.
+          </li>
+          <li>
+            Deja la ventana negra abierta y pulsa el botón verde «Buscar
+            impresoras instaladas».
+          </li>
+        </ol>
+        <p>
+          El asistente solo lee impresoras de Windows en este PC; no se publica
+          en internet.
         </p>
-      ) : null}
-
-      {bridgeUp === false ? (
-        <div className={`mt-3 space-y-2 text-xs ${text}`}>
-          <p className={title}>Una sola vez en este PC:</p>
-          <ol className="list-decimal space-y-1 pl-4">
-            <li>
-              Descarga estos dos archivos en la misma carpeta:
-              <span className="mt-1 flex flex-wrap gap-2">
-                <a
-                  href={PRINT_BRIDGE_DOWNLOAD_BAT}
-                  download
-                  className={
-                    floor
-                      ? "text-emerald-400 underline"
-                      : "text-accent underline"
-                  }
-                >
-                  start-windows.bat
-                </a>
-                <a
-                  href={PRINT_BRIDGE_DOWNLOAD_PS1}
-                  download
-                  className={
-                    floor
-                      ? "text-emerald-400 underline"
-                      : "text-accent underline"
-                  }
-                >
-                  smartserve-print-bridge.ps1
-                </a>
-              </span>
-            </li>
-            <li>Haz doble clic en <strong>start-windows.bat</strong>.</li>
-            <li>Deja la ventana negra abierta y pulsa «Buscar impresoras».</li>
-          </ol>
-          <p>
-            El asistente solo lee impresoras de Windows en este PC; no se
-            publica en internet.
-          </p>
-        </div>
-      ) : null}
+      </div>
     </div>
   );
 }
@@ -414,6 +404,8 @@ function StationCard({
   canEdit,
   floor,
   installed,
+  scanning,
+  onScan,
   onTest,
 }: {
   title: string;
@@ -423,6 +415,8 @@ function StationCard({
   canEdit: boolean;
   floor: boolean;
   installed: InstalledPrinter[];
+  scanning: boolean;
+  onScan: () => void;
   onTest: () => void;
 }) {
   const selectValue =
@@ -434,44 +428,60 @@ function StationCard({
         : "";
 
   const printerSelect = (
-    <label className="block space-y-1.5">
-      <span
-        className={`text-xs font-medium ${floor ? "text-[#c5d0c2]" : "text-fg-muted"}`}
-      >
-        Impresora instalada
-      </span>
-      <select
-        value={selectValue}
-        disabled={!canEdit || installed.length === 0}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v === "__custom__") return;
-          onChange({ ...draft, systemName: v });
-        }}
-        className={
-          floor
-            ? "w-full rounded-xl border border-white/15 bg-[#152018] px-3 py-2.5 text-sm text-[#e7efe4] disabled:opacity-50"
-            : "flex h-10 w-full rounded-[var(--radius-md)] border border-border bg-bg px-3 text-sm disabled:opacity-50"
-        }
-      >
-        <option value="">
-          {installed.length
-            ? "— Selecciona impresora —"
-            : "— Busca impresoras arriba —"}
-        </option>
-        {installed.map((p) => (
-          <option key={p.name} value={p.name}>
-            {p.name}
-            {p.isDefault ? " (predeterminada)" : ""}
-            {p.portName ? ` · ${p.portName}` : ""}
+    <div className="space-y-2">
+      <label className="block space-y-1.5">
+        <span
+          className={`text-xs font-medium ${floor ? "text-[#c5d0c2]" : "text-fg-muted"}`}
+        >
+          Impresora instalada
+        </span>
+        <select
+          value={selectValue}
+          disabled={!canEdit || installed.length === 0}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "__custom__") return;
+            onChange({ ...draft, systemName: v });
+          }}
+          className={
+            floor
+              ? "w-full rounded-xl border border-white/15 bg-[#152018] px-3 py-2.5 text-sm text-[#e7efe4] disabled:opacity-50"
+              : "flex h-10 w-full rounded-[var(--radius-md)] border border-border bg-bg px-3 text-sm disabled:opacity-50"
+          }
+        >
+          <option value="">
+            {installed.length
+              ? "— Selecciona impresora —"
+              : "— Pulsa Buscar para listar —"}
           </option>
-        ))}
-        {draft.systemName &&
-        !installed.some((p) => p.name === draft.systemName) ? (
-          <option value="__custom__">{draft.systemName} (guardada)</option>
-        ) : null}
-      </select>
-    </label>
+          {installed.map((p) => (
+            <option key={p.name} value={p.name}>
+              {p.name}
+              {p.isDefault ? " (predeterminada)" : ""}
+              {p.portName ? ` · ${p.portName}` : ""}
+            </option>
+          ))}
+          {draft.systemName &&
+          !installed.some((p) => p.name === draft.systemName) ? (
+            <option value="__custom__">{draft.systemName} (guardada)</option>
+          ) : null}
+        </select>
+      </label>
+      {installed.length === 0 ? (
+        <button
+          type="button"
+          disabled={scanning || !canEdit}
+          onClick={onScan}
+          className={
+            floor
+              ? "w-full rounded-xl border border-emerald-400/50 bg-emerald-600/90 py-2.5 text-xs font-semibold text-white disabled:opacity-50"
+              : "w-full rounded-[var(--radius-md)] border border-accent/40 bg-accent py-2.5 text-xs font-semibold text-white disabled:opacity-50"
+          }
+        >
+          {scanning ? "Buscando…" : "Buscar impresoras ahora"}
+        </button>
+      ) : null}
+    </div>
   );
 
   if (floor) {

@@ -26,7 +26,7 @@ export function CashierPrintersPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 px-4 py-4 pb-28">
+    <div className="mx-auto max-w-3xl space-y-4 px-4 py-4 pb-28">
       <div>
         <Link
           href={routes.home}
