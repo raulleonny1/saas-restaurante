@@ -67,24 +67,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const healUid = user?.uid ?? "";
+  const healRestaurants = user?.restaurantIds?.join(",") ?? "";
+
   // Heal raced roles (profile and/or membership stamped as cliente)
   useEffect(() => {
-    if (!user?.restaurantIds?.length) return;
+    if (!healUid || !healRestaurants) return;
     let cancelled = false;
-    void reloadCurrentUser().then((fresh) => {
-      if (cancelled || !fresh) return;
-      if (
-        fresh.role !== user.role ||
-        fresh.updatedAt !== user.updatedAt
-      ) {
-        setUser(fresh);
-      }
-    });
+    void reloadCurrentUser()
+      .then((fresh) => {
+        if (cancelled || !fresh) return;
+        setUser((prev) => {
+          if (!prev) return fresh;
+          if (fresh.role !== prev.role || fresh.updatedAt !== prev.updatedAt) {
+            return fresh;
+          }
+          return prev;
+        });
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- heal once per uid / restaurant set
-  }, [user?.uid, user?.restaurantIds?.join(",")]);
+  }, [healUid, healRestaurants]);
 
   const value = useMemo<AuthSessionValue>(
     () => ({

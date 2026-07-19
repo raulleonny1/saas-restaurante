@@ -105,6 +105,11 @@ export async function updateMember(input: {
   );
 }
 
+function staffInviteId(restaurantId: string, email: string): string {
+  const safe = email.trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
+  return `inv_${restaurantId}_${safe}`;
+}
+
 export async function inviteMember(input: {
   restaurantId: string;
   restaurantName: string;
@@ -115,7 +120,31 @@ export async function inviteMember(input: {
 }): Promise<MemberInvite> {
   const email = input.email.trim().toLowerCase();
   const stamp = new Date().toISOString();
-  const id = createId("inv");
+  const id = staffInviteId(input.restaurantId, email);
+  const ref = doc(getDb(), "memberInvites", id);
+  const existing = await getDoc(ref);
+  if (existing.exists()) {
+    const prev = existing.data() as MemberInvite;
+    if (prev.status === "accepted") return prev;
+    if (prev.status === "pending") {
+      await updateDoc(
+        ref,
+        stripUndefined({
+          roleId: input.roleId,
+          branchIds: input.branchIds ?? prev.branchIds ?? [],
+          restaurantName: input.restaurantName,
+          updatedAt: stamp,
+        }),
+      );
+      return {
+        ...prev,
+        roleId: input.roleId,
+        branchIds: input.branchIds ?? prev.branchIds ?? [],
+        restaurantName: input.restaurantName,
+        updatedAt: stamp,
+      };
+    }
+  }
   const row: MemberInvite = {
     id,
     restaurantId: input.restaurantId,
@@ -128,11 +157,28 @@ export async function inviteMember(input: {
     createdAt: stamp,
     updatedAt: stamp,
   };
-  await setDoc(
-    doc(getDb(), "memberInvites", id),
-    stripUndefined({ ...row }),
-  );
+  await setDoc(ref, stripUndefined({ ...row }));
   return row;
+}
+
+/** Idempotent invite for employee alta / backfill (uses stable doc id). */
+export async function ensureStaffInvite(input: {
+  restaurantId: string;
+  restaurantName: string;
+  email: string;
+  roleId: RoleId;
+  branchIds?: string[];
+  invitedBy: string;
+}): Promise<boolean> {
+  const email = input.email.trim().toLowerCase();
+  const id = staffInviteId(input.restaurantId, email);
+  const snap = await getDoc(doc(getDb(), "memberInvites", id));
+  if (snap.exists()) {
+    const status = (snap.data() as MemberInvite).status;
+    if (status === "pending" || status === "accepted") return false;
+  }
+  await inviteMember(input);
+  return true;
 }
 
 export async function listPendingInvites(
@@ -147,6 +193,129 @@ export async function listPendingInvites(
   return snap.docs.map((d) => d.data() as MemberInvite);
 }
 
+async function linkEmployeeByEmail(input: {
+  restaurantId: string;
+  email: string;
+  uid: string;
+  employeeId?: string;
+}): Promise<void> {
+  const stamp = new Date().toISOString();
+  if (input.employeeId) {
+    await updateDoc(
+      doc(
+        getDb(),
+        "restaurants",
+        input.restaurantId,
+        "employees",
+        input.employeeId,
+      ),
+      { uid: input.uid, updatedAt: stamp },
+    );
+    return;
+  }
+  const snap = await getDocs(
+    collection(getDb(), "restaurants", input.restaurantId, "employees"),
+  );
+  for (const d of snap.docs) {
+    const data = d.data() as { email?: string; uid?: string; deletedAt?: string | null };
+    if (data.deletedAt) continue;
+    if ((data.email ?? "").trim().toLowerCase() !== input.email) continue;
+    if (data.uid === input.uid) continue;
+    await updateDoc(d.ref, { uid: input.uid, updatedAt: stamp });
+  }
+}
+
+type EmployeeEmailIndex = {
+  email: string;
+  restaurantId: string;
+  employeeId: string;
+  roleId: RoleId;
+  branchIds?: string[];
+  name?: string;
+  status?: string;
+};
+
+/**
+ * Activate staff from employees alta (employeeEmailIndex), even if
+ * memberInvites was never created.
+ */
+export async function activateFromEmployeeEmailIndex(
+  user: AppUser,
+): Promise<boolean> {
+  if (!isFirebaseConfigured()) return false;
+  const email = user.email.trim().toLowerCase();
+  const indexRef = doc(getDb(), "employeeEmailIndex", email);
+
+  let snap;
+  try {
+    snap = await getDoc(indexRef);
+  } catch (e) {
+    console.warn("[activateFromEmployeeEmailIndex] lectura denegada:", e);
+    return false;
+  }
+  if (!snap.exists()) return false;
+
+  const data = snap.data() as EmployeeEmailIndex;
+  if (!data.restaurantId || !data.employeeId || !data.roleId) return false;
+
+  try {
+    const existing = await getMember(data.restaurantId, user.uid);
+    if (!existing) {
+      const member = createMemberDocument(
+        data.restaurantId,
+        {
+          ...user,
+          role: data.roleId,
+          displayName: data.name || user.displayName,
+        },
+        data.branchIds ?? [],
+      );
+      await setDoc(
+        doc(getDb(), "restaurants", data.restaurantId, "members", user.uid),
+        stripUndefined({ ...member }),
+      );
+    }
+
+    const restaurantIds = new Set(user.restaurantIds);
+    restaurantIds.add(data.restaurantId);
+
+    await updateDoc(
+      doc(getDb(), "users", user.uid),
+      stripUndefined({
+        restaurantIds: [...restaurantIds],
+        role: data.roleId,
+        displayName: data.name || user.displayName,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    try {
+      await linkEmployeeByEmail({
+        restaurantId: data.restaurantId,
+        email,
+        uid: user.uid,
+        employeeId: data.employeeId,
+      });
+    } catch {
+      /* best-effort */
+    }
+
+    try {
+      await updateDoc(indexRef, {
+        status: "linked",
+        updatedAt: new Date().toISOString(),
+      });
+    } catch {
+      /* non-fatal */
+    }
+
+    return true;
+  } catch (e) {
+    console.warn("[activateFromEmployeeEmailIndex] activación falló:", e);
+    return false;
+  }
+}
+
 /** Accept pending invites for the signed-in user (by email). */
 export async function acceptPendingInvites(user: AppUser): Promise<number> {
   if (!isFirebaseConfigured()) return 0;
@@ -156,9 +325,17 @@ export async function acceptPendingInvites(user: AppUser): Promise<number> {
     where("email", "==", email),
     where("status", "==", "pending"),
   );
-  const snap = await getDocs(q);
+  let snap;
+  try {
+    snap = await getDocs(q);
+  } catch (e) {
+    console.warn("[acceptPendingInvites] query invites:", e);
+    const fromIndex = await activateFromEmployeeEmailIndex(user);
+    return fromIndex ? 1 : 0;
+  }
   let accepted = 0;
   const restaurantIds = new Set(user.restaurantIds);
+  let primaryRole: RoleId | null = null;
 
   for (const d of snap.docs) {
     const inv = d.data() as MemberInvite;
@@ -175,20 +352,38 @@ export async function acceptPendingInvites(user: AppUser): Promise<number> {
       );
     }
     restaurantIds.add(inv.restaurantId);
+    if (!primaryRole) primaryRole = inv.roleId;
     await updateDoc(doc(getDb(), "memberInvites", inv.id), {
       status: "accepted",
       acceptedAt: new Date().toISOString(),
       acceptedUid: user.uid,
       updatedAt: new Date().toISOString(),
     });
+    try {
+      await linkEmployeeByEmail({
+        restaurantId: inv.restaurantId,
+        email,
+        uid: user.uid,
+      });
+    } catch {
+      /* best-effort */
+    }
     accepted += 1;
   }
 
   if (accepted > 0) {
-    await updateDoc(doc(getDb(), "users", user.uid), {
-      restaurantIds: [...restaurantIds],
-      updatedAt: new Date().toISOString(),
-    });
+    await updateDoc(
+      doc(getDb(), "users", user.uid),
+      stripUndefined({
+        restaurantIds: [...restaurantIds],
+        ...(primaryRole ? { role: primaryRole } : {}),
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  } else {
+    // Fallback: ficha en Empleados sin memberInvites
+    const fromIndex = await activateFromEmployeeEmailIndex(user);
+    if (fromIndex) return 1;
   }
 
   return accepted;

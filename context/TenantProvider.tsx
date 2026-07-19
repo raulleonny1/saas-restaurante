@@ -44,9 +44,13 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) return;
-    void acceptPendingInvites(user).then((n) => {
-      if (n > 0) void refreshRestaurants();
-    });
+    void acceptPendingInvites(user)
+      .then((n) => {
+        if (n > 0) void refreshRestaurants();
+      })
+      .catch((e) => {
+        console.warn("[TenantProvider] acceptPendingInvites:", e);
+      });
   }, [user, refreshRestaurants]);
 
   useEffect(() => {

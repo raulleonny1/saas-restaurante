@@ -7,30 +7,47 @@ import { Badge, SearchInput } from "@/ui";
 import { useMemo, useState } from "react";
 
 export function EmployeeList() {
-  const { employees, selectedId, selectEmployee } = useEmployees();
+  const {
+    employees,
+    archivedEmployees,
+    listMode,
+    selectedId,
+    selectEmployee,
+  } = useEmployees();
   const { branches } = useTenant();
   const [q, setQ] = useState("");
 
+  const source = listMode === "history" ? archivedEmployees : employees;
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return employees;
-    return employees.filter(
+    if (!term) return source;
+    return source.filter(
       (e) =>
         e.name.toLowerCase().includes(term) ||
         e.email.toLowerCase().includes(term) ||
         (ROLE_LABELS[e.roleId] ?? e.roleId).toLowerCase().includes(term),
     );
-  }, [employees, q]);
+  }, [source, q]);
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-[var(--radius-xl)] border border-border bg-bg-elevated">
       <div className="border-b border-border p-3">
         <SearchInput
-          placeholder="Buscar empleado…"
+          placeholder={
+            listMode === "history"
+              ? "Buscar en historial…"
+              : "Buscar empleado…"
+          }
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onClear={() => setQ("")}
         />
+        {listMode === "history" ? (
+          <p className="mt-2 text-[11px] text-fg-muted">
+            Empleados eliminados del equipo. Siguen guardados para consulta.
+          </p>
+        ) : null}
       </div>
       <ul className="min-h-0 flex-1 overflow-y-auto p-2">
         {filtered.map((e) => {
@@ -52,9 +69,15 @@ export function EmployeeList() {
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium">{e.name}</p>
                   <Badge
-                    tone={e.status === "active" ? "success" : "neutral"}
+                    tone={
+                      e.deletedAt
+                        ? "neutral"
+                        : e.status === "active"
+                          ? "success"
+                          : "neutral"
+                    }
                   >
-                    {e.status}
+                    {e.deletedAt ? "historial" : e.status}
                   </Badge>
                 </div>
                 <p className="text-caption">
@@ -65,13 +88,21 @@ export function EmployeeList() {
                     {branchNames}
                   </p>
                 ) : null}
+                {e.deletedAt ? (
+                  <p className="mt-0.5 text-[11px] text-fg-muted">
+                    Eliminado:{" "}
+                    {new Date(e.deletedAt).toLocaleDateString("es-ES")}
+                  </p>
+                ) : null}
               </button>
             </li>
           );
         })}
         {!filtered.length ? (
           <li className="px-3 py-10 text-center text-sm text-fg-muted">
-            No hay empleados. Crea uno o importa desde membresías.
+            {listMode === "history"
+              ? "No hay empleados en el historial."
+              : "No hay empleados. Crea uno o importa desde membresías."}
           </li>
         ) : null}
       </ul>

@@ -8,17 +8,27 @@ import {
   importMembersAsEmployees,
   linkEmployeeUid,
   markEmployeeInviteSent,
+  restoreEmployee,
   setEmployeeStatus,
   subscribeEmployees,
   upsertEmployee,
+  upsertEmployeeEmailIndex,
 } from "@/modules/employees/services/employees.service";
 import {
   deleteShift,
   subscribeShifts,
   upsertShift,
 } from "@/modules/employees/services/shifts.service";
-import { inviteMember } from "@/modules/tenant/services/members.service";
-import type { Employee, EmployeeShift, EmploymentType } from "@/types/employees";
+import {
+  ensureStaffInvite,
+  inviteMember,
+} from "@/modules/tenant/services/members.service";
+import type {
+  Employee,
+  EmployeeIdDocumentType,
+  EmployeeShift,
+  EmploymentType,
+} from "@/types/employees";
 import type { RoleId } from "@/types/rbac";
 import {
   createContext,
@@ -31,10 +41,17 @@ import {
   type ReactNode,
 } from "react";
 
+export type EmployeesListMode = "roster" | "history";
+
 interface EmployeesContextValue {
   ready: boolean;
   error: string | null;
+  /** Equipo visible en el panel (sin eliminados). */
   employees: Employee[];
+  /** Soft-deleted: no salen en el roster, sí en historial. */
+  archivedEmployees: Employee[];
+  listMode: EmployeesListMode;
+  setListMode: (mode: EmployeesListMode) => void;
   shifts: EmployeeShift[];
   selectedId: string | null;
   selected: Employee | null;
@@ -44,6 +61,8 @@ interface EmployeesContextValue {
     name: string;
     email: string;
     phone?: string;
+    documentType?: EmployeeIdDocumentType | null;
+    documentNumber?: string | null;
     roleId: RoleId;
     employmentType: EmploymentType;
     branchIds: string[];
@@ -54,7 +73,10 @@ interface EmployeesContextValue {
   }) => Promise<Employee>;
   /** Send / resend Auth invite and mark inviteSentAt on the employee. */
   sendAccessInvite: (employeeId: string) => Promise<void>;
+  /** Eliminar → historial (soft-delete). */
   archive: (employeeId: string) => Promise<void>;
+  /** Restaurar desde historial al listado activo. */
+  restore: (employeeId: string) => Promise<void>;
   setStatus: (
     employeeId: string,
     status: Employee["status"],
@@ -85,15 +107,30 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { restaurantId, restaurant } = useRestaurant();
   const { members, branches } = useTenant();
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<EmployeeShift[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [listMode, setListMode] = useState<EmployeesListMode>("roster");
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const employees = useMemo(
+    () => allEmployees.filter((e) => !e.deletedAt),
+    [allEmployees],
+  );
+  const archivedEmployees = useMemo(
+    () =>
+      allEmployees
+        .filter((e) => Boolean(e.deletedAt))
+        .sort((a, b) =>
+          (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""),
+        ),
+    [allEmployees],
+  );
+
   useEffect(() => {
     if (!restaurantId) {
-      setEmployees([]);
+      setAllEmployees([]);
       setShifts([]);
       setReady(true);
       return;
@@ -102,7 +139,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
     const u1 = subscribeEmployees(
       restaurantId,
       (rows) => {
-        setEmployees(rows);
+        setAllEmployees(rows);
         setReady(true);
         setError(null);
       },
@@ -121,6 +158,43 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
       u2();
     };
   }, [restaurantId]);
+
+  /**
+   * Backfill: índice + memberInvites. Sin invite el mesero entra como "cliente"
+   * y el login lo manda al home.
+   */
+  const indexSyncRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!employees.length || !restaurantId || !restaurant || !user) return;
+    for (const emp of employees) {
+      if (emp.status !== "active" || emp.deletedAt || emp.uid) continue;
+      const key = emp.email;
+      if (indexSyncRef.current.has(key)) continue;
+      indexSyncRef.current.add(key);
+      void (async () => {
+        try {
+          await upsertEmployeeEmailIndex(emp);
+          await ensureStaffInvite({
+            restaurantId,
+            restaurantName: restaurant.name,
+            email: emp.email,
+            roleId: emp.roleId,
+            branchIds: emp.branchIds,
+            invitedBy: user.uid,
+          });
+          if (!emp.inviteSentAt) {
+            await markEmployeeInviteSent({
+              restaurantId,
+              employeeId: emp.id,
+            });
+          }
+        } catch (e) {
+          console.warn("[EmployeesProvider] backfill acceso:", e);
+          indexSyncRef.current.delete(key);
+        }
+      })();
+    }
+  }, [employees, restaurantId, restaurant, user]);
 
   /** Link employee docs to Auth members when email matches. */
   const linkingRef = useRef(new Set<string>());
@@ -144,7 +218,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
   }, [restaurantId, employees, members]);
 
   const selected =
-    employees.find((e) => e.id === selectedId) ?? null;
+    allEmployees.find((e) => e.id === selectedId) ?? null;
 
   const shiftsForSelected = useMemo(() => {
     if (!selectedId) return [];
@@ -157,6 +231,8 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
       name: string;
       email: string;
       phone?: string;
+      documentType?: EmployeeIdDocumentType | null;
+      documentNumber?: string | null;
       roleId: RoleId;
       employmentType: EmploymentType;
       branchIds: string[];
@@ -177,6 +253,8 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
         name: input.name,
         email: input.email,
         phone: input.phone,
+        documentType: input.documentType,
+        documentNumber: input.documentNumber,
         roleId: input.roleId,
         employmentType: input.employmentType,
         branchIds:
@@ -220,6 +298,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
       }
       const emp = employees.find((e) => e.id === employeeId);
       if (!emp) throw new Error("Empleado no encontrado");
+      if (emp.deletedAt) throw new Error("Empleado en historial; restáuralo primero");
       if (emp.uid) throw new Error("Ya tiene cuenta vinculada");
 
       const linked = members.find(
@@ -250,21 +329,48 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
     [restaurantId, restaurant, user, employees, members],
   );
 
+  const archive = useCallback(
+    async (employeeId: string) => {
+      if (!restaurantId) return;
+      const emp = allEmployees.find((e) => e.id === employeeId);
+      await archiveEmployee({
+        restaurantId,
+        employeeId,
+        email: emp?.email,
+      });
+      setSelectedId(null);
+      setListMode("roster");
+    },
+    [restaurantId, allEmployees],
+  );
+
+  const restore = useCallback(
+    async (employeeId: string) => {
+      if (!restaurantId) return;
+      const emp = allEmployees.find((e) => e.id === employeeId);
+      if (!emp) throw new Error("Empleado no encontrado");
+      await restoreEmployee({ restaurantId, employee: emp });
+      setListMode("roster");
+      setSelectedId(employeeId);
+    },
+    [restaurantId, allEmployees],
+  );
+
   const value: EmployeesContextValue = {
     ready,
     error,
     employees,
+    archivedEmployees,
+    listMode,
+    setListMode,
     shifts,
     selectedId,
     selected,
     selectEmployee: setSelectedId,
     saveEmployee,
     sendAccessInvite,
-    archive: async (employeeId) => {
-      if (!restaurantId) return;
-      await archiveEmployee({ restaurantId, employeeId });
-      if (selectedId === employeeId) setSelectedId(null);
-    },
+    archive,
+    restore,
     setStatus: async (employeeId, status) => {
       if (!restaurantId) return;
       await setEmployeeStatus({ restaurantId, employeeId, status });

@@ -5,12 +5,14 @@ import { stripUndefined } from "@/lib/firestore-safe";
 import { newId, nowIso } from "@/modules/employees/domain/ids";
 import type {
   Employee,
+  EmployeeIdDocumentType,
   EmploymentType,
 } from "@/types/employees";
 import type { RoleId } from "@/types/rbac";
 import type { Member } from "@/types/restaurant";
 import {
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   setDoc,
@@ -18,6 +20,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 
+/** All employees including soft-deleted (historial). */
 export function subscribeEmployees(
   restaurantId: string,
   onData: (rows: Employee[]) => void,
@@ -29,12 +32,21 @@ export function subscribeEmployees(
       onData(
         snap.docs
           .map((d) => ({ id: d.id, ...d.data() }) as Employee)
-          .filter((e) => !e.deletedAt)
           .sort((a, b) => a.name.localeCompare(b.name, "es")),
       );
     },
     (err) => onError?.(err),
   );
+}
+
+export async function clearEmployeeEmailIndex(email: string): Promise<void> {
+  const key = email.trim().toLowerCase();
+  if (!key) return;
+  try {
+    await deleteDoc(doc(getDb(), "employeeEmailIndex", key));
+  } catch {
+    /* ignore missing */
+  }
 }
 
 export async function upsertEmployee(input: {
@@ -43,6 +55,8 @@ export async function upsertEmployee(input: {
   name: string;
   email: string;
   phone?: string;
+  documentType?: EmployeeIdDocumentType | null;
+  documentNumber?: string | null;
   roleId: RoleId;
   employmentType: EmploymentType;
   branchIds: string[];
@@ -58,6 +72,15 @@ export async function upsertEmployee(input: {
     input.inviteSentAt === null
       ? undefined
       : (input.inviteSentAt ?? input.employee?.inviteSentAt);
+  const documentType =
+    input.documentType === null
+      ? undefined
+      : (input.documentType ?? input.employee?.documentType);
+  const rawNumber =
+    input.documentNumber === null
+      ? undefined
+      : (input.documentNumber ?? input.employee?.documentNumber);
+  const documentNumber = rawNumber?.trim().toUpperCase() || undefined;
   const row: Employee = {
     id,
     restaurantId: input.restaurantId,
@@ -67,6 +90,8 @@ export async function upsertEmployee(input: {
     name: input.name.trim(),
     email: input.email.trim().toLowerCase(),
     phone: input.phone?.trim() || undefined,
+    documentType: documentNumber ? documentType : undefined,
+    documentNumber,
     roleId: input.roleId,
     employmentType: input.employmentType,
     status: input.status ?? input.employee?.status ?? "active",
@@ -83,13 +108,44 @@ export async function upsertEmployee(input: {
     doc(getDb(), "restaurants", input.restaurantId, "employees", id),
     stripUndefined({ ...row }),
   );
+  try {
+    await upsertEmployeeEmailIndex(row);
+  } catch (e) {
+    console.warn("[upsertEmployee] employeeEmailIndex:", e);
+  }
   return row;
 }
 
+/** Lookup doc so staff can activate on /login without a separate memberInvites row. */
+export async function upsertEmployeeEmailIndex(
+  employee: Employee,
+): Promise<void> {
+  const email = employee.email.trim().toLowerCase();
+  if (!email || employee.deletedAt || employee.status === "inactive") {
+    return;
+  }
+  await setDoc(
+    doc(getDb(), "employeeEmailIndex", email),
+    stripUndefined({
+      email,
+      restaurantId: employee.restaurantId,
+      employeeId: employee.id,
+      roleId: employee.roleId,
+      branchIds: employee.branchIds ?? [],
+      name: employee.name,
+      status: employee.uid ? "linked" : "pending",
+      updatedAt: nowIso(),
+    }),
+  );
+}
+
+/** Soft-delete: sale del listado activo y queda en historial. */
 export async function archiveEmployee(input: {
   restaurantId: string;
   employeeId: string;
+  email?: string;
 }): Promise<void> {
+  const stamp = nowIso();
   await updateDoc(
     doc(
       getDb(),
@@ -99,11 +155,42 @@ export async function archiveEmployee(input: {
       input.employeeId,
     ),
     {
-      status: "inactive",
-      deletedAt: nowIso(),
-      updatedAt: nowIso(),
+      status: "archived",
+      deletedAt: stamp,
+      updatedAt: stamp,
     },
   );
+  if (input.email) {
+    await clearEmployeeEmailIndex(input.email);
+  }
+}
+
+/** Vuelve al listado activo desde el historial. */
+export async function restoreEmployee(input: {
+  restaurantId: string;
+  employee: Employee;
+}): Promise<void> {
+  const stamp = nowIso();
+  await updateDoc(
+    doc(
+      getDb(),
+      "restaurants",
+      input.restaurantId,
+      "employees",
+      input.employee.id,
+    ),
+    {
+      status: "active",
+      deletedAt: null,
+      updatedAt: stamp,
+    },
+  );
+  await upsertEmployeeEmailIndex({
+    ...input.employee,
+    status: "active",
+    deletedAt: null,
+    updatedAt: stamp,
+  });
 }
 
 export async function linkEmployeeUid(input: {

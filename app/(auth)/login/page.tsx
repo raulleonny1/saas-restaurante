@@ -2,7 +2,8 @@
 
 import { AuthShell } from "@/modules/auth";
 import { isFirebaseConfigured } from "@/lib/firebase";
-import { signIn } from "@/services/auth.service";
+import { STAFF_ROLES } from "@/lib/roles";
+import { signInOrActivate } from "@/services/auth.service";
 import { Button, Input, toast } from "@/ui";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -11,6 +12,15 @@ import { FormEvent, Suspense, useState } from "react";
 function safeNext(raw: string | null): string | null {
   if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
   return raw;
+}
+
+function postLoginPath(role: string): string {
+  if (role === "mesero" || role === "cajero") return "/waiter";
+  if (role === "cliente") return "/";
+  if (STAFF_ROLES.includes(role as (typeof STAFF_ROLES)[number])) {
+    return "/dashboard";
+  }
+  return "/dashboard";
 }
 
 function LoginForm() {
@@ -26,7 +36,20 @@ function LoginForm() {
     e.preventDefault();
     setLoading(true);
     try {
-      const user = await signIn({ email, password });
+      const user = await signInOrActivate({ email, password });
+
+      // Empleado mal activado: Auth ok pero sigue como cliente sin restaurante
+      if (
+        user.role === "cliente" &&
+        (!user.restaurantIds || user.restaurantIds.length === 0)
+      ) {
+        toast(
+          "Cuenta creada, pero aún sin acceso al local. Como dueño: abre Empleados (crea el acceso) y vuelve a entrar aquí.",
+          "error",
+        );
+        return;
+      }
+
       toast("Sesión iniciada", "success");
       if (next) {
         router.replace(next);
@@ -36,10 +59,8 @@ function LoginForm() {
             ? localStorage.getItem("customerSlug")
             : null;
         router.replace(slug ? `/c/${slug}` : "/");
-      } else if (user.role === "mesero" || user.role === "cajero") {
-        router.replace("/waiter");
       } else {
-        router.replace("/dashboard");
+        router.replace(postLoginPath(user.role));
       }
     } catch (err) {
       toast(err instanceof Error ? err.message : "Error al entrar", "error");
@@ -51,7 +72,7 @@ function LoginForm() {
   return (
     <AuthShell
       title="Iniciar sesión"
-      subtitle="Acceso con Firebase Authentication."
+      subtitle="Empleados: usa el email del alta. Si es la primera vez, elige aquí tu contraseña."
     >
       {!firebaseReady ? (
         <div className="mb-4 rounded-[14px] border border-warning bg-[color-mix(in_oklab,var(--warning)_12%,transparent)] px-4 py-3 text-sm">
@@ -75,7 +96,9 @@ function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
+          minLength={6}
           required
+          hint="Primera vez: escribe la clave que quieras usar. Ya tienes cuenta: la tuya."
         />
         <div className="flex justify-end">
           <Link
@@ -91,7 +114,7 @@ function LoginForm() {
       </form>
 
       <p className="mt-6 text-sm text-fg-muted">
-        ¿No tienes cuenta?{" "}
+        ¿Dueño o cliente nuevo?{" "}
         <Link
           href={
             next
@@ -100,7 +123,7 @@ function LoginForm() {
           }
           className="text-accent underline-offset-2 hover:underline"
         >
-          Regístrate
+          Crear cuenta
         </Link>
       </p>
     </AuthShell>

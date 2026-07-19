@@ -39,6 +39,11 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
+import {
+  acceptPendingInvites,
+  activateFromEmployeeEmailIndex,
+} from "@/modules/tenant/services/members.service";
+import { STAFF_ROLES } from "@/lib/roles";
 
 function assertFirebase(): void {
   if (!isFirebaseConfigured()) {
@@ -393,19 +398,97 @@ export async function signUp(input: SignUpCredentials): Promise<AppUser> {
   }
 }
 
-export async function signIn(input: SignInCredentials): Promise<AppUser> {
+/**
+ * Login: cuenta existente → entra.
+ * Primera vez (empleado dado de alta por el dueño) → crea la cuenta con esa
+ * contraseña y acepta la invitación. No hace falta /register.
+ */
+export async function signInOrActivate(
+  input: SignInCredentials,
+): Promise<AppUser> {
   assertFirebase();
+  const email = input.email.trim().toLowerCase();
+  const password = input.password;
+  const auth = getFirebaseAuth();
 
   try {
-    const cred = await signInWithEmailAndPassword(
-      getFirebaseAuth(),
-      input.email.trim(),
-      input.password,
-    );
-    return ensureUserProfile(cred.user);
-  } catch (error) {
-    throw new Error(mapAuthError(error));
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    let user = await ensureUserProfile(cred.user);
+    let accepted = await acceptPendingInvites(user);
+    if (accepted === 0 && !user.restaurantIds?.length) {
+      const fromIndex = await activateFromEmployeeEmailIndex(user);
+      if (fromIndex) accepted = 1;
+    }
+    if (accepted > 0) {
+      user = (await readUserProfile(cred.user.uid)) ?? user;
+      user = await repairMislabeledOwner(user);
+    }
+    pushProfileToSession(user);
+    return user;
+  } catch (signInError) {
+    const code = firebaseErrorCode(signInError);
+    const maybeMissing =
+      code === "auth/user-not-found" ||
+      code === "auth/invalid-credential" ||
+      code === "auth/wrong-password";
+    if (!maybeMissing) {
+      throw new Error(mapAuthError(signInError));
+    }
+
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      const displayName = email.split("@")[0] || "Empleado";
+      try {
+        await updateProfile(cred.user, { displayName });
+      } catch {
+        /* non-fatal */
+      }
+
+      const stub = createUserDocument(
+        cred.user.uid,
+        email,
+        displayName,
+        "cliente",
+      );
+      await setDoc(
+        doc(getDb(), "users", cred.user.uid),
+        stripUndefined({ ...stub }),
+      );
+
+      const accepted = await acceptPendingInvites(stub);
+      if (accepted === 0) {
+        try {
+          await cred.user.delete();
+        } catch {
+          await firebaseSignOut(auth);
+        }
+        throw new Error(
+          "Este email no está dado de alta como empleado activo. El dueño debe crearlo en Empleados (y publicar firestore.rules si acabas de actualizarlas).",
+        );
+      }
+
+      let user = (await readUserProfile(cred.user.uid)) ?? stub;
+      user = await repairMislabeledOwner(user);
+      pushProfileToSession(user);
+      return user;
+    } catch (activateError) {
+      if (firebaseErrorCode(activateError) === "auth/email-already-in-use") {
+        throw new Error("Contraseña incorrecta.");
+      }
+      if (
+        activateError instanceof Error &&
+        (activateError.message.includes("invitación") ||
+          activateError.message.includes("empleado"))
+      ) {
+        throw activateError;
+      }
+      throw new Error(mapAuthError(activateError));
+    }
   }
+}
+
+export async function signIn(input: SignInCredentials): Promise<AppUser> {
+  return signInOrActivate(input);
 }
 
 export async function resetPassword(input: ResetPasswordInput): Promise<void> {

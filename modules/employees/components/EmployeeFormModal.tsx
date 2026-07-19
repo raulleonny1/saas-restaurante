@@ -3,9 +3,13 @@
 import { useTenant } from "@/context/TenantProvider";
 import { ROLE_LABELS, STAFF_ROLES } from "@/lib/roles";
 import { useEmployees } from "@/modules/employees/context/EmployeesProvider";
-import type { Employee, EmploymentType } from "@/types/employees";
+import type {
+  Employee,
+  EmployeeIdDocumentType,
+  EmploymentType,
+} from "@/types/employees";
 import type { RoleId } from "@/types/rbac";
-import { Button, Checkbox, Input, Modal, Select, toast } from "@/ui";
+import { Button, Input, Modal, Select, toast } from "@/ui";
 import { useEffect, useState } from "react";
 
 const EMPLOYMENT: { id: EmploymentType; label: string }[] = [
@@ -13,6 +17,13 @@ const EMPLOYMENT: { id: EmploymentType; label: string }[] = [
   { id: "part_time", label: "Media jornada" },
   { id: "contractor", label: "Autónomo / contrato" },
   { id: "temp", label: "Temporal" },
+];
+
+const DOC_TYPES: { id: EmployeeIdDocumentType; label: string }[] = [
+  { id: "nif", label: "NIF" },
+  { id: "nie", label: "NIE" },
+  { id: "cedula", label: "Cédula" },
+  { id: "pasaporte", label: "Pasaporte" },
 ];
 
 export function EmployeeFormModal({
@@ -29,13 +40,15 @@ export function EmployeeFormModal({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [documentType, setDocumentType] =
+    useState<EmployeeIdDocumentType | "">("");
+  const [documentNumber, setDocumentNumber] = useState("");
   const [roleId, setRoleId] = useState<RoleId>("mesero");
   const [employmentType, setEmploymentType] =
     useState<EmploymentType>("full_time");
   const [branchIds, setBranchIds] = useState<string[]>([]);
   const [hireDate, setHireDate] = useState("");
   const [notes, setNotes] = useState("");
-  const [sendInvite, setSendInvite] = useState(true);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -43,6 +56,8 @@ export function EmployeeFormModal({
     setName(employee?.name ?? "");
     setEmail(employee?.email ?? "");
     setPhone(employee?.phone ?? "");
+    setDocumentType(employee?.documentType ?? "");
+    setDocumentNumber(employee?.documentNumber ?? "");
     setRoleId(employee?.roleId ?? "mesero");
     setEmploymentType(employee?.employmentType ?? "full_time");
     setBranchIds(
@@ -54,7 +69,6 @@ export function EmployeeFormModal({
     );
     setHireDate(employee?.hireDate?.slice(0, 10) ?? "");
     setNotes(employee?.notes ?? "");
-    setSendInvite(!employee);
   }, [open, employee, branches]);
 
   function toggleBranch(id: string) {
@@ -86,19 +100,22 @@ export function EmployeeFormModal({
                     name,
                     email,
                     phone,
+                    documentType: documentType || null,
+                    documentNumber: documentNumber.trim()
+                      ? documentNumber
+                      : null,
                     roleId,
                     employmentType,
                     branchIds,
                     hireDate: hireDate || undefined,
                     notes,
-                    sendInvite: !employee && sendInvite,
+                    // Alta nueva: siempre deja invitación para que active clave en /login
+                    sendInvite: !employee,
                   });
                   toast(
                     employee
                       ? "Empleado actualizado"
-                      : sendInvite
-                        ? "Empleado creado e invitación enviada"
-                        : "Empleado creado",
+                      : "Empleado listo. Que entre en /login con su email y cree su clave.",
                     "success",
                   );
                   onClose();
@@ -133,6 +150,27 @@ export function EmployeeFormModal({
           label="Teléfono"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
+        />
+        <Select
+          label="Documento de identidad"
+          value={documentType}
+          onChange={(e) =>
+            setDocumentType(e.target.value as EmployeeIdDocumentType | "")
+          }
+        >
+          <option value="">Sin documento</option>
+          {DOC_TYPES.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.label}
+            </option>
+          ))}
+        </Select>
+        <Input
+          label="Número (NIF / NIE / cédula / pasaporte)"
+          value={documentNumber}
+          onChange={(e) => setDocumentNumber(e.target.value)}
+          placeholder="Ej. 12345678Z"
+          autoComplete="off"
         />
         <Input
           label="Fecha de alta"
@@ -201,13 +239,10 @@ export function EmployeeFormModal({
       </div>
 
       {!employee ? (
-        <div className="mt-4">
-          <Checkbox
-            checked={sendInvite}
-            onChange={(e) => setSendInvite(e.target.checked)}
-            label="Enviar invitación para que pueda iniciar sesión"
-          />
-        </div>
+        <p className="mt-4 text-xs text-fg-muted">
+          El mesero no se registra aparte: entra en <strong>/login</strong> con
+          este email y elige su contraseña la primera vez.
+        </p>
       ) : null}
     </Modal>
   );

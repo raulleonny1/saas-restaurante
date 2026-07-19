@@ -94,6 +94,31 @@ service cloud.firestore {
       allow delete: if canManage(resource.data.restaurantId);
     }
 
+    // Staff activation by email (owner alta → mesero crea clave en /login)
+    match /employeeEmailIndex/{emailKey} {
+      // Lectura amplia para signed-in: el id es el email; sin list no se enumeran.
+      allow get: if isSignedIn();
+      allow list: if false;
+      allow create: if canManage(request.resource.data.restaurantId)
+        && request.resource.data.email is string
+        && request.resource.data.restaurantId is string
+        && request.resource.data.employeeId is string;
+      allow update: if (
+          canManage(request.resource.data.restaurantId)
+          && request.resource.data.email is string
+          && request.resource.data.restaurantId is string
+          && request.resource.data.employeeId is string
+        ) || (
+          isSignedIn()
+          && resource.data.email == authEmail()
+          && request.resource.data.email == resource.data.email
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && request.resource.data.employeeId == resource.data.employeeId
+          && request.resource.data.roleId == resource.data.roleId
+        );
+      allow delete: if canManage(resource.data.restaurantId);
+    }
+
     match /users/{uid} {
       allow read: if isSelf(uid);
       allow create: if isSelf(uid);

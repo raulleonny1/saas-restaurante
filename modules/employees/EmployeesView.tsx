@@ -17,13 +17,23 @@ import {
   Skeleton,
   toast,
 } from "@/ui";
-import { CalendarPlus, Plus, UsersRound } from "lucide-react";
+import { ArrowLeft, CalendarPlus, History, Plus, UsersRound } from "lucide-react";
 import { useState } from "react";
 
 function EmployeesWorkspace() {
   const { can } = useAuth();
-  const { ready, error, employees, shifts, importFromMembers, selected } =
-    useEmployees();
+  const {
+    ready,
+    error,
+    employees,
+    archivedEmployees,
+    listMode,
+    setListMode,
+    selectEmployee,
+    shifts,
+    importFromMembers,
+    selected,
+  } = useEmployees();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [shiftOpen, setShiftOpen] = useState(false);
@@ -50,17 +60,56 @@ function EmployeesWorkspace() {
   }
 
   const active = employees.filter((e) => e.status === "active").length;
+  const inHistory = listMode === "history";
 
   return (
     <div className="flex min-h-[calc(100vh-8rem)] flex-col gap-4 pb-16 lg:pb-0">
       <PageHeader
-        title="Empleados"
-        description="Equipo, roles, sucursales y turnos en tiempo real con Firestore."
+        title={inHistory ? "Historial de empleados" : "Empleados"}
+        description={
+          inHistory
+            ? "Empleados eliminados del equipo. Puedes consultar su ficha y turnos, o restaurarlos."
+            : "Equipo activo, roles, sucursales y turnos. Eliminar mueve al historial (no borra del todo)."
+        }
         actions={
           <div className="flex flex-wrap gap-2">
-            <Badge tone="accent">{active} activos</Badge>
-            <Badge tone="neutral">{shifts.length} turnos</Badge>
-            {canManage ? (
+            {!inHistory ? (
+              <>
+                <Badge tone="accent">{active} activos</Badge>
+                <Badge tone="neutral">{shifts.length} turnos</Badge>
+                {archivedEmployees.length ? (
+                  <Badge tone="neutral">
+                    {archivedEmployees.length} en historial
+                  </Badge>
+                ) : null}
+              </>
+            ) : (
+              <Badge tone="neutral">
+                {archivedEmployees.length} en historial
+              </Badge>
+            )}
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                selectEmployee(null);
+                setListMode(inHistory ? "roster" : "history");
+              }}
+            >
+              {inHistory ? (
+                <>
+                  <ArrowLeft className="h-4 w-4" /> Volver al equipo
+                </>
+              ) : (
+                <>
+                  <History className="h-4 w-4" /> Historial
+                  {archivedEmployees.length
+                    ? ` (${archivedEmployees.length})`
+                    : ""}
+                </>
+              )}
+            </Button>
+            {canManage && !inHistory ? (
               <>
                 <Button
                   size="sm"
@@ -136,14 +185,16 @@ function EmployeesWorkspace() {
           setFormOpen(false);
           setEditing(false);
         }}
-        employee={editing ? selected : null}
+        employee={editing && selected && !selected.deletedAt ? selected : null}
       />
 
-      <ShiftFormModal
-        open={shiftOpen}
-        onClose={() => setShiftOpen(false)}
-        defaultEmployeeId={selected?.id}
-      />
+      {!inHistory ? (
+        <ShiftFormModal
+          open={shiftOpen}
+          onClose={() => setShiftOpen(false)}
+          defaultEmployeeId={selected?.id}
+        />
+      ) : null}
     </div>
   );
 }
