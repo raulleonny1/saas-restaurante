@@ -11,6 +11,7 @@ import {
   listInstalledPrinters,
   type InstalledPrinter,
 } from "@/lib/print-bridge-client";
+import { openCashDrawer } from "@/modules/pos/domain/cash-drawer";
 import { printKitchenTestPage } from "@/modules/pos/domain/print-kitchen";
 import { printTpvTestPage } from "@/modules/pos/domain/print";
 import { updateTenantSettings } from "@/modules/tenant/services/settings.service";
@@ -28,6 +29,8 @@ type StationDraft = {
   label: string;
   systemName: string;
   paperWidthMm: ThermalPaperWidth;
+  openDrawerOnCash: boolean;
+  drawerPin: 0 | 1;
 };
 
 function toDraft(
@@ -38,6 +41,8 @@ function toDraft(
     label: station?.label?.trim() || fallbackLabel,
     systemName: station?.systemName ?? "",
     paperWidthMm: station?.paperWidthMm ?? 80,
+    openDrawerOnCash: Boolean(station?.openDrawerOnCash),
+    drawerPin: station?.drawerPin === 1 ? 1 : 0,
   };
 }
 
@@ -169,6 +174,8 @@ export function PrinterSetupPanel({
         label: tpv.label.trim() || "Ventas · ticket cliente",
         systemName: tpvName || undefined,
         paperWidthMm: tpv.paperWidthMm,
+        openDrawerOnCash: tpv.openDrawerOnCash,
+        drawerPin: tpv.drawerPin,
       },
       kitchen: {
         label: kitchen.label.trim() || "Cocina · comanda",
@@ -216,7 +223,8 @@ export function PrinterSetupPanel({
           className={`mt-1 text-sm ${floor ? "text-[#a8b5a4]" : "text-fg-muted"}`}
         >
           Ventas = ticket al cobrar. Cocina = comanda en /kitchen o /bar (no
-          en el mesero). Elige impresoras distintas.
+          en el mesero). Elige impresoras distintas. El cajón portamonedas
+          tradicional se abre por el cable RJ11 de la impresora de ventas.
         </p>
       </div>
 
@@ -294,6 +302,34 @@ export function PrinterSetupPanel({
               printerLabel: tpv.label || "Ventas · ticket cliente",
             })
           }
+          drawer={{
+            enabled: tpv.openDrawerOnCash,
+            pin: tpv.drawerPin,
+            onEnabledChange: (v) =>
+              setTpv((d) => ({ ...d, openDrawerOnCash: v })),
+            onPinChange: (pin) => setTpv((d) => ({ ...d, drawerPin: pin })),
+            onTest: () => {
+              void (async () => {
+                const res = await openCashDrawer(
+                  {
+                    systemName: tpv.systemName,
+                    openDrawerOnCash: true,
+                    drawerPin: tpv.drawerPin,
+                  },
+                  { force: true },
+                );
+                if (res.ok) {
+                  toast("Cajón abierto", "success");
+                } else {
+                  toast(
+                    res.message ||
+                      "No se abrió el cajón. Asistente v1.3+, impresora TPV y cable RJ11.",
+                    "error",
+                  );
+                }
+              })();
+            },
+          }}
         />
         <StationCard
           title="Impresora de cocina"
@@ -423,7 +459,8 @@ function BridgeBanner({
         </li>
         <li>
           Doble clic en <strong>start-windows.bat</strong>. Debe decir{" "}
-          <strong>ESTADO: ENCENDIDO</strong>.
+          <strong>ESTADO: ENCENDIDO</strong> y versión <strong>v1.3+</strong>{" "}
+          (cajón portamonedas).
         </li>
         <li>Vuelve aquí, pulsa el botón de abajo y luego «Buscar» en cada tarjeta.</li>
       </ol>
@@ -458,6 +495,7 @@ function StationCard({
   scanMsg,
   onScan,
   onTest,
+  drawer,
 }: {
   title: string;
   subtitle: string;
@@ -474,6 +512,13 @@ function StationCard({
   scanMsg: string | null;
   onScan: () => void;
   onTest: () => void;
+  drawer?: {
+    enabled: boolean;
+    pin: 0 | 1;
+    onEnabledChange: (v: boolean) => void;
+    onPinChange: (pin: 0 | 1) => void;
+    onTest: () => void;
+  };
 }) {
   const exclude = excludeName.trim();
   const options = installed.filter((p) => p.name !== exclude);
@@ -611,6 +656,93 @@ function StationCard({
           <option value="58">58 mm</option>
         </Select>
       )}
+
+      {drawer ? (
+        <div
+          className={
+            floor
+              ? "space-y-2 rounded-xl border border-white/10 bg-[#152018]/80 p-3"
+              : "space-y-2 rounded-[var(--radius-md)] border border-border bg-bg-muted/40 p-3"
+          }
+        >
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={drawer.enabled}
+              disabled={!canEdit}
+              onChange={(e) => drawer.onEnabledChange(e.target.checked)}
+            />
+            <span>
+              <span className={floor ? "text-[#e7efe4]" : "text-fg"}>
+                Abrir cajón al cobrar en efectivo
+              </span>
+              <span
+                className={`mt-0.5 block text-xs ${floor ? "text-[#8fa08c]" : "text-fg-muted"}`}
+              >
+                Cajón tradicional conectado a esta impresora (RJ11). Requiere
+                asistente v1.3+.
+              </span>
+            </span>
+          </label>
+          {drawer.enabled ? (
+            <>
+              {floor ? (
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium text-[#c5d0c2]">
+                    Pin del cajón
+                  </span>
+                  <select
+                    value={String(drawer.pin)}
+                    disabled={!canEdit}
+                    onChange={(e) =>
+                      drawer.onPinChange(
+                        e.target.value === "1" ? 1 : 0,
+                      )
+                    }
+                    className="w-full rounded-xl border border-white/15 bg-[#0e1410] px-3 py-2 text-sm text-[#e7efe4]"
+                  >
+                    <option value="0">Pin 2 (habitual)</option>
+                    <option value="1">Pin 5 (alternativa)</option>
+                  </select>
+                </label>
+              ) : (
+                <Select
+                  label="Pin del cajón"
+                  value={String(drawer.pin)}
+                  disabled={!canEdit}
+                  onChange={(e) =>
+                    drawer.onPinChange(e.target.value === "1" ? 1 : 0)
+                  }
+                >
+                  <option value="0">Pin 2 (habitual)</option>
+                  <option value="1">Pin 5 (alternativa)</option>
+                </Select>
+              )}
+              {floor ? (
+                <button
+                  type="button"
+                  onClick={drawer.onTest}
+                  disabled={!draft.systemName.trim()}
+                  className="w-full rounded-xl border border-amber-500/40 bg-amber-950/30 py-2 text-sm font-medium text-amber-100 disabled:opacity-50"
+                >
+                  Probar abrir cajón
+                </button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={!draft.systemName.trim()}
+                  onClick={drawer.onTest}
+                >
+                  Probar abrir cajón
+                </Button>
+              )}
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {floor ? (
         <button

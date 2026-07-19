@@ -23,6 +23,14 @@ export interface PrinterStationConfig {
   /** Etiqueta amigable en la app (ej. «Cocina planta baja»). */
   label?: string;
   paperWidthMm?: ThermalPaperWidth;
+  /**
+   * Abrir cajón portamonedas tradicional al cobrar en efectivo.
+   * El cajón va cableado (RJ11/RJ12) a la impresora térmica de ventas;
+   * el asistente local envía el pulso ESC/POS.
+   */
+  openDrawerOnCash?: boolean;
+  /** Pin del cajón: 0 = pin 2 (habitual), 1 = pin 5. */
+  drawerPin?: 0 | 1;
 }
 
 /**

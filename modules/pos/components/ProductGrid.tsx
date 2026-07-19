@@ -1,6 +1,10 @@
 "use client";
 
 import { formatCurrency } from "@/lib/format";
+import {
+  categoryTone,
+  categoryToneStyle,
+} from "@/modules/pos/domain/categoryTone";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import type { Product } from "@/types/catalog";
 import { SearchInput } from "@/ui";
@@ -20,6 +24,12 @@ export function ProductGrid({
   const [query, setQuery] = useState("");
   const [customizing, setCustomizing] = useState<Product | null>(null);
   const waiter = tone === "waiter";
+
+  const categoryNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of categories) map.set(c.id, c.name);
+    return map;
+  }, [categories]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -56,7 +66,7 @@ export function ProductGrid({
       <div
         className={
           waiter
-            ? "[&_input]:border-white/20 [&_input]:bg-[#1a241c] [&_input]:text-[#e7efe4] [&_input]:placeholder:text-[#8fa08c] [&_svg]:text-[#8fa08c]"
+            ? "[&_input]:min-h-12 [&_input]:border-white/20 [&_input]:bg-[#1a241c] [&_input]:text-[#e7efe4] [&_input]:placeholder:text-[#8fa08c] [&_svg]:text-[#8fa08c]"
             : undefined
         }
       >
@@ -67,12 +77,12 @@ export function ProductGrid({
           onClear={() => setQuery("")}
         />
       </div>
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
+      <div className="-mx-0.5 flex gap-2 overflow-x-auto px-0.5 pb-1 [scrollbar-width:thin]">
         <CatChip
           active={categoryId === "all"}
           onClick={() => setCategoryId("all")}
           label="Todos"
-          waiter={waiter}
+          categoryId="all"
         />
         {categories.map((c) => (
           <CatChip
@@ -80,7 +90,8 @@ export function ProductGrid({
             active={categoryId === c.id}
             onClick={() => setCategoryId(c.id)}
             label={c.name}
-            waiter={waiter}
+            categoryId={c.id}
+            categoryName={c.name}
           />
         ))}
       </div>
@@ -93,47 +104,41 @@ export function ProductGrid({
           No hay productos. Prepara la carta en Firestore o usa «Preparar POS».
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {filtered.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              disabled={disabled}
-              onClick={() => void onPick(p)}
-              className={
-                waiter
-                  ? "min-h-[72px] rounded-xl border border-white/20 bg-[#1a241c] px-3 py-3 text-left text-[#e7efe4] transition-colors hover:border-emerald-500/50 hover:bg-[#243028] disabled:opacity-40"
-                  : "min-h-[72px] rounded-[var(--radius-md)] border border-border bg-bg-elevated px-3 py-3 text-left text-fg transition-colors hover:border-accent/40 hover:bg-bg-muted disabled:opacity-40"
-              }
-            >
-              <p className="text-sm font-medium leading-snug text-inherit">
-                {p.name}
-              </p>
-              {p.brand ? (
-                <p
-                  className={
-                    waiter
-                      ? "text-[11px] text-[#8fa08c]"
-                      : "text-caption text-fg-muted"
-                  }
-                >
-                  {p.brand}
-                </p>
-              ) : null}
-              <p
-                className={
-                  waiter
-                    ? "mt-1 text-xs font-medium text-emerald-300"
-                    : "mt-1 text-caption text-fg-muted"
-                }
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
+          {filtered.map((p) => {
+            const catName = categoryNameById.get(p.categoryId);
+            const style = categoryToneStyle(p.categoryId, {
+              categoryName: catName,
+            });
+            const toneColors = categoryTone(p.categoryId, catName);
+            return (
+              <button
+                key={p.id}
+                type="button"
+                disabled={disabled}
+                onClick={() => void onPick(p)}
+                style={style}
+                className="flex min-h-[92px] touch-manipulation flex-col justify-between rounded-xl border-2 px-3 py-3 text-left shadow-sm transition-[transform,filter] active:scale-[0.97] active:brightness-110 disabled:opacity-40"
               >
-                {formatCurrency(p.price, currency)}
-                {p.wholesalePrice != null
-                  ? ` · mayor ${formatCurrency(p.wholesalePrice, currency)}`
-                  : ""}
-              </p>
-            </button>
-          ))}
+                <div className="min-w-0">
+                  <p className="line-clamp-2 text-sm font-semibold leading-snug">
+                    {p.name}
+                  </p>
+                  {p.brand ? (
+                    <p
+                      className="mt-0.5 truncate text-[11px] opacity-80"
+                      style={{ color: toneColors.fg }}
+                    >
+                      {p.brand}
+                    </p>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-sm font-bold tabular-nums tracking-tight">
+                  {formatCurrency(p.price, currency)}
+                </p>
+              </button>
+            );
+          })}
         </div>
       )}
       <ProductCustomizeModal
@@ -149,25 +154,26 @@ function CatChip({
   label,
   active,
   onClick,
-  waiter,
+  categoryId,
+  categoryName,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
-  waiter?: boolean;
+  categoryId: string;
+  categoryName?: string;
 }) {
+  const style = categoryToneStyle(categoryId, {
+    active,
+    categoryName,
+  });
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`shrink-0 rounded-[var(--radius-sm)] px-3 py-1.5 text-sm ${
-        active
-          ? waiter
-            ? "bg-emerald-700 text-white"
-            : "bg-accent text-accent-fg"
-          : waiter
-            ? "border border-white/15 bg-[#1a241c] text-[#c5d0c2]"
-            : "bg-bg-muted text-fg-muted hover:text-fg"
+      style={style}
+      className={`shrink-0 touch-manipulation rounded-xl border-2 px-4 py-2.5 text-sm font-semibold transition-[transform,filter] active:scale-[0.97] ${
+        active ? "ring-2 ring-white/40 ring-offset-1 ring-offset-transparent" : "opacity-90"
       }`}
     >
       {label}

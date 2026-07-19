@@ -51,12 +51,12 @@ export function ReadyPickupBanner() {
   return (
     <div className="pointer-events-none fixed inset-x-0 top-[max(0.5rem,env(safe-area-inset-top))] z-[80] flex justify-center px-3">
       <div
-        className="pointer-events-auto w-full max-w-lg animate-fade-up overflow-hidden rounded-2xl border-2 border-cyan-300 bg-gradient-to-br from-cyan-500 to-emerald-600 text-white shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
+        className="pointer-events-auto w-full max-w-lg animate-fade-up overflow-hidden rounded-3xl border border-white/25 bg-gradient-to-br from-cyan-400 via-teal-500 to-emerald-600 text-white shadow-[0_16px_48px_rgba(0,0,0,0.5)] ring-1 ring-white/20"
         role="alert"
         aria-live="assertive"
       >
-        <div className="flex items-start gap-3 px-4 py-3.5">
-          <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20">
+        <div className="flex items-start gap-3 px-4 py-4">
+          <div className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 shadow-inner">
             <BellRing className="h-6 w-6 animate-bounce" />
           </div>
           <div className="min-w-0 flex-1">

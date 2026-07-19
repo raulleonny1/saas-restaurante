@@ -5,22 +5,37 @@ import { useRestaurant } from "@/context/RestaurantProvider";
 import { formatCurrency } from "@/lib/format";
 import { getEffectivePrintSettings } from "@/lib/printer-device-prefs";
 import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
+import { openCashDrawer } from "@/modules/pos/domain/cash-drawer";
 import { printOrderReceipt } from "@/modules/pos/domain/print";
 import { roundMoney } from "@/modules/pos/domain/totals";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import type { Order, Payment, PaymentMethod } from "@/types/orders";
+import { Delete } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-const METHODS: { id: PaymentMethod; label: string }[] = [
-  { id: "cash", label: "Efectivo" },
-  { id: "card", label: "Tarjeta" },
-  { id: "sumup", label: "SumUp" },
-  { id: "stripe", label: "Stripe" },
-  { id: "other", label: "Otro" },
+const METHODS: { id: PaymentMethod; label: string; accent: string }[] = [
+  { id: "cash", label: "Efectivo", accent: "bg-emerald-700 border-emerald-500" },
+  { id: "card", label: "Tarjeta", accent: "bg-sky-700 border-sky-500" },
+  { id: "sumup", label: "SumUp", accent: "bg-violet-700 border-violet-500" },
+  { id: "stripe", label: "Stripe", accent: "bg-indigo-700 border-indigo-500" },
+  { id: "other", label: "Otro", accent: "bg-slate-600 border-slate-400" },
 ];
 
 const CASH_CHIPS = [5, 10, 20, 50, 100];
+
+function appendDigit(current: string, digit: string): string {
+  if (digit === ".") {
+    if (current.includes(".")) return current;
+    return current === "" ? "0." : `${current}.`;
+  }
+  if (current === "0" && digit !== ".") return digit;
+  // máx 2 decimales
+  const [, dec] = current.split(".");
+  if (dec && dec.length >= 2) return current;
+  if (current.replace(".", "").length >= 8) return current;
+  return `${current}${digit}`;
+}
 
 export function WaiterPayPage() {
   const { can } = useAuth();
@@ -49,7 +64,6 @@ export function WaiterPayPage() {
     order: Order;
     payments: Payment[];
   } | null>(null);
-  /** En caja/sala: imprimir ticket TPV automáticamente al cobrar */
   const [printOnCharge, setPrintOnCharge] = useState(true);
 
   const allowed = can("payments.charge");
@@ -98,10 +112,92 @@ export function WaiterPayPage() {
     .filter((p) => p.status === "completed" || p.status === "refunded")
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
+  const onCharge = () => {
+    void (async () => {
+      try {
+        setBusy(true);
+        setMsg(null);
+        const tender = method === "cash" ? tenderedNum : undefined;
+        const snapshot = activeOrder;
+        const changeDue =
+          method === "cash" && tender != null
+            ? roundMoney(Math.max(0, tender - due - tipNum))
+            : 0;
+        await pay(method, due, tipNum, undefined, tender, {
+          chargedFrom: routes.base === "/caja" ? "caja" : "waiter",
+        });
+        if (method === "cash" && tender != null) {
+          setLastChange(changeDue);
+        } else {
+          setLastChange(null);
+        }
+        const stamp = new Date().toISOString();
+        const payRow: Payment = {
+          id: `local_${stamp}`,
+          restaurantId: snapshot.restaurantId,
+          branchId: snapshot.branchId,
+          orderId: snapshot.id,
+          method,
+          status: "completed",
+          amount: due,
+          currency: snapshot.currency,
+          tipAmount: tipNum,
+          processedBy: "local",
+          paidAt: stamp,
+          ...(tender != null ? { amountTendered: tender } : {}),
+          ...(method === "cash" ? { changeGiven: changeDue } : {}),
+          createdAt: stamp,
+          updatedAt: stamp,
+        };
+        const ticketOrder: Order = {
+          ...snapshot,
+          status: "paid",
+          paidAt: stamp,
+          amountPaid: snapshot.total,
+        };
+        const ticketPayments = [...payments, payRow];
+        setLastTicket({
+          order: ticketOrder,
+          payments: ticketPayments,
+        });
+        if (method === "cash") {
+          void openCashDrawer(tpvPrinter).catch(() => {});
+        }
+        if (printOnCharge) {
+          try {
+            printOrderReceipt(ticketOrder, ticketPayments, {
+              restaurantName,
+              paperWidthMm: tpvPrinter?.paperWidthMm ?? 80,
+              printerSystemName: tpvPrinter?.systemName,
+              printerLabel: tpvPrinter?.label ?? "Ventas · ticket cliente",
+            });
+          } catch {
+            /* cobro OK aunque falle el diálogo de impresión */
+          }
+        }
+        setMsg(
+          routes.base === "/caja"
+            ? printOnCharge
+              ? "Cobrado · imprimiendo ticket de ventas…"
+              : "Cobrado en caja · puedes imprimir el ticket abajo"
+            : printOnCharge
+              ? "Cobrado · imprimiendo ticket…"
+              : "Cobrado · ticket listo · queda en Archivo/Caja",
+        );
+        setTendered("");
+        setTip("0");
+      } catch (e) {
+        setMsg(e instanceof Error ? e.message : "Error al cobrar");
+      } finally {
+        setBusy(false);
+      }
+    })();
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 lg:space-y-5">
       <div>
-        <h1 className="font-[family-name:var(--font-display)] text-2xl">
+        <h1 className="font-[family-name:var(--font-display)] text-2xl lg:text-3xl">
           Cobrar
         </h1>
         <p className="text-sm text-[#a8b5a4]">
@@ -115,12 +211,12 @@ export function WaiterPayPage() {
         <p className="text-xs uppercase tracking-wide text-[#8fa08c]">
           Pendiente
         </p>
-        <p className="mt-1 font-[family-name:var(--font-display)] text-4xl text-emerald-300">
+        <p className="mt-1 font-[family-name:var(--font-display)] text-4xl text-emerald-300 lg:text-5xl">
           {formatCurrency(due, currency)}
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {METHODS.map((m) => (
           <button
             key={m.id}
@@ -130,10 +226,10 @@ export function WaiterPayPage() {
               setLastChange(null);
               if (m.id === "cash") setTendered(String(due));
             }}
-            className={`rounded-xl border py-3 text-xs ${
+            className={`touch-manipulation rounded-2xl border-2 py-4 text-sm font-semibold transition-transform active:scale-[0.98] ${
               method === m.id
-                ? "border-emerald-500 bg-emerald-900/40"
-                : "border-white/15"
+                ? `${m.accent} text-white`
+                : "border-white/15 bg-white/[0.04] text-[#c5d0c2]"
             }`}
           >
             {m.label}
@@ -153,67 +249,73 @@ export function WaiterPayPage() {
       </label>
 
       {method === "cash" ? (
-        <div className="space-y-3 rounded-2xl border border-white/15 bg-white/[0.03] p-4">
-          <label className="block text-xs text-[#8fa08c]">
-            Cliente entrega
-            <input
-              type="text"
-              inputMode="decimal"
-              value={tendered}
-              placeholder={String(totalDue)}
-              onChange={(e) => {
-                const v = e.target.value.replace(",", ".");
-                if (v === "" || /^\d*\.?\d*$/.test(v)) setTendered(v);
-              }}
-              className="mt-1 w-full rounded-xl border border-white/15 bg-transparent px-3 py-3 text-2xl font-semibold text-[#e7efe4]"
-            />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setTendered(String(totalDue))}
-              className="rounded-lg border border-emerald-600/50 bg-emerald-950/40 px-3 py-2 text-xs"
-            >
-              Exacto
-            </button>
-            {CASH_CHIPS.map((n) => (
+        <div className="grid gap-4 lg:grid-cols-[1fr_minmax(260px,320px)]">
+          <div className="space-y-3 rounded-2xl border border-white/15 bg-white/[0.03] p-4">
+            <div>
+              <p className="text-xs text-[#8fa08c]">Cliente entrega</p>
+              <p className="mt-1 font-[family-name:var(--font-display)] text-3xl font-semibold tabular-nums text-[#e7efe4] lg:text-4xl">
+                {tendered === ""
+                  ? "—"
+                  : formatCurrency(Number(tendered) || 0, currency)}
+              </p>
+              <p className="mt-0.5 text-xs text-[#5a6b57]">{tendered || "0"}</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
               <button
-                key={n}
                 type="button"
-                onClick={() => setTendered(String(n))}
-                className="rounded-lg border border-white/15 px-3 py-2 text-xs"
+                onClick={() => setTendered(String(totalDue))}
+                className="touch-manipulation rounded-xl border border-emerald-600/50 bg-emerald-950/40 px-4 py-3 text-sm font-medium"
               >
-                {formatCurrency(n, currency)}
+                Exacto
               </button>
-            ))}
+              {CASH_CHIPS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setTendered(String(n))}
+                  className="touch-manipulation rounded-xl border border-white/15 px-4 py-3 text-sm font-medium"
+                >
+                  {formatCurrency(n, currency)}
+                </button>
+              ))}
+            </div>
+
+            <div
+              className={`rounded-xl px-4 py-4 text-center ${
+                cashOk
+                  ? "border border-cyan-400/40 bg-cyan-950/40"
+                  : "border border-amber-500/40 bg-amber-950/30"
+              }`}
+            >
+              <p className="text-xs uppercase tracking-wide text-[#a8b5a4]">
+                Cambio a devolver
+              </p>
+              <p className="mt-1 font-[family-name:var(--font-display)] text-4xl text-cyan-200">
+                {formatCurrency(cashOk ? change : 0, currency)}
+              </p>
+              {!cashOk && Number.isFinite(tenderedNum) ? (
+                <p className="mt-2 text-xs text-amber-300">
+                  Falta{" "}
+                  {formatCurrency(
+                    roundMoney(totalDue - tenderedNum),
+                    currency,
+                  )}
+                </p>
+              ) : null}
+            </div>
           </div>
 
-          <div
-            className={`rounded-xl px-4 py-4 text-center ${
-              cashOk
-                ? "border border-cyan-400/40 bg-cyan-950/40"
-                : "border border-amber-500/40 bg-amber-950/30"
-            }`}
-          >
-            <p className="text-xs uppercase tracking-wide text-[#a8b5a4]">
-              Cambio a devolver
-            </p>
-            <p className="mt-1 font-[family-name:var(--font-display)] text-4xl text-cyan-200">
-              {formatCurrency(cashOk ? change : 0, currency)}
-            </p>
-            {!cashOk && Number.isFinite(tenderedNum) ? (
-              <p className="mt-2 text-xs text-amber-300">
-                Falta{" "}
-                {formatCurrency(
-                  roundMoney(totalDue - tenderedNum),
-                  currency,
-                )}
-              </p>
-            ) : null}
-          </div>
+          <CashNumpad
+            onDigit={(d) => setTendered((v) => appendDigit(v, d))}
+            onClear={() => setTendered("")}
+            onBackspace={() =>
+              setTendered((v) => (v.length <= 1 ? "" : v.slice(0, -1)))
+            }
+          />
         </div>
       ) : (
-        <p className="text-center text-sm text-[#a8b5a4]">
+        <p className="rounded-2xl border border-white/10 bg-white/[0.03] py-6 text-center text-sm text-[#a8b5a4]">
           Se cobrará {formatCurrency(totalDue, currency)} con {method}.
         </p>
       )}
@@ -221,87 +323,8 @@ export function WaiterPayPage() {
       <button
         type="button"
         disabled={busy || due <= 0 || !cashOk}
-        onClick={() => {
-          void (async () => {
-            try {
-              setBusy(true);
-              setMsg(null);
-              const tender =
-                method === "cash" ? tenderedNum : undefined;
-              const snapshot = activeOrder;
-              const changeDue =
-                method === "cash" && tender != null
-                  ? roundMoney(Math.max(0, tender - due - tipNum))
-                  : 0;
-              await pay(method, due, tipNum, undefined, tender, {
-                chargedFrom: routes.base === "/caja" ? "caja" : "waiter",
-              });
-              if (method === "cash" && tender != null) {
-                setLastChange(changeDue);
-              } else {
-                setLastChange(null);
-              }
-              const stamp = new Date().toISOString();
-              const payRow: Payment = {
-                id: `local_${stamp}`,
-                restaurantId: snapshot.restaurantId,
-                branchId: snapshot.branchId,
-                orderId: snapshot.id,
-                method,
-                status: "completed",
-                amount: due,
-                currency: snapshot.currency,
-                tipAmount: tipNum,
-                processedBy: "local",
-                paidAt: stamp,
-                ...(tender != null ? { amountTendered: tender } : {}),
-                ...(method === "cash" ? { changeGiven: changeDue } : {}),
-                createdAt: stamp,
-                updatedAt: stamp,
-              };
-              const ticketOrder: Order = {
-                ...snapshot,
-                status: "paid",
-                paidAt: stamp,
-                amountPaid: snapshot.total,
-              };
-              const ticketPayments = [...payments, payRow];
-              setLastTicket({
-                order: ticketOrder,
-                payments: ticketPayments,
-              });
-              if (printOnCharge) {
-                try {
-                  printOrderReceipt(ticketOrder, ticketPayments, {
-                    restaurantName,
-                    paperWidthMm: tpvPrinter?.paperWidthMm ?? 80,
-                    printerSystemName: tpvPrinter?.systemName,
-                    printerLabel:
-                      tpvPrinter?.label ?? "Ventas · ticket cliente",
-                  });
-                } catch {
-                  /* cobro OK aunque falle el diálogo de impresión */
-                }
-              }
-              setMsg(
-                routes.base === "/caja"
-                  ? printOnCharge
-                    ? "Cobrado · imprimiendo ticket de ventas…"
-                    : "Cobrado en caja · puedes imprimir el ticket abajo"
-                  : printOnCharge
-                    ? "Cobrado · imprimiendo ticket…"
-                    : "Cobrado · ticket listo · queda en Archivo/Caja",
-              );
-              setTendered("");
-              setTip("0");
-            } catch (e) {
-              setMsg(e instanceof Error ? e.message : "Error al cobrar");
-            } finally {
-              setBusy(false);
-            }
-          })();
-        }}
-        className="w-full rounded-xl bg-emerald-700 py-4 text-base font-semibold disabled:opacity-50"
+        onClick={onCharge}
+        className="w-full touch-manipulation rounded-2xl bg-emerald-600 py-5 text-lg font-bold shadow-lg shadow-emerald-950/40 disabled:opacity-50"
       >
         {busy
           ? "Cobrando…"
@@ -319,11 +342,28 @@ export function WaiterPayPage() {
         />
         Imprimir ticket de ventas al cobrar
         {tpvPrinter?.systemName ? (
-          <span className="text-[#8fa08c]">
-            ({tpvPrinter.systemName})
-          </span>
+          <span className="text-[#8fa08c]">({tpvPrinter.systemName})</span>
         ) : null}
       </label>
+
+      {tpvPrinter?.openDrawerOnCash && tpvPrinter.systemName ? (
+        <button
+          type="button"
+          className="w-full touch-manipulation rounded-xl border border-amber-500/40 bg-amber-950/30 py-3 text-sm font-medium text-amber-100"
+          onClick={() => {
+            void (async () => {
+              const res = await openCashDrawer(tpvPrinter, { force: true });
+              setMsg(
+                res.ok
+                  ? "Cajón abierto"
+                  : res.message || "No se pudo abrir el cajón",
+              );
+            })();
+          }}
+        >
+          Abrir cajón portamonedas
+        </button>
+      ) : null}
 
       {lastChange != null && lastChange > 0 ? (
         <div className="rounded-2xl border border-cyan-400/50 bg-cyan-950/50 p-4 text-center">
@@ -362,7 +402,7 @@ export function WaiterPayPage() {
                 printerLabel: tpvPrinter?.label ?? "TPV · ticket cliente",
               });
             }}
-            className="w-full rounded-xl bg-white/10 py-3 text-sm font-medium text-emerald-200"
+            className="w-full touch-manipulation rounded-xl bg-white/10 py-3 text-sm font-medium text-emerald-200"
           >
             Ver / imprimir ticket
           </button>
@@ -411,6 +451,44 @@ export function WaiterPayPage() {
           </ul>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function CashNumpad({
+  onDigit,
+  onClear,
+  onBackspace,
+}: {
+  onDigit: (d: string) => void;
+  onClear: () => void;
+  onBackspace: () => void;
+}) {
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"] as const;
+  return (
+    <div className="rounded-2xl border border-white/15 bg-[#121a14] p-3">
+      <div className="grid grid-cols-3 gap-2">
+        {keys.map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => {
+              if (k === "⌫") onBackspace();
+              else onDigit(k);
+            }}
+            className="flex h-14 touch-manipulation items-center justify-center rounded-xl border border-white/15 bg-[#1a241c] text-xl font-semibold text-[#e7efe4] transition-transform active:scale-[0.96] active:bg-emerald-900/50 lg:h-16"
+          >
+            {k === "⌫" ? <Delete className="h-5 w-5" /> : k}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={onClear}
+          className="col-span-3 flex h-12 touch-manipulation items-center justify-center rounded-xl border border-amber-500/40 bg-amber-950/30 text-sm font-semibold text-amber-100 active:scale-[0.98]"
+        >
+          C · Limpiar
+        </button>
+      </div>
     </div>
   );
 }

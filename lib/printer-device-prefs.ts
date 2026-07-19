@@ -44,6 +44,9 @@ function mergeStation(
     label: override?.label ?? base?.label,
     systemName: override?.systemName ?? base?.systemName,
     paperWidthMm: override?.paperWidthMm ?? base?.paperWidthMm ?? 80,
+    openDrawerOnCash:
+      override?.openDrawerOnCash ?? base?.openDrawerOnCash ?? false,
+    drawerPin: override?.drawerPin ?? base?.drawerPin ?? 0,
   };
 }
 

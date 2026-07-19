@@ -218,3 +218,156 @@ export async function listInstalledPrinters(
   if (viaFetch) return viaFetch;
   return listPrintersViaPopup(12_000);
 }
+
+export type CashDrawerKickResult =
+  | { ok: true; version?: string }
+  | {
+      ok: false;
+      reason: "offline" | "error" | "popup_blocked" | "no_printer" | "disabled";
+      message?: string;
+    };
+
+async function kickDrawerViaFetch(
+  printerName: string,
+  pin: 0 | 1,
+  timeoutMs: number,
+): Promise<CashDrawerKickResult | null> {
+  const payload = JSON.stringify({ printer: printerName, pin });
+  for (const base of [PRINT_BRIDGE_URL, PRINT_BRIDGE_URL_ALT]) {
+    try {
+      const ctrl = new AbortController();
+      const t = window.setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        const res = await fetch(`${base}/drawer/kick`, {
+          method: "POST",
+          mode: "cors",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+          signal: ctrl.signal,
+        });
+        const data = (await res.json()) as {
+          ok?: boolean;
+          error?: string;
+          detail?: string;
+          version?: string;
+        };
+        if (data.ok) return { ok: true, version: data.version };
+        return {
+          ok: false,
+          reason: "error",
+          message: data.detail || data.error || "No se pudo abrir el cajón",
+        };
+      } finally {
+        window.clearTimeout(t);
+      }
+    } catch {
+      /* probar siguiente base o popup */
+    }
+  }
+  return null;
+}
+
+function kickDrawerViaPopup(
+  printerName: string,
+  pin: 0 | 1,
+  timeoutMs = 10_000,
+): Promise<CashDrawerKickResult> {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined") {
+      resolve({
+        ok: false,
+        reason: "offline",
+        message: "Solo disponible en el navegador",
+      });
+      return;
+    }
+    const origin = window.location.origin;
+    const url =
+      `${PRINT_BRIDGE_URL}/drawer/ui?printer=${encodeURIComponent(printerName)}` +
+      `&pin=${pin}&origin=${encodeURIComponent(origin)}&t=${Date.now()}`;
+
+    const popup = window.open(
+      url,
+      "smartserve-drawer",
+      "width=360,height=220,menubar=no,toolbar=no,noopener=no",
+    );
+    if (!popup) {
+      resolve({
+        ok: false,
+        reason: "popup_blocked",
+        message:
+          "Permite ventanas emergentes para abrir el cajón, o usa HTTP local.",
+      });
+      return;
+    }
+
+    let done = false;
+    const finish = (result: CashDrawerKickResult) => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(timer);
+      window.removeEventListener("message", onMessage);
+      try {
+        popup.close();
+      } catch {
+        /* ignore */
+      }
+      resolve(result);
+    };
+
+    const onMessage = (event: MessageEvent) => {
+      if (!BRIDGE_ORIGINS.has(event.origin)) return;
+      const data = event.data as {
+        type?: string;
+        ok?: boolean;
+        error?: string;
+        version?: string;
+      };
+      if (!data || data.type !== "smartserve-drawer") return;
+      if (data.ok) {
+        finish({ ok: true, version: data.version });
+        return;
+      }
+      finish({
+        ok: false,
+        reason: "error",
+        message: data.error || "No se pudo abrir el cajón",
+      });
+    };
+
+    window.addEventListener("message", onMessage);
+    const timer = window.setTimeout(() => {
+      finish({
+        ok: false,
+        reason: "offline",
+        message:
+          "Sin respuesta del asistente. Abre start-windows.bat (v1.3+) y reintenta.",
+      });
+    }, timeoutMs);
+  });
+}
+
+/**
+ * Pulso ESC/POS al cajón portamonedas (RJ11 en la impresora TPV).
+ * Requiere asistente local v1.3+.
+ */
+export async function kickCashDrawer(opts: {
+  printerName: string;
+  pin?: 0 | 1;
+  timeoutMs?: number;
+}): Promise<CashDrawerKickResult> {
+  const printerName = opts.printerName.trim();
+  if (!printerName) {
+    return {
+      ok: false,
+      reason: "no_printer",
+      message: "Falta el nombre de la impresora de ventas",
+    };
+  }
+  const pin = opts.pin === 1 ? 1 : 0;
+  const timeoutMs = opts.timeoutMs ?? 5000;
+  const viaFetch = await kickDrawerViaFetch(printerName, pin, timeoutMs);
+  if (viaFetch) return viaFetch;
+  return kickDrawerViaPopup(printerName, pin, 10_000);
+}

@@ -36,6 +36,16 @@ const LEGEND: TableFloorTone[] = [
   "ready",
 ];
 
+const TONE_DOT: Record<TableFloorTone, string> = {
+  free: "bg-[#8fa08c]",
+  occupied: "bg-red-400",
+  ordering: "bg-amber-400",
+  sent: "bg-emerald-400",
+  ready: "bg-cyan-400",
+  reserved: "bg-sky-400",
+  dirty: "bg-stone-400",
+};
+
 function tableNeedsCover(table: Table, order: Order | null): boolean {
   if (order && order.status !== "paid" && order.status !== "cancelled") {
     return true;
@@ -69,48 +79,59 @@ function TableCard({
     <button
       type="button"
       onClick={onOpen}
-      className={`min-h-[120px] rounded-2xl border p-3 text-left transition ${
+      className={`group relative min-h-[132px] overflow-hidden rounded-2xl border p-3.5 text-left shadow-sm transition-[transform,box-shadow] active:scale-[0.98] ${
         TABLE_TONE_WAITER_LIVE[tone] ?? TABLE_TONE_WAITER[tone]
-      } ${selected ? "ring-2 ring-emerald-500" : ""}`}
+      } ${
+        selected
+          ? "ring-2 ring-emerald-400/80 ring-offset-2 ring-offset-[#0e1410]"
+          : "hover:shadow-md hover:shadow-black/20"
+      }`}
     >
-      <div className="flex items-start justify-between gap-1">
-        <p className="text-lg font-semibold">{table.name}</p>
-        <div className="flex flex-col items-end gap-0.5">
+      <span
+        aria-hidden
+        className={`absolute inset-y-0 left-0 w-1 ${TONE_DOT[tone]}`}
+      />
+      <div className="flex items-start justify-between gap-1 pl-1.5">
+        <p className="font-[family-name:var(--font-display)] text-xl leading-none tracking-tight">
+          {table.name}
+        </p>
+        <div className="flex flex-col items-end gap-1">
           {cover ? (
-            <span className="rounded-full border border-amber-400/40 bg-amber-950/50 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-amber-200">
+            <span className="rounded-full border border-amber-400/40 bg-amber-950/60 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-200">
               Cobertura
             </span>
           ) : null}
-          <span className="text-[10px] text-[#c5d0c2]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-black/25 px-2 py-0.5 text-[10px] font-medium text-[#d5e0d2]">
+            <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[tone]}`} />
             {TABLE_TONE_LABEL[tone]}
           </span>
         </div>
       </div>
-      <p className="mt-0.5 text-[11px] text-[#8fa08c]">
+      <p className="mt-1.5 pl-1.5 text-[11px] text-[#8fa08c]">
         {table.seats} asientos
         {zoneLabel}
         {elapsed ? ` · ${elapsed}` : ""}
       </p>
       {lines.length ? (
-        <ul className="mt-2 space-y-0.5">
+        <ul className="mt-2.5 space-y-0.5 pl-1.5">
           {lines.map((line) => (
             <li
               key={line}
-              className="truncate text-[11px] leading-snug text-[#d5e0d2]"
+              className="truncate text-[11px] leading-snug text-[#d5e0d2]/95"
             >
               {line}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-xs text-[#5a6b57]">Sin pedidos</p>
+        <p className="mt-2.5 pl-1.5 text-xs text-[#5a6b57]">Sin pedidos</p>
       )}
       {order ? (
-        <p className="mt-2 text-sm font-semibold text-white/95">
+        <p className="mt-2.5 pl-1.5 text-base font-semibold tabular-nums tracking-tight text-white">
           {formatCurrency(order.total, currency)}
         </p>
       ) : (
-        <p className="mt-2 text-xs text-[#5a6b57]">Sin ticket</p>
+        <p className="mt-2.5 pl-1.5 text-xs text-[#5a6b57]">Sin ticket</p>
       )}
     </button>
   );
@@ -168,7 +189,6 @@ function TablesContent() {
     return tables.filter((t) => assignedSet.has(t.id));
   }, [floorOnly, tables, assignedTableIds, assignedSet]);
 
-  /** Mesas ajenas con servicio activo — no se mezclan con Mis mesas. */
   const coverTables = useMemo(() => {
     if (!floorOnly) return [];
     if (assignedTableIds === null) return [];
@@ -179,7 +199,6 @@ function TablesContent() {
     });
   }, [floorOnly, tables, assignedTableIds, assignedSet, openOrders]);
 
-  // Deep-link: permitir preview también en mesas de cobertura
   useEffect(() => {
     const tableId = searchParams.get("table") || searchParams.get("tableId");
     if (!tableId) return;
@@ -200,30 +219,30 @@ function TablesContent() {
     : null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="font-[family-name:var(--font-display)] text-2xl">
+          <h1 className="font-[family-name:var(--font-display)] text-3xl tracking-tight">
             Tu sala
           </h1>
-          <p className="text-sm text-[#a8b5a4]">
-            Arriba están mesas. Para ayudar en mesas de un compañero, pulsa{" "}
-            <strong className="text-[#e7efe4]">Cubrir</strong>.
+          <p className="mt-1 max-w-[20rem] text-sm leading-snug text-[#a8b5a4]">
+            Toca una mesa para ver el ticket. Para ayudar a un compañero usa{" "}
+            <span className="font-medium text-[#e7efe4]">Cubrir</span>.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           {canManageTables ? (
             <button
               type="button"
               onClick={() => setManageOpen(true)}
-              className="inline-flex items-center gap-1 rounded-xl border border-white/15 px-3 py-2 text-xs text-[#c5d0c2]"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.04] px-3.5 py-2.5 text-xs font-medium text-[#c5d0c2]"
             >
               <Settings2 className="h-3.5 w-3.5" /> Gestionar
             </button>
           ) : null}
           <Link
             href={routes.move}
-            className="inline-flex items-center gap-1 rounded-xl border border-white/15 px-3 py-2 text-xs text-[#c5d0c2]"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.04] px-3.5 py-2.5 text-xs font-medium text-[#c5d0c2]"
           >
             <ArrowRightLeft className="h-3.5 w-3.5" /> Mover
           </Link>
@@ -234,14 +253,16 @@ function TablesContent() {
         <button
           type="button"
           onClick={() => setCoverOpen((v) => !v)}
-          className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+          className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 text-left shadow-sm transition ${
             coverOpen
-              ? "border-amber-400/50 bg-amber-950/50 text-amber-50"
-              : "border-amber-500/30 bg-amber-950/25 text-amber-100"
+              ? "border-amber-400/50 bg-gradient-to-r from-amber-950/70 to-amber-900/40 text-amber-50"
+              : "border-amber-500/25 bg-amber-950/30 text-amber-100"
           }`}
         >
-          <span className="flex items-center gap-2">
-            <HandHelping className="h-5 w-5 shrink-0" />
+          <span className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20">
+              <HandHelping className="h-5 w-5" />
+            </span>
             <span>
               <span className="block text-sm font-semibold">
                 Cubrir a un compañero
@@ -253,18 +274,19 @@ function TablesContent() {
               </span>
             </span>
           </span>
-          <span className="rounded-lg bg-amber-500/20 px-2.5 py-1 text-xs font-medium">
+          <span className="rounded-full bg-amber-500/25 px-3 py-1.5 text-xs font-semibold">
             {coverOpen ? "Ocultar" : "Abrir"}
           </span>
         </button>
       ) : null}
 
-      <div className="flex flex-wrap gap-2 text-[10px] text-[#a8b5a4]">
+      <div className="flex flex-wrap gap-1.5">
         {LEGEND.map((tone) => (
           <span
             key={tone}
-            className={`rounded-full border px-2 py-0.5 ${TABLE_TONE_WAITER_LEGEND[tone]}`}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium text-[#c5d0c2] ${TABLE_TONE_WAITER_LEGEND[tone]}`}
           >
+            <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[tone]}`} />
             {TABLE_TONE_LABEL[tone]}
           </span>
         ))}
@@ -274,7 +296,7 @@ function TablesContent() {
         <select
           value={branchId ?? ""}
           onChange={(e) => setBranchId(e.target.value)}
-          className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm"
+          className="w-full rounded-2xl border border-white/12 bg-white/[0.05] px-3.5 py-3 text-sm"
         >
           {branches.map((b) => (
             <option key={b.id} value={b.id}>
@@ -284,9 +306,16 @@ function TablesContent() {
         </select>
       ) : null}
 
-      <h2 className="text-sm font-medium text-[#c5d0c2]">Mis mesas</h2>
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8fa08c]">
+          Mis mesas
+        </h2>
+        <span className="text-[11px] text-[#5a6b57]">
+          {visibleTables.length} mesa{visibleTables.length === 1 ? "" : "s"}
+        </span>
+      </div>
 
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-2 gap-3">
         {visibleTables.map((table) => (
           <TableCard
             key={table.id}
@@ -300,13 +329,15 @@ function TablesContent() {
       </div>
 
       {!visibleTables.length ? (
-        <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-[#8fa08c]">
+        <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-8 text-center text-sm text-[#8fa08c]">
           {floorOnly ? (
             <>
-              <p>No tienes mesas asignadas.</p>
-              <p className="mt-2 text-xs">
+              <p className="font-medium text-[#a8b5a4]">
+                No tienes mesas asignadas.
+              </p>
+              <p className="mt-2 text-xs leading-relaxed">
                 El administrador debe asignarte mesas en{" "}
-                <strong>Admin sala</strong>.
+                <strong className="text-[#c5d0c2]">Admin sala</strong>.
                 {coverTables.length > 0
                   ? " Mientras, puedes usar Cubrir para ayudar."
                   : ""}
@@ -330,18 +361,18 @@ function TablesContent() {
       ) : null}
 
       {floorOnly && coverOpen ? (
-        <div className="space-y-2.5 border-t border-amber-500/20 pt-4">
+        <div className="space-y-3 border-t border-amber-500/15 pt-5">
           <div>
-            <h2 className="text-sm font-medium text-amber-200">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-200/90">
               Otras mesas · cobertura
             </h2>
-            <p className="mt-0.5 text-[11px] text-[#8fa08c]">
+            <p className="mt-1 text-[11px] leading-relaxed text-[#8fa08c]">
               Mesas de compañeros con servicio. Entras solo a ayudar; no se
               quedan asignadas a ti.
             </p>
           </div>
           {coverTables.length > 0 ? (
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-3">
               {coverTables.map((table) => (
                 <TableCard
                   key={table.id}

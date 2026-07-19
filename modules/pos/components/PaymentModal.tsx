@@ -1,6 +1,9 @@
 "use client";
 
+import { useRestaurant } from "@/context/RestaurantProvider";
 import { formatCurrency } from "@/lib/format";
+import { getEffectivePrintSettings } from "@/lib/printer-device-prefs";
+import { openCashDrawer } from "@/modules/pos/domain/cash-drawer";
 import { roundMoney } from "@/modules/pos/domain/totals";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import type { PaymentMethod } from "@/types/orders";
@@ -24,8 +27,13 @@ export function PaymentModal({
   open: boolean;
   onClose: () => void;
 }) {
+  const { restaurantId, restaurant } = useRestaurant();
   const { balance, currency, pay, activeOrder, printReceipt, payments } =
     usePos();
+  const tpvPrinter = getEffectivePrintSettings(
+    restaurantId,
+    restaurant?.settings,
+  ).printers.tpv;
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [tendered, setTendered] = useState(String(balance));
   const [tipExtra, setTipExtra] = useState("0");
@@ -84,6 +92,9 @@ export function PaymentModal({
                     method === "cash" ? tenderedNum : undefined,
                     { chargedFrom: "pos" },
                   );
+                  if (method === "cash") {
+                    void openCashDrawer(tpvPrinter).catch(() => {});
+                  }
                   if (method === "cash" && change > 0) {
                     toast(
                       `Pago OK · cambio ${formatCurrency(change, currency)}`,
