@@ -207,7 +207,8 @@ function TablesContent() {
             Tu sala
           </h1>
           <p className="text-sm text-[#a8b5a4]">
-            Tus mesas arriba. Si un compañero no puede, usa Cubrir.
+            Arriba están mesas. Para ayudar en mesas de un compañero, pulsa{" "}
+            <strong className="text-[#e7efe4]">Cubrir</strong>.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -228,6 +229,35 @@ function TablesContent() {
           </Link>
         </div>
       </div>
+
+      {floorOnly ? (
+        <button
+          type="button"
+          onClick={() => setCoverOpen((v) => !v)}
+          className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+            coverOpen
+              ? "border-amber-400/50 bg-amber-950/50 text-amber-50"
+              : "border-amber-500/30 bg-amber-950/25 text-amber-100"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <HandHelping className="h-5 w-5 shrink-0" />
+            <span>
+              <span className="block text-sm font-semibold">
+                Cubrir a un compañero
+              </span>
+              <span className="block text-[11px] text-amber-100/70">
+                {coverTables.length > 0
+                  ? `${coverTables.length} mesa${coverTables.length === 1 ? "" : "s"} ajena${coverTables.length === 1 ? "" : "s"} con servicio`
+                  : "Ver mesas de otros (si hay servicio activo)"}
+              </span>
+            </span>
+          </span>
+          <span className="rounded-lg bg-amber-500/20 px-2.5 py-1 text-xs font-medium">
+            {coverOpen ? "Ocultar" : "Abrir"}
+          </span>
+        </button>
+      ) : null}
 
       <div className="flex flex-wrap gap-2 text-[10px] text-[#a8b5a4]">
         {LEGEND.map((tone) => (
@@ -254,23 +284,7 @@ function TablesContent() {
         </select>
       ) : null}
 
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-medium text-[#c5d0c2]">Mis mesas</h2>
-        {floorOnly && coverTables.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => setCoverOpen((v) => !v)}
-            className={`inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs ${
-              coverOpen
-                ? "border-amber-400/50 bg-amber-950/40 text-amber-100"
-                : "border-white/15 text-[#c5d0c2]"
-            }`}
-          >
-            <HandHelping className="h-3.5 w-3.5" />
-            Cubrir ({coverTables.length})
-          </button>
-        ) : null}
-      </div>
+      <h2 className="text-sm font-medium text-[#c5d0c2]">Mis mesas</h2>
 
       <div className="grid grid-cols-2 gap-2.5">
         {visibleTables.map((table) => (
@@ -315,29 +329,37 @@ function TablesContent() {
         </div>
       ) : null}
 
-      {floorOnly && coverOpen && coverTables.length > 0 ? (
-        <div className="space-y-2.5 border-t border-white/10 pt-4">
+      {floorOnly && coverOpen ? (
+        <div className="space-y-2.5 border-t border-amber-500/20 pt-4">
           <div>
             <h2 className="text-sm font-medium text-amber-200">
               Otras mesas · cobertura
             </h2>
             <p className="mt-0.5 text-[11px] text-[#8fa08c]">
-              Solo mesas ajenas con servicio. No se mezclan con las tuyas.
+              Mesas de compañeros con servicio. Entras solo a ayudar; no se
+              quedan asignadas a ti.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            {coverTables.map((table) => (
-              <TableCard
-                key={table.id}
-                table={table}
-                order={orderForTable(table, openOrders)}
-                selected={table.id === selectedTableId}
-                currency={currency}
-                cover
-                onOpen={() => setPreviewTable(table)}
-              />
-            ))}
-          </div>
+          {coverTables.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2.5">
+              {coverTables.map((table) => (
+                <TableCard
+                  key={table.id}
+                  table={table}
+                  order={orderForTable(table, openOrders)}
+                  selected={table.id === selectedTableId}
+                  currency={currency}
+                  cover
+                  onOpen={() => setPreviewTable(table)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-amber-500/25 bg-amber-950/20 p-6 text-center text-sm text-[#a8b5a4]">
+              Ahora no hay mesas ajenas con pedido o ocupadas. Cuando un
+              compañero tenga servicio, aparecerán aquí.
+            </div>
+          )}
         </div>
       ) : null}
 
