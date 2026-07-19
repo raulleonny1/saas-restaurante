@@ -66,14 +66,18 @@ export function DashboardView() {
     <div className="pb-4 sm:pb-0">
       <PageHeader
         title="Dashboard"
-        description={`Pulso de ${restaurantName}: ingresos, pedidos, mesas y alertas.`}
+        description={`Pulso de ${restaurantName}: ingresos, pedidos, mesas y alertas en tiempo real.`}
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            {isSimulated ? (
+            {!isSimulated ? (
+              <Badge tone="success" className="w-fit">
+                Datos reales
+              </Badge>
+            ) : (
               <Badge tone="neutral" className="w-fit">
                 Datos simulados
               </Badge>
-            ) : null}
+            )}
             {showCatalog ? (
               <Link href="/inventory?tab=products">
                 <Button size="sm" variant="secondary">
@@ -136,7 +140,7 @@ export function DashboardView() {
         <KpiCard
           label="Mesas abiertas"
           value={String(metrics.openTables)}
-          hint="Estado occupied"
+          hint="Mesas ocupadas ahora"
           icon={UtensilsCrossed}
         />
         <KpiCard

@@ -3,8 +3,7 @@ import { Badge, Card, CardDescription, CardHeader, CardTitle } from "@/ui";
 import Link from "next/link";
 
 /**
- * Compact AI surface on the dashboard — consumes insight contracts
- * from the AI module architecture (read-only, simulated).
+ * Compact AI surface — insights reales de Firestore (aiInsights).
  */
 export function AiPulse({ insights }: { insights: AiInsight[] }) {
   const top = insights.slice(0, 3);
@@ -15,7 +14,7 @@ export function AiPulse({ insights }: { insights: AiInsight[] }) {
         <div className="min-w-0">
           <CardTitle>Pulso IA</CardTitle>
           <CardDescription>
-            Insights del bounded context AI (datos simulados)
+            Insights generados para este restaurante
           </CardDescription>
         </div>
         <Badge tone="accent">{insights.length} nuevos</Badge>
