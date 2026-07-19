@@ -390,6 +390,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
           branchId,
           table: selectedTable,
           uid: user.uid,
+          waiterName: user.displayName || user.email || undefined,
           currency: currency as "EUR",
           taxPercent,
           tipDefaultPercent: tipDefault,
@@ -552,11 +553,12 @@ export function PosProvider({ children }: { children: ReactNode }) {
       uid,
       products,
       categories,
+      user?.displayName || user?.email || undefined,
     );
     // La comanda se imprime en el PC/tablet de cocina o barra (/kitchen|/bar),
     // no en el mesero (así va a la impresora de cocina).
     return { printed: false };
-  }, [requireOrder, taxPercent, products, categories]);
+  }, [requireOrder, taxPercent, products, categories, user]);
 
   const markItemsServed = useCallback(
     async (itemIds: string[]) => {

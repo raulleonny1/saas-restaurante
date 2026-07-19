@@ -8,13 +8,28 @@ export function escapeHtml(s: string) {
     .replace(/"/g, "&quot;");
 }
 
-/** Abre el diálogo de impresión del sistema (impresoras USB/red ya instaladas). */
-export function openPrintHtml(html: string, title: string) {
+/**
+ * Abre el ticket en una ventana aparte (el HTML llama a print al cargar).
+ * En cocina/barra: `allowIframeFallback: false` para no bloquear Carta con el diálogo.
+ */
+export function openPrintHtml(
+  html: string,
+  title: string,
+  opts?: { allowIframeFallback?: boolean },
+) {
   if (typeof window === "undefined") return;
+  const allowIframe = opts?.allowIframeFallback !== false;
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
-  const w = window.open(url, "_blank");
+  const w = window.open(url, "_blank", "noopener,noreferrer");
   if (!w) {
+    if (!allowIframe) {
+      URL.revokeObjectURL(url);
+      window.alert(
+        `No se pudo abrir la ventana de impresión (${title}). Permite ventanas emergentes para este sitio y pulsa Imprimir otra vez.`,
+      );
+      return;
+    }
     const iframe = document.createElement("iframe");
     iframe.style.position = "fixed";
     iframe.style.right = "0";

@@ -26,6 +26,32 @@ function renderItem(item: OrderItem): string {
   </div>`;
 }
 
+function orderWhen(order: Order, items: OrderItem[]): Date {
+  const sentTimes = items
+    .map((i) => i.sentAt)
+    .filter((x): x is string => Boolean(x))
+    .map((x) => Date.parse(x))
+    .filter((n) => Number.isFinite(n));
+  if (sentTimes.length) return new Date(Math.max(...sentTimes));
+  if (order.sentAt) return new Date(order.sentAt);
+  if (order.openedAt) return new Date(order.openedAt);
+  return new Date();
+}
+
+function formatPedidoDateTime(d: Date): { fecha: string; hora: string } {
+  const fecha = d.toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const hora = d.toLocaleTimeString("es-ES", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return { fecha, hora };
+}
+
 export type PrintKitchenOptions = {
   restaurantName?: string;
   /** Si se indica, solo imprime esa estación; si no, separa comida/barra. */
@@ -33,6 +59,8 @@ export type PrintKitchenOptions = {
   paperWidthMm?: ThermalPaperWidth;
   printerSystemName?: string;
   printerLabel?: string;
+  /** Nombre del mesero si no viene en order.servedByName */
+  waiterName?: string;
 };
 
 /**
@@ -77,14 +105,23 @@ export function printKitchenTicket(
     )
     .join('<hr class="rule"/>');
 
+  const when = orderWhen(order, active);
+  const { fecha, hora } = formatPedidoDateTime(when);
+  const mesero =
+    opts.waiterName?.trim() ||
+    order.servedByName?.trim() ||
+    "";
+
   const html = `<!doctype html><html><head><meta charset="utf-8"/>
     <title>Cocina ${escapeHtml(order.tableName ?? order.id.slice(0, 8))}</title>
     <style>
       ${thermalPageCss(mm)}
       h1{font-size:${narrow ? 13 : 15}px;margin:0 0 2px;text-align:center;
         text-transform:uppercase;letter-spacing:.05em}
-      .meta{text-align:center;font-size:${narrow ? 10 : 12}px;margin-bottom:4px}
+      .meta{text-align:center;font-size:${narrow ? 10 : 12}px;margin-bottom:3px}
       .big{font-size:${narrow ? 16 : 20}px;font-weight:700;text-align:center;margin:8px 0 4px}
+      .mesero{text-align:center;font-size:${narrow ? 12 : 14}px;font-weight:700;margin:4px 0}
+      .when{text-align:center;font-size:${narrow ? 11 : 13}px;font-weight:700;margin:2px 0 6px}
       .sec{font-weight:700;border-top:1px dashed #000;border-bottom:1px dashed #000;
         padding:4px 0;margin:8px 0 4px;text-align:center;letter-spacing:.08em;
         font-size:${narrow ? 12 : 13}px}
@@ -100,15 +137,23 @@ export function printKitchenTicket(
       systemName: opts.printerSystemName,
     })}
     <h1>${escapeHtml(restaurantName)}</h1>
-    <div class="meta">COMANDA · ${new Date().toLocaleString("es-ES")}</div>
+    <div class="meta">COMANDA</div>
     <div class="big">Mesa ${escapeHtml(order.tableName || "—")}</div>
+    ${
+      mesero
+        ? `<div class="mesero">Mesero: ${escapeHtml(mesero)}</div>`
+        : `<div class="meta">Mesero: —</div>`
+    }
+    <div class="when">${escapeHtml(fecha)} · ${escapeHtml(hora)}</div>
     <div class="meta">#${escapeHtml(order.id.slice(0, 10))} · ${escapeHtml(order.channel)}</div>
     ${body}
     <div class="foot">— fin comanda —</div>
     <script>window.onload=function(){window.print();}</script>
     </body></html>`;
 
-  openPrintHtml(html, `Cocina ${order.tableName ?? ""}`);
+  openPrintHtml(html, `Cocina ${order.tableName ?? ""}`, {
+    allowIframeFallback: false,
+  });
 }
 
 /** Comanda de prueba para configurar la impresora de cocina. */
@@ -116,6 +161,7 @@ export function printKitchenTestPage(opts: PrintKitchenOptions = {}): void {
   const restaurantName = opts.restaurantName ?? "SmartServe";
   const mm = opts.paperWidthMm ?? 80;
   const printerLabel = opts.printerLabel ?? "Cocina · comanda";
+  const { fecha, hora } = formatPedidoDateTime(new Date());
   const html = `<!doctype html><html><head><meta charset="utf-8"/>
     <title>Prueba cocina</title>
     <style>
@@ -133,8 +179,9 @@ export function printKitchenTestPage(opts: PrintKitchenOptions = {}): void {
     <h1>${escapeHtml(restaurantName)}</h1>
     <hr class="rule"/>
     <div class="ok">PRUEBA COCINA</div>
-    <div class="sub">Comanda · ${mm} mm</div>
-    <div class="sub">${new Date().toLocaleString("es-ES")}</div>
+    <div class="sub">Mesa T1</div>
+    <div class="sub"><strong>Mesero: Demo</strong></div>
+    <div class="sub">${escapeHtml(fecha)} · ${escapeHtml(hora)}</div>
     <div class="sec" style="text-align:center;font-weight:700;margin:10px 0;border-top:1px dashed #000;border-bottom:1px dashed #000;padding:4px 0">COCINA</div>
     <div class="line"><div class="qty">1×</div><div>Plato de prueba</div></div>
     <div class="line"><div class="qty">2×</div><div>Bebida de prueba</div></div>
@@ -142,5 +189,5 @@ export function printKitchenTestPage(opts: PrintKitchenOptions = {}): void {
     <div class="sub">Si lees esto, la impresora de cocina está lista.</div>
     <script>window.onload=function(){window.print();}</script>
     </body></html>`;
-  openPrintHtml(html, "Prueba cocina");
+  openPrintHtml(html, "Prueba cocina", { allowIframeFallback: false });
 }

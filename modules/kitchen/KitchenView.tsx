@@ -8,13 +8,21 @@ import {
   useKitchen,
 } from "@/modules/kitchen/context/KitchenProvider";
 import type { KitchenBoardMode } from "@/modules/kitchen/domain/stations";
-import { Alert, Badge, Skeleton } from "@/ui";
-import { Package } from "lucide-react";
+import { Alert, Badge, Button, Skeleton } from "@/ui";
+import { Package, Printer } from "lucide-react";
 import Link from "next/link";
 
 function KitchenWorkspace({ mode }: { mode: KitchenBoardMode }) {
   const { can } = useAuth();
-  const { ready, error, tickets, unlockAudio } = useKitchen();
+  const {
+    ready,
+    error,
+    tickets,
+    unlockAudio,
+    canThermalPrint,
+    pendingPrintCount,
+    printPendingTickets,
+  } = useKitchen();
   const isBar = mode === "bar";
   const accessOk = isBar
     ? can("bar.access") || can("bar.update_status")
@@ -76,6 +84,23 @@ function KitchenWorkspace({ mode }: { mode: KitchenBoardMode }) {
         <Alert tone="danger" title="Error de conexión">
           {error}
         </Alert>
+      ) : null}
+
+      {canThermalPrint && pendingPrintCount > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+          <p className="text-sm font-medium text-fg">
+            {pendingPrintCount} línea
+            {pendingPrintCount === 1 ? "" : "s"} nueva
+            {pendingPrintCount === 1 ? "" : "s"} para imprimir
+          </p>
+          <Button
+            size="sm"
+            onClick={() => printPendingTickets()}
+          >
+            <Printer className="h-3.5 w-3.5" />
+            Imprimir comandas
+          </Button>
+        </div>
       ) : null}
 
       <KitchenToolbar />

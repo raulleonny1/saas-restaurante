@@ -8,7 +8,7 @@ import {
 } from "@/modules/kitchen/domain/priority";
 import type { KitchenColumnId, KitchenTicket } from "@/types/kitchen";
 import { Badge, Button, toast } from "@/ui";
-import { BellRing } from "lucide-react";
+import { BellRing, Printer } from "lucide-react";
 import { useState } from "react";
 
 const NEXT: Partial<Record<KitchenColumnId, KitchenColumnId>> = {
@@ -36,13 +36,16 @@ export function KitchenTicketCard({
   ticket: KitchenTicket;
   column: KitchenColumnId;
 }) {
-  const { moveTicketItems, moveItem, alertWaiter } = useKitchen();
+  const { moveTicketItems, moveItem, alertWaiter, canThermalPrint, printTicket } =
+    useKitchen();
   const style = PRIORITY_STYLES[ticket.priority];
   const next = NEXT[column];
   const prev = PREV[column];
   const itemIds = ticket.items.map((i) => i.item.id);
   const [pingBusy, setPingBusy] = useState(false);
   const canAlertWaiter = column !== "delivered";
+  const canPrintCard =
+    canThermalPrint && (column === "queued" || column === "preparing");
 
   const advance = async (to: KitchenColumnId) => {
     try {
@@ -148,6 +151,18 @@ export function KitchenTicketCard({
             </li>
           ))}
         </ul>
+
+        {canPrintCard ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="w-full"
+            onClick={() => printTicket(ticket.order.id, itemIds)}
+          >
+            <Printer className="h-3.5 w-3.5" />
+            Imprimir comanda
+          </Button>
+        ) : null}
 
         {canAlertWaiter ? (
           <Button

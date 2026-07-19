@@ -108,6 +108,8 @@ export interface Order extends Timestamps, SoftDelete {
   refundedAt?: ISODateString;
   createdBy: string;
   servedBy?: string;
+  /** Nombre del mesero (para comanda impresa / cocina). */
+  servedByName?: string;
   notes?: string;
   printCount?: number;
   lastPrintedAt?: ISODateString;

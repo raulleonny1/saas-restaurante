@@ -84,6 +84,13 @@ interface KitchenContextValue {
   ) => Promise<void>;
   /** Avisa al mesero (flotante + sonido) por esa mesa/pedido. */
   alertWaiter: (orderId: string, itemIds: string[]) => Promise<void>;
+  /** Hay salida térmica activa (impresora / ambos). */
+  canThermalPrint: boolean;
+  /** Comandas nuevas pendientes de imprimir (no abre diálogo sola). */
+  pendingPrintCount: number;
+  /** Imprime pendientes; solo al pulsar (el diálogo no bloquea Carta al llegar el pedido). */
+  printPendingTickets: () => void;
+  printTicket: (orderId: string, itemIds: string[]) => void;
 }
 
 const KitchenContext = createContext<KitchenContextValue | null>(null);
@@ -107,7 +114,7 @@ export function KitchenProvider({
 }) {
   const { user } = useAuth();
   const { restaurant, restaurantId } = useRestaurant();
-  const { canAccessBranch } = useTenant();
+  const { canAccessBranch, members } = useTenant();
   const [allBranches, setAllBranches] = useState<Branch[]>([]);
   const [branchId, setBranchIdState] = useState<string | null>(null);
   const [station, setStationState] = useState<KitchenStationId | "all">("all");
@@ -127,9 +134,10 @@ export function KitchenProvider({
   const seenKeysRef = useRef<Set<string>>(new Set());
   const primedRef = useRef(false);
   const lastUrgentBucketRef = useRef(-1);
-  /** Ítems ya impresos en este PC de cocina/barra (evita reimprimir). */
+  /** Ítems ya impresos o descartados en este PC. */
   const printedItemKeysRef = useRef<Set<string>>(new Set());
   const printPrimedRef = useRef(false);
+  const [pendingPrintKeys, setPendingPrintKeys] = useState<string[]>([]);
 
   const allowedStations = useMemo(
     () =>
@@ -160,6 +168,7 @@ export function KitchenProvider({
     seenKeysRef.current = new Set();
     printPrimedRef.current = false;
     printedItemKeysRef.current = new Set();
+    setPendingPrintKeys([]);
   }, [user?.uid]);
 
   const setStation = useCallback(
@@ -170,6 +179,7 @@ export function KitchenProvider({
       seenKeysRef.current = new Set();
       printPrimedRef.current = false;
       printedItemKeysRef.current = new Set();
+      setPendingPrintKeys([]);
     },
     [mode],
   );
@@ -265,6 +275,7 @@ export function KitchenProvider({
     seenKeysRef.current = new Set();
     printPrimedRef.current = false;
     printedItemKeysRef.current = new Set();
+    setPendingPrintKeys([]);
     return subscribeKitchenOrders(
       restaurantId,
       branchId,
@@ -373,22 +384,23 @@ export function KitchenProvider({
     seenKeysRef.current = keys;
   }, [tickets, soundEnabled, now]);
 
-  /**
-   * Comanda térmica en el PC de cocina/barra (no en el mesero).
-   * Solo si la salida está en «impresora» o «ambos».
-   */
-  useEffect(() => {
-    if (!restaurantId || !ready) return;
-    const printCfg = getEffectivePrintSettings(
+  const canThermalPrint = useMemo(() => {
+    if (!restaurantId) return false;
+    const out = getEffectivePrintSettings(
       restaurantId,
       restaurant?.settings,
-    );
-    const out = printCfg.kitchenOutput;
-    if (out !== "printer" && out !== "both") return;
+    ).kitchenOutput;
+    return out === "printer" || out === "both";
+  }, [restaurantId, restaurant?.settings]);
 
-    type Bundle = { order: Order; items: OrderItem[] };
-    const byOrder = new Map<string, Bundle>();
+  /**
+   * Encola comandas nuevas para imprimir a mano.
+   * No abre el diálogo sola: eso bloqueaba Carta / la pantalla de cocina.
+   */
+  useEffect(() => {
+    if (!ready || !canThermalPrint) return;
 
+    const fresh: string[] = [];
     for (const t of tickets) {
       for (const row of t.items) {
         if (row.column === "delivered" || row.column === "ready") continue;
@@ -400,10 +412,7 @@ export function KitchenProvider({
           continue;
         }
         if (printedItemKeysRef.current.has(key)) continue;
-        printedItemKeysRef.current.add(key);
-        const prev = byOrder.get(t.order.id);
-        if (prev) prev.items.push(item);
-        else byOrder.set(t.order.id, { order: t.order, items: [item] });
+        fresh.push(key);
       }
     }
 
@@ -412,36 +421,90 @@ export function KitchenProvider({
       return;
     }
 
-    if (!byOrder.size) return;
+    if (!fresh.length) return;
+    setPendingPrintKeys((prev) => {
+      const set = new Set(prev);
+      for (const k of fresh) set.add(k);
+      return [...set];
+    });
+  }, [tickets, ready, canThermalPrint]);
 
-    const kp = printCfg.printers.kitchen;
-    const stationPrint = mode === "bar" ? "bar" : "cocina";
-    for (const { order, items } of byOrder.values()) {
-      try {
-        printKitchenTicket(
-          { ...order, items },
-          {
-            restaurantName: restaurant?.name ?? "SmartServe",
-            station: stationPrint,
-            paperWidthMm: kp?.paperWidthMm ?? 80,
-            printerSystemName: kp?.systemName,
-            printerLabel:
-              kp?.label ??
-              (mode === "bar" ? "Barra · comanda" : "Cocina · comanda"),
-          },
-        );
-      } catch {
-        /* diálogo cancelado: no tumbar el KDS */
+  const runPrintBundle = useCallback(
+    (bundles: { order: Order; items: OrderItem[] }[]) => {
+      if (!restaurantId || !bundles.length) return;
+      const printCfg = getEffectivePrintSettings(
+        restaurantId,
+        restaurant?.settings,
+      );
+      const kp = printCfg.printers.kitchen;
+      const stationPrint = mode === "bar" ? "bar" : "cocina";
+      for (const { order, items } of bundles) {
+        if (!items.length) continue;
+        const uid = order.servedBy || order.createdBy;
+        const member = members.find((m) => m.uid === uid);
+        const waiterName =
+          order.servedByName?.trim() ||
+          member?.displayName?.trim() ||
+          member?.email ||
+          undefined;
+        try {
+          printKitchenTicket(
+            { ...order, items },
+            {
+              restaurantName: restaurant?.name ?? "SmartServe",
+              station: stationPrint,
+              paperWidthMm: kp?.paperWidthMm ?? 80,
+              printerSystemName: kp?.systemName,
+              printerLabel:
+                kp?.label ??
+                (mode === "bar" ? "Barra · comanda" : "Cocina · comanda"),
+              waiterName,
+            },
+          );
+        } catch {
+          /* ignore */
+        }
+        for (const item of items) {
+          printedItemKeysRef.current.add(
+            `${order.id}:${item.id}:${item.sentAt ?? ""}`,
+          );
+        }
       }
+      setPendingPrintKeys((prev) =>
+        prev.filter((k) => !printedItemKeysRef.current.has(k)),
+      );
+    },
+    [restaurantId, restaurant?.settings, restaurant?.name, mode, members],
+  );
+
+  const printPendingTickets = useCallback(() => {
+    if (!pendingPrintKeys.length) return;
+    const byOrder = new Map<string, { order: Order; items: OrderItem[] }>();
+    for (const key of pendingPrintKeys) {
+      const [orderId, itemId] = key.split(":");
+      if (!orderId || !itemId) continue;
+      const order = orders.find((o) => o.id === orderId);
+      const item = order?.items.find((i) => i.id === itemId);
+      if (!order || !item) continue;
+      const prev = byOrder.get(orderId);
+      if (prev) prev.items.push(item);
+      else byOrder.set(orderId, { order, items: [item] });
     }
-  }, [
-    tickets,
-    restaurantId,
-    restaurant?.settings,
-    restaurant?.name,
-    ready,
-    mode,
-  ]);
+    runPrintBundle([...byOrder.values()]);
+  }, [pendingPrintKeys, orders, runPrintBundle]);
+
+  const printTicket = useCallback(
+    (orderId: string, itemIds: string[]) => {
+      const order = orders.find((o) => o.id === orderId);
+      if (!order) return;
+      const idSet = new Set(itemIds);
+      const items = order.items.filter(
+        (i) => idSet.has(i.id) && i.status !== "cancelled",
+      );
+      runPrintBundle([{ order, items }]);
+    },
+    [orders, runPrintBundle],
+  );
 
   const findOrder = useCallback(
     (orderId: string) => orders.find((o) => o.id === orderId),
@@ -516,6 +579,10 @@ export function KitchenProvider({
     moveItem,
     moveTicketItems,
     alertWaiter,
+    canThermalPrint,
+    pendingPrintCount: pendingPrintKeys.length,
+    printPendingTickets,
+    printTicket,
   };
 
   return (

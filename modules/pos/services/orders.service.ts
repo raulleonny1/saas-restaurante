@@ -171,6 +171,8 @@ export interface OpenTableInput {
   branchId: string;
   table: Table;
   uid: string;
+  /** Nombre visible del mesero al abrir la mesa. */
+  waiterName?: string;
   currency: CurrencyCode;
   taxPercent: number;
   tipDefaultPercent: number;
@@ -178,8 +180,15 @@ export interface OpenTableInput {
 }
 
 export async function openTable(input: OpenTableInput): Promise<Order> {
-  const { restaurantId, branchId, table, uid, currency, tipDefaultPercent } =
-    input;
+  const {
+    restaurantId,
+    branchId,
+    table,
+    uid,
+    waiterName,
+    currency,
+    tipDefaultPercent,
+  } = input;
   if (table.status === "occupied" && table.currentOrderId) {
     const existing = await getDoc(
       doc(getDb(), "restaurants", restaurantId, "orders", table.currentOrderId),
@@ -214,6 +223,7 @@ export async function openTable(input: OpenTableInput): Promise<Order> {
     openedAt: stamp,
     createdBy: uid,
     servedBy: uid,
+    servedByName: waiterName?.trim() || undefined,
     printCount: 0,
     createdAt: stamp,
     updatedAt: stamp,
@@ -403,6 +413,7 @@ export async function sendToKitchen(
   actorUid: string,
   products: Product[] = [],
   categories: ProductCategory[] = [],
+  waiterName?: string,
 ): Promise<Order> {
   const stamp = nowIso();
   const productById = new Map(products.map((p) => [p.id, p]));
@@ -421,6 +432,7 @@ export async function sendToKitchen(
         item.kitchenStation ?? resolveItemStation(item, product, category),
     };
   });
+  const name = waiterName?.trim() || order.servedByName;
   return saveOrder(
     restaurantId,
     {
@@ -428,6 +440,8 @@ export async function sendToKitchen(
       items,
       status: order.status === "open" ? "sent" : order.status,
       sentAt: order.sentAt ?? stamp,
+      servedBy: order.servedBy ?? actorUid,
+      servedByName: name || undefined,
     },
     taxPercent,
     actorUid,
