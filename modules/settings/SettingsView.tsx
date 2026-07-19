@@ -19,11 +19,11 @@ import {
   revokeInvite,
   updateMember,
 } from "@/modules/tenant/services/members.service";
+import { PrinterSetupPanel } from "@/modules/pos/components/PrinterSetupPanel";
 import { updateTenantSettings } from "@/modules/tenant/services/settings.service";
 import type { BillingPlanId, MemberInvite } from "@/types/billing";
 import { BILLING_PLANS } from "@/types/billing";
 import type { RoleId } from "@/types/rbac";
-import type { KitchenOutputMode } from "@/types/restaurant";
 import {
   Alert,
   Button,
@@ -149,9 +149,6 @@ function GeneralPanel({
   const [tax, setTax] = useState(String(restaurant.settings.taxPercent));
   const [tip, setTip] = useState(String(restaurant.settings.tipDefaultPercent));
   const [locale, setLocale] = useState(restaurant.settings.locale);
-  const [kitchenOutput, setKitchenOutput] = useState<KitchenOutputMode>(
-    restaurant.settings.kitchenOutput ?? "kds",
-  );
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -163,81 +160,75 @@ function GeneralPanel({
     setTax(String(restaurant.settings.taxPercent));
     setTip(String(restaurant.settings.tipDefaultPercent));
     setLocale(restaurant.settings.locale);
-    setKitchenOutput(restaurant.settings.kitchenOutput ?? "kds");
   }, [restaurant]);
 
   return (
-    <form
-      className="max-w-xl space-y-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!canEdit) return;
-        void (async () => {
-          try {
-            setBusy(true);
-            await updateTenantSettings({
-              restaurantId,
-              patch: {
-                name: name.trim(),
-                legalName: legalName.trim() || undefined,
-                email: email.trim() || undefined,
-                phone: phone.trim() || undefined,
-                address: address.trim() || undefined,
-                settings: {
-                  taxPercent: Number(tax) || 0,
-                  tipDefaultPercent: Number(tip) || 0,
-                  locale,
-                  kitchenOutput,
+    <div className="space-y-8">
+      <form
+        className="max-w-xl space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!canEdit) return;
+          void (async () => {
+            try {
+              setBusy(true);
+              await updateTenantSettings({
+                restaurantId,
+                patch: {
+                  name: name.trim(),
+                  legalName: legalName.trim() || undefined,
+                  email: email.trim() || undefined,
+                  phone: phone.trim() || undefined,
+                  address: address.trim() || undefined,
+                  settings: {
+                    taxPercent: Number(tax) || 0,
+                    tipDefaultPercent: Number(tip) || 0,
+                    locale,
+                  },
                 },
-              },
-            });
-            toast("Configuración guardada", "success");
-            onSaved();
-          } catch (err) {
-            toast(err instanceof Error ? err.message : "Error", "error");
-          } finally {
-            setBusy(false);
-          }
-        })();
-      }}
-    >
-      <Input label="Nombre comercial" value={name} onChange={(e) => setName(e.target.value)} disabled={!canEdit} />
-      <Input label="Razón social" value={legalName} onChange={(e) => setLegalName(e.target.value)} disabled={!canEdit} />
-      <Input label="Email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!canEdit} />
-      <Input label="Teléfono" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={!canEdit} />
-      <Input label="Dirección" value={address} onChange={(e) => setAddress(e.target.value)} disabled={!canEdit} />
-      <div className="grid grid-cols-2 gap-3">
-        <Input label="IVA %" type="number" value={tax} onChange={(e) => setTax(e.target.value)} disabled={!canEdit} />
-        <Input label="Propina %" type="number" value={tip} onChange={(e) => setTip(e.target.value)} disabled={!canEdit} />
-      </div>
-      <Input label="Locale" value={locale} onChange={(e) => setLocale(e.target.value)} disabled={!canEdit} />
-      <Select
-        label="Salida cocina"
-        value={kitchenOutput}
-        onChange={(e) =>
-          setKitchenOutput(e.target.value as KitchenOutputMode)
-        }
-        disabled={!canEdit}
+              });
+              toast("Configuración guardada", "success");
+              onSaved();
+            } catch (err) {
+              toast(err instanceof Error ? err.message : "Error", "error");
+            } finally {
+              setBusy(false);
+            }
+          })();
+        }}
       >
-        <option value="kds">Pantalla KDS (tablet cocina/barra)</option>
-        <option value="printer">Impresora térmica</option>
-        <option value="both">Ambos (KDS + impresora)</option>
-      </Select>
-      <p className="text-xs text-fg-muted">
-        Impresora térmica: debe estar instalada en este equipo (USB o red con
-        driver). Al «Enviar a cocina» se abre el diálogo de impresión. Con solo
-        impresora no hay aviso automático al mesero desde cocina.
-      </p>
-      <p className="text-xs text-fg-muted">
-        ID tenant: <code>{restaurantId}</code> · moneda {restaurant.currency} · TZ{" "}
-        {restaurant.timezone}
-      </p>
-      {canEdit ? (
-        <Button type="submit" disabled={busy}>
-          {busy ? "Guardando…" : "Guardar"}
-        </Button>
-      ) : null}
-    </form>
+        <Input label="Nombre comercial" value={name} onChange={(e) => setName(e.target.value)} disabled={!canEdit} />
+        <Input label="Razón social" value={legalName} onChange={(e) => setLegalName(e.target.value)} disabled={!canEdit} />
+        <Input label="Email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!canEdit} />
+        <Input label="Teléfono" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={!canEdit} />
+        <Input label="Dirección" value={address} onChange={(e) => setAddress(e.target.value)} disabled={!canEdit} />
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="IVA %" type="number" value={tax} onChange={(e) => setTax(e.target.value)} disabled={!canEdit} />
+          <Input label="Propina %" type="number" value={tip} onChange={(e) => setTip(e.target.value)} disabled={!canEdit} />
+        </div>
+        <Input label="Locale" value={locale} onChange={(e) => setLocale(e.target.value)} disabled={!canEdit} />
+        <p className="text-xs text-fg-muted">
+          ID tenant: <code>{restaurantId}</code> · moneda {restaurant.currency} · TZ{" "}
+          {restaurant.timezone}
+        </p>
+        {canEdit ? (
+          <Button type="submit" disabled={busy}>
+            {busy ? "Guardando…" : "Guardar"}
+          </Button>
+        ) : null}
+      </form>
+
+      <section className="max-w-3xl rounded-[var(--radius-xl)] border border-border bg-bg-elevated p-4 sm:p-5">
+        <PrinterSetupPanel
+          restaurantId={restaurantId}
+          restaurantName={restaurant.name}
+          kitchenOutput={restaurant.settings.kitchenOutput ?? "kds"}
+          printers={restaurant.settings.printers}
+          canEdit={canEdit}
+          onSaved={onSaved}
+        />
+      </section>
+    </div>
   );
 }
 

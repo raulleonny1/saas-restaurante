@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/context/AuthProvider";
+import { useRestaurant } from "@/context/RestaurantProvider";
 import { formatCurrency } from "@/lib/format";
 import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { printOrderReceipt } from "@/modules/pos/domain/print";
@@ -22,6 +23,7 @@ const CASH_CHIPS = [5, 10, 20, 50, 100];
 
 export function WaiterPayPage() {
   const { can } = useAuth();
+  const { restaurant } = useRestaurant();
   const routes = useFloorRoutes();
   const {
     activeOrder,
@@ -32,6 +34,7 @@ export function WaiterPayPage() {
     selectedTableId,
     restaurantName,
   } = usePos();
+  const tpvPrinter = restaurant?.settings.printers?.tpv;
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [tendered, setTendered] = useState("");
   const [tip, setTip] = useState("0");
@@ -312,11 +315,12 @@ export function WaiterPayPage() {
           <button
             type="button"
             onClick={() => {
-              printOrderReceipt(
-                lastTicket.order,
-                lastTicket.payments,
+              printOrderReceipt(lastTicket.order, lastTicket.payments, {
                 restaurantName,
-              );
+                paperWidthMm: tpvPrinter?.paperWidthMm ?? 80,
+                printerSystemName: tpvPrinter?.systemName,
+                printerLabel: tpvPrinter?.label ?? "TPV · ticket cliente",
+              });
             }}
             className="w-full rounded-xl bg-white/10 py-3 text-sm font-medium text-emerald-200"
           >

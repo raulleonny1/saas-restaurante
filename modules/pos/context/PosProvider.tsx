@@ -573,9 +573,15 @@ export function PosProvider({ children }: { children: ReactNode }) {
       );
       if (justSent.length) {
         try {
+          const kp = restaurant?.settings.printers?.kitchen;
           printKitchenTicket(
             { ...next, items: justSent },
-            { restaurantName },
+            {
+              restaurantName,
+              paperWidthMm: kp?.paperWidthMm ?? 80,
+              printerSystemName: kp?.systemName,
+              printerLabel: kp?.label ?? "Cocina · comanda",
+            },
           );
           printed = true;
         } catch {
@@ -590,6 +596,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
     products,
     categories,
     restaurant?.settings.kitchenOutput,
+    restaurant?.settings.printers?.kitchen,
     restaurantName,
   ]);
 
@@ -722,9 +729,20 @@ export function PosProvider({ children }: { children: ReactNode }) {
     if (!paid) {
       throw new Error("El ticket solo se imprime cuando ya está cobrado");
     }
-    printOrderReceipt(order, payments, restaurantName);
+    const tpv = restaurant?.settings.printers?.tpv;
+    printOrderReceipt(order, payments, {
+      restaurantName,
+      paperWidthMm: tpv?.paperWidthMm ?? 80,
+      printerSystemName: tpv?.systemName,
+      printerLabel: tpv?.label ?? "TPV · ticket cliente",
+    });
     await markPrinted(rid, order, uid);
-  }, [requireOrder, payments, restaurantName]);
+  }, [
+    requireOrder,
+    payments,
+    restaurantName,
+    restaurant?.settings.printers?.tpv,
+  ]);
 
   const printPaidOrder = useCallback(
     async (order: Order, orderPayments: Payment[]) => {
@@ -736,10 +754,16 @@ export function PosProvider({ children }: { children: ReactNode }) {
       if (!paid) {
         throw new Error("El ticket solo se imprime cuando ya está cobrado");
       }
-      printOrderReceipt(order, orderPayments, restaurantName);
+      const tpv = restaurant?.settings.printers?.tpv;
+      printOrderReceipt(order, orderPayments, {
+        restaurantName,
+        paperWidthMm: tpv?.paperWidthMm ?? 80,
+        printerSystemName: tpv?.systemName,
+        printerLabel: tpv?.label ?? "TPV · ticket cliente",
+      });
       await markPrinted(restaurantId, order, user.uid);
     },
-    [restaurantId, user, restaurantName],
+    [restaurantId, user, restaurantName, restaurant?.settings.printers?.tpv],
   );
 
   const refund = useCallback(

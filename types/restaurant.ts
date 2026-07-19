@@ -13,6 +13,28 @@ export type MemberRole = RoleId;
 /** Salida de comandas de cocina: pantalla KDS, impresora térmica, o ambas. */
 export type KitchenOutputMode = "kds" | "printer" | "both";
 
+/** Ancho de rollo térmico habitual (mm). */
+export type ThermalPaperWidth = 58 | 80;
+
+/** Impresora asignada a un uso (TPV cliente o cocina). */
+export interface PrinterStationConfig {
+  /** Nombre exacto como aparece en Windows / macOS (ayuda al elegir en el diálogo). */
+  systemName?: string;
+  /** Etiqueta amigable en la app (ej. «Cocina planta baja»). */
+  label?: string;
+  paperWidthMm?: ThermalPaperWidth;
+}
+
+/**
+ * Dos destinos de impresión: ticket de cliente (TPV) y comanda de cocina.
+ * El navegador no puede instalar drivers solos: la impresora debe existir
+ * en el sistema (USB o red). Aquí se guardan nombre y formato de cada una.
+ */
+export interface RestaurantPrintersSettings {
+  tpv?: PrinterStationConfig;
+  kitchen?: PrinterStationConfig;
+}
+
 export interface RestaurantSettings {
   tipDefaultPercent: number;
   taxPercent: number;
@@ -27,6 +49,8 @@ export interface RestaurantSettings {
    * - both: imprime y sigue el KDS
    */
   kitchenOutput?: KitchenOutputMode;
+  /** Impresora TPV (ticket cliente) e impresora de cocina. */
+  printers?: RestaurantPrintersSettings;
 }
 
 /** Brand / company (multi-sucursal parent). */
@@ -89,4 +113,8 @@ export const DEFAULT_RESTAURANT_SETTINGS: RestaurantSettings = {
   sumupEnabled: false,
   locale: "es-ES",
   kitchenOutput: "kds",
+  printers: {
+    tpv: { label: "TPV · ticket cliente", paperWidthMm: 80 },
+    kitchen: { label: "Cocina · comanda", paperWidthMm: 80 },
+  },
 };

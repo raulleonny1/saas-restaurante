@@ -1,26 +1,72 @@
 import { formatCurrency } from "@/lib/format";
 import { lineTotal } from "@/modules/pos/domain/totals";
+import {
+  escapeHtml,
+  openPrintHtml,
+  printerHintHtml,
+  thermalPageCss,
+} from "@/modules/pos/domain/print-shared";
 import type { Order, Payment } from "@/types/orders";
+import type { ThermalPaperWidth } from "@/types/restaurant";
 
-/** Opens a print-friendly receipt (browser print dialog). */
+export type PrintReceiptOptions = {
+  restaurantName?: string;
+  paperWidthMm?: ThermalPaperWidth;
+  /** Nombre de la impresora en el SO (ayuda en pantalla previa). */
+  printerSystemName?: string;
+  printerLabel?: string;
+};
+
+function resolveOpts(
+  restaurantNameOrOpts: string | PrintReceiptOptions = "SmartServe",
+): Required<
+  Pick<PrintReceiptOptions, "restaurantName" | "paperWidthMm" | "printerLabel">
+> &
+  PrintReceiptOptions {
+  if (typeof restaurantNameOrOpts === "string") {
+    return {
+      restaurantName: restaurantNameOrOpts,
+      paperWidthMm: 80,
+      printerLabel: "TPV · ticket cliente",
+    };
+  }
+  return {
+    restaurantName: restaurantNameOrOpts.restaurantName ?? "SmartServe",
+    paperWidthMm: restaurantNameOrOpts.paperWidthMm ?? 80,
+    printerSystemName: restaurantNameOrOpts.printerSystemName,
+    printerLabel:
+      restaurantNameOrOpts.printerLabel ?? "TPV · ticket cliente",
+  };
+}
+
+/** Ticket de cliente / TPV (térmico 58 o 80 mm). */
 export function printOrderReceipt(
   order: Order,
   payments: Payment[] = [],
-  restaurantName = "SmartServe",
+  restaurantNameOrOpts: string | PrintReceiptOptions = "SmartServe",
 ): void {
   if (typeof window === "undefined") return;
 
+  const opts = resolveOpts(restaurantNameOrOpts);
+  const name = escapeHtml(opts.restaurantName);
+  const mm = opts.paperWidthMm;
+
   const lines = order.items
+    .filter((i) => i.status !== "cancelled")
     .map((item) => {
       const mods =
-        item.modifiers?.map((m) => `  + ${m.name}`).join("<br/>") ?? "";
-      const variant = item.variantName ? ` (${item.variantName})` : "";
+        item.modifiers
+          ?.map((m) => `<div class="mod">+ ${escapeHtml(m.name)}</div>`)
+          .join("") ?? "";
+      const variant = item.variantName
+        ? ` (${escapeHtml(item.variantName)})`
+        : "";
       const notes =
         item.kitchenNotes || item.notes
-          ? `<div class="muted">Nota: ${item.kitchenNotes || item.notes}</div>`
+          ? `<div class="mod">Nota: ${escapeHtml(item.kitchenNotes || item.notes || "")}</div>`
           : "";
       return `<tr>
-        <td>${item.quantity}× ${item.name}${variant}${mods ? `<br/>${mods}` : ""}${notes}</td>
+        <td class="item">${item.quantity}× ${escapeHtml(item.name)}${variant}${mods}${notes}</td>
         <td class="right">${formatCurrency(lineTotal(item), order.currency)}</td>
       </tr>`;
     })
@@ -37,69 +83,97 @@ export function printOrderReceipt(
                 : ""
             }`
           : "";
-      return `<tr><td>${p.method}${p.status === "refunded" ? " (reembolso)" : ""}${cashExtra}</td>
+      const label = `${escapeHtml(p.method)}${p.status === "refunded" ? " (reembolso)" : ""}${cashExtra}`;
+      return `<tr><td>${label}</td>
          <td class="right">${formatCurrency(p.amount, order.currency)}</td></tr>`;
     })
     .join("");
 
+  const tableLabel = escapeHtml(order.tableName ?? "Barra");
+  const when = new Date(order.paidAt || order.openedAt).toLocaleString("es-ES");
+
   const html = `<!doctype html><html><head><meta charset="utf-8"/>
-    <title>Ticket ${order.tableName ?? order.id}</title>
+    <title>Ticket ${tableLabel}</title>
     <style>
-      body{font-family:ui-monospace,monospace;font-size:12px;padding:16px;color:#111}
-      h1{font-size:16px;margin:0 0 4px}
-      .muted{color:#666;font-size:11px}
-      table{width:100%;border-collapse:collapse;margin-top:12px}
-      td{padding:4px 0;vertical-align:top}
-      .right{text-align:right}
-      .total{font-weight:700;font-size:14px;border-top:1px dashed #999;padding-top:8px}
-      @media print{body{padding:0}}
+      ${thermalPageCss(mm)}
+      .brand{text-align:center;margin:0 0 2px}
+      .brand h1{font-size:${mm === 58 ? 14 : 16}px;margin:0;letter-spacing:.06em;
+        text-transform:uppercase;font-weight:700}
+      .sub{text-align:center;font-size:${mm === 58 ? 10 : 11}px;color:#333}
+      .mesa{text-align:center;font-size:${mm === 58 ? 13 : 15}px;font-weight:700;margin:6px 0 2px}
+      table{width:100%;border-collapse:collapse;margin-top:4px}
+      td{padding:3px 0;vertical-align:top}
+      .item{padding-right:6px}
+      .right{text-align:right;white-space:nowrap}
+      .mod{font-size:${mm === 58 ? 10 : 11}px;color:#333;margin-top:1px}
+      .totals td{padding:2px 0}
+      .total td{font-weight:700;font-size:${mm === 58 ? 13 : 15}px;padding-top:6px}
+      .thanks{text-align:center;margin-top:12px;font-size:${mm === 58 ? 10 : 11}px}
+      .foot{text-align:center;font-size:10px;color:#444;margin-top:4px}
     </style></head><body>
-    <h1>${restaurantName}</h1>
-    <div class="muted">${order.tableName ?? "Barra"} · ${order.channel.toUpperCase()}</div>
-    <div class="muted">${new Date(order.openedAt).toLocaleString("es-ES")}</div>
-    <div class="muted">#${order.id.slice(0, 8)}</div>
+    ${printerHintHtml({
+      roleLabel: opts.printerLabel,
+      systemName: opts.printerSystemName,
+    })}
+    <div class="brand"><h1>${name}</h1></div>
+    <div class="sub">Ticket de cliente</div>
+    <hr class="rule"/>
+    <div class="mesa">${tableLabel}</div>
+    <div class="sub">${when}</div>
+    <div class="sub">#${escapeHtml(order.id.slice(0, 10))} · ${escapeHtml(order.channel.toUpperCase())}</div>
+    <hr class="rule-d"/>
     <table>${lines}</table>
-    <table>
+    <hr class="rule"/>
+    <table class="totals">
       <tr><td>Subtotal</td><td class="right">${formatCurrency(order.subtotal, order.currency)}</td></tr>
-      <tr><td>Descuento</td><td class="right">-${formatCurrency(order.discountAmount, order.currency)}</td></tr>
+      ${
+        order.discountAmount > 0
+          ? `<tr><td>Descuento</td><td class="right">-${formatCurrency(order.discountAmount, order.currency)}</td></tr>`
+          : ""
+      }
       <tr><td>IVA</td><td class="right">${formatCurrency(order.taxAmount, order.currency)}</td></tr>
-      <tr><td>Propina</td><td class="right">${formatCurrency(order.tipAmount, order.currency)}</td></tr>
+      ${
+        order.tipAmount > 0
+          ? `<tr><td>Propina</td><td class="right">${formatCurrency(order.tipAmount, order.currency)}</td></tr>`
+          : ""
+      }
       <tr class="total"><td>TOTAL</td><td class="right">${formatCurrency(order.total, order.currency)}</td></tr>
       ${payRows}
     </table>
-    <p class="muted" style="margin-top:16px">Gracias por su visita</p>
+    <hr class="rule-d"/>
+    <p class="thanks">Gracias por su visita</p>
+    <p class="foot">— SmartServe —</p>
     <script>window.onload=function(){window.print();}</script>
     </body></html>`;
 
-  // Blob URL evita about:blank vacío (noopener / móvil bloquean document.write)
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
-  const w = window.open(url, "_blank");
-  if (!w) {
-    // Popup bloqueado: imprimir en iframe oculto
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    iframe.src = url;
-    document.body.appendChild(iframe);
-    iframe.onload = () => {
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-      } catch {
-        /* ignore */
-      }
-      window.setTimeout(() => {
-        URL.revokeObjectURL(url);
-        iframe.remove();
-      }, 60_000);
-    };
-    return;
-  }
+  openPrintHtml(html, `Ticket ${order.tableName ?? order.id.slice(0, 8)}`);
+}
 
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+/** Ticket de prueba para configurar la impresora TPV. */
+export function printTpvTestPage(opts: PrintReceiptOptions = {}): void {
+  const o = resolveOpts(opts);
+  const name = escapeHtml(o.restaurantName);
+  const mm = o.paperWidthMm;
+  const html = `<!doctype html><html><head><meta charset="utf-8"/>
+    <title>Prueba TPV</title>
+    <style>
+      ${thermalPageCss(mm)}
+      h1{font-size:15px;text-align:center;margin:0;text-transform:uppercase}
+      .ok{text-align:center;font-size:18px;font-weight:700;margin:14px 0}
+      .sub{text-align:center;font-size:11px}
+    </style></head><body>
+    ${printerHintHtml({
+      roleLabel: o.printerLabel,
+      systemName: o.printerSystemName,
+    })}
+    <h1>${name}</h1>
+    <hr class="rule"/>
+    <div class="ok">PRUEBA TPV</div>
+    <div class="sub">Ticket cliente · ${mm} mm</div>
+    <div class="sub">${new Date().toLocaleString("es-ES")}</div>
+    <hr class="rule-d"/>
+    <div class="sub">Si lees esto, la impresora TPV está lista.</div>
+    <script>window.onload=function(){window.print();}</script>
+    </body></html>`;
+  openPrintHtml(html, "Prueba TPV");
 }
