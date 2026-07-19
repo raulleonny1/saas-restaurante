@@ -43,6 +43,32 @@ export function subscribePaymentsForOrder(
   );
 }
 
+/** Pagos de la sucursal (mesero/caja filtran el día en cliente). */
+export function subscribePaymentsForBranch(
+  restaurantId: string,
+  branchId: string,
+  onData: (payments: Payment[]) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(getDb(), "restaurants", restaurantId, "payments"),
+    where("branchId", "==", branchId),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      onData(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }) as Payment)
+          .sort((a, b) =>
+            (b.paidAt ?? b.createdAt).localeCompare(a.paidAt ?? a.createdAt),
+          ),
+      );
+    },
+    (err) => onError?.(err),
+  );
+}
+
 export interface ChargeInput {
   restaurantId: string;
   order: Order;

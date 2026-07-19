@@ -23,6 +23,7 @@ import type { Order, OrderItem, OrderStatus } from "@/types/orders";
 import type { Branch } from "@/types/restaurant";
 import {
   collection,
+  deleteField,
   doc,
   onSnapshot,
   orderBy,
@@ -320,6 +321,7 @@ export async function advanceTicketColumn(input: {
           .map((i) => `${i.quantity}× ${i.name}`)
           .join(", ")
       : undefined;
+  const stillHasReady = items.some((i) => i.status === "ready");
 
   const batch = writeBatch(getDb());
   batch.update(doc(getDb(), "restaurants", restaurantId, "orders", order.id), {
@@ -331,7 +333,12 @@ export async function advanceTicketColumn(input: {
           waiterAlertAt: stamp,
           waiterAlertBody: readyBody || "Pedido listo para llevar a la mesa",
         }
-      : {}),
+      : !stillHasReady
+        ? {
+            waiterAlertAt: deleteField(),
+            waiterAlertBody: deleteField(),
+          }
+        : {}),
   });
 
   const evtId = `evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;

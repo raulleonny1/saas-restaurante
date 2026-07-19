@@ -2,9 +2,10 @@
 
 import { useAuth } from "@/context/AuthProvider";
 import { formatCurrency } from "@/lib/format";
+import { printOrderReceipt } from "@/modules/pos/domain/print";
 import { roundMoney } from "@/modules/pos/domain/totals";
 import { usePos } from "@/modules/pos/context/PosProvider";
-import type { PaymentMethod } from "@/types/orders";
+import type { Order, Payment, PaymentMethod } from "@/types/orders";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -26,8 +27,8 @@ export function WaiterPayPage() {
     currency,
     pay,
     payments,
-    printReceipt,
     selectedTableId,
+    restaurantName,
   } = usePos();
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [tendered, setTendered] = useState("");
@@ -35,6 +36,10 @@ export function WaiterPayPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [lastChange, setLastChange] = useState<number | null>(null);
+  const [lastTicket, setLastTicket] = useState<{
+    order: Order;
+    payments: Payment[];
+  } | null>(null);
 
   const allowed = can("payments.charge");
   const due = balance;
@@ -212,20 +217,45 @@ export function WaiterPayPage() {
               setMsg(null);
               const tender =
                 method === "cash" ? tenderedNum : undefined;
-              await pay(
-                method,
-                due,
-                tipNum,
-                undefined,
-                tender,
-              );
+              const snapshot = activeOrder;
+              const changeDue =
+                method === "cash" && tender != null
+                  ? roundMoney(Math.max(0, tender - due - tipNum))
+                  : 0;
+              await pay(method, due, tipNum, undefined, tender);
               if (method === "cash" && tender != null) {
-                setLastChange(roundMoney(Math.max(0, tender - due - tipNum)));
+                setLastChange(changeDue);
               } else {
                 setLastChange(null);
               }
-              // No abrir impresión automática en el móvil (provocaba about:blank)
-              setMsg("Cobro registrado · visible en caja al instante");
+              const stamp = new Date().toISOString();
+              const payRow: Payment = {
+                id: `local_${stamp}`,
+                restaurantId: snapshot.restaurantId,
+                branchId: snapshot.branchId,
+                orderId: snapshot.id,
+                method,
+                status: "completed",
+                amount: due,
+                currency: snapshot.currency,
+                tipAmount: tipNum,
+                processedBy: "local",
+                paidAt: stamp,
+                ...(tender != null ? { amountTendered: tender } : {}),
+                ...(method === "cash" ? { changeGiven: changeDue } : {}),
+                createdAt: stamp,
+                updatedAt: stamp,
+              };
+              setLastTicket({
+                order: {
+                  ...snapshot,
+                  status: "paid",
+                  paidAt: stamp,
+                  amountPaid: snapshot.total,
+                },
+                payments: [...payments, payRow],
+              });
+              setMsg("Cobrado · ticket listo abajo · queda en Archivo/Caja");
               setTendered("");
               setTip("0");
             } catch (e) {
@@ -253,20 +283,51 @@ export function WaiterPayPage() {
         </div>
       ) : null}
 
-      {msg ? <p className="text-center text-sm text-emerald-300">{msg}</p> : null}
+      {lastTicket ? (
+        <div className="space-y-3 rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-4">
+          <p className="text-xs uppercase tracking-wide text-emerald-200/80">
+            Ticket cobrado
+          </p>
+          <p className="font-[family-name:var(--font-display)] text-xl">
+            {lastTicket.order.tableName ?? "Mesa"} ·{" "}
+            {formatCurrency(lastTicket.order.total, currency)}
+          </p>
+          <ul className="space-y-0.5 text-xs text-[#c5d0c2]">
+            {lastTicket.order.items
+              .filter((i) => i.status !== "cancelled")
+              .map((i) => (
+                <li key={i.id}>
+                  {i.quantity}× {i.name}
+                </li>
+              ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => {
+              printOrderReceipt(
+                lastTicket.order,
+                lastTicket.payments,
+                restaurantName,
+              );
+            }}
+            className="w-full rounded-xl bg-white/10 py-3 text-sm font-medium text-emerald-200"
+          >
+            Ver / imprimir ticket
+          </button>
+          <Link
+            href="/waiter/historial"
+            className="block text-center text-xs text-emerald-400"
+          >
+            Ir a Archivo · Caja del día
+          </Link>
+        </div>
+      ) : (
+        <p className="text-center text-xs text-[#5a6b57]">
+          El ticket solo se muestra e imprime cuando el cobro está hecho.
+        </p>
+      )}
 
-      <button
-        type="button"
-        disabled={!activeOrder}
-        onClick={() => {
-          void printReceipt().catch((e) =>
-            setMsg(e instanceof Error ? e.message : "No se pudo imprimir"),
-          );
-        }}
-        className="w-full rounded-xl border border-white/20 py-3 text-sm text-[#c5d0c2]"
-      >
-        Imprimir ticket (opcional)
-      </button>
+      {msg ? <p className="text-center text-sm text-emerald-300">{msg}</p> : null}
 
       {recentPays.length ? (
         <div className="space-y-2">

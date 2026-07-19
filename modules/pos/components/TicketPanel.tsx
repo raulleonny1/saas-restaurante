@@ -87,12 +87,14 @@ export function TicketPanel({
                 : ""}
             </p>
           </div>
-          <IconButton
-            aria-label="Imprimir"
-            onClick={() => void printReceipt().catch((e) => alert(e.message))}
-          >
-            <Printer className="h-4 w-4" />
-          </IconButton>
+          {activeOrder.status === "paid" || balance <= 0.001 ? (
+            <IconButton
+              aria-label="Imprimir ticket cobrado"
+              onClick={() => void printReceipt().catch((e) => alert(e.message))}
+            >
+              <Printer className="h-4 w-4" />
+            </IconButton>
+          ) : null}
         </div>
       </div>
 

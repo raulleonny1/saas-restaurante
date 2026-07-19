@@ -45,9 +45,12 @@ export function useWaiterNotifications() {
 function readyItemKeys(orders: Order[]) {
   const keys = new Set<string>();
   for (const o of orders) {
-    if (o.waiterAlertAt) keys.add(`ping:${o.id}:${o.waiterAlertAt}`);
+    if (o.status === "paid" || o.status === "cancelled") continue;
     for (const i of o.items) {
-      if (i.status === "ready") keys.add(`${o.id}:${i.id}`);
+      if (i.status === "ready") {
+        // Incluye waiterAlertAt para reavisos de cocina sobre la misma línea
+        keys.add(`${o.id}:${i.id}:${o.waiterAlertAt ?? i.readyAt ?? ""}`);
+      }
     }
   }
   return keys;

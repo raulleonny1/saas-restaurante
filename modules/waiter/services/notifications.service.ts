@@ -56,23 +56,20 @@ export async function markStaffNotificationRead(input: {
   );
 }
 
-/** Derive live kitchen-ready alerts from open orders (no extra writes). */
+/** Solo si hay líneas realmente listas para retirar (no avisos viejos). */
 export function kitchenReadyAlerts(orders: Order[]): AppNotification[] {
   return orders
-    .filter(
-      (o) =>
-        Boolean(o.waiterAlertAt) ||
-        o.status === "ready" ||
-        o.items.some((i) => i.status === "ready"),
-    )
+    .filter((o) => {
+      if (o.status === "paid" || o.status === "cancelled") return false;
+      return o.items.some((i) => i.status === "ready");
+    })
     .map((o) => {
       const readyItems = o.items.filter((i) => i.status === "ready");
       const body =
         o.waiterAlertBody ||
-        (readyItems.length > 0
-          ? readyItems.map((i) => `${i.quantity}× ${i.name}`).join(", ")
-          : "Pedido listo para llevar a la mesa");
-      const stamp = o.waiterAlertAt ?? "auto";
+        readyItems.map((i) => `${i.quantity}× ${i.name}`).join(", ") ||
+        "Pedido listo para llevar a la mesa";
+      const stamp = o.waiterAlertAt ?? readyItems[0]?.readyAt ?? o.updatedAt;
       return {
         id: `ready_${o.id}_${stamp}`,
         restaurantId: o.restaurantId,
@@ -84,7 +81,7 @@ export function kitchenReadyAlerts(orders: Order[]): AppNotification[] {
         read: false,
         referenceType: "order" as const,
         referenceId: o.id,
-        createdAt: o.waiterAlertAt ?? o.updatedAt,
+        createdAt: stamp,
         updatedAt: o.updatedAt,
       };
     });

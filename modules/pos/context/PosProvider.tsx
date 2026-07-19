@@ -133,6 +133,8 @@ interface PosContextValue {
     amountTendered?: number,
   ) => Promise<void>;
   printReceipt: () => Promise<void>;
+  /** Reimpresión desde archivo (pedido ya cobrado). */
+  printPaidOrder: (order: Order, orderPayments: Payment[]) => Promise<void>;
   refund: (paymentId: string, amount: number) => Promise<void>;
   clearSelection: () => void;
   balance: number;
@@ -615,9 +617,32 @@ export function PosProvider({ children }: { children: ReactNode }) {
 
   const printReceipt = useCallback(async () => {
     const { order, restaurantId: rid, uid } = requireOrder();
+    const paid =
+      order.status === "paid" ||
+      Boolean(order.paidAt) ||
+      balanceDue(order) <= 0.001;
+    if (!paid) {
+      throw new Error("El ticket solo se imprime cuando ya está cobrado");
+    }
     printOrderReceipt(order, payments, restaurantName);
     await markPrinted(rid, order, uid);
   }, [requireOrder, payments, restaurantName]);
+
+  const printPaidOrder = useCallback(
+    async (order: Order, orderPayments: Payment[]) => {
+      if (!restaurantId || !user) throw new Error("Sin sesión");
+      const paid =
+        order.status === "paid" ||
+        Boolean(order.paidAt) ||
+        balanceDue(order) <= 0.001;
+      if (!paid) {
+        throw new Error("El ticket solo se imprime cuando ya está cobrado");
+      }
+      printOrderReceipt(order, orderPayments, restaurantName);
+      await markPrinted(restaurantId, order, user.uid);
+    },
+    [restaurantId, user, restaurantName],
+  );
 
   const refund = useCallback(
     async (paymentId: string, amount: number) => {
@@ -727,6 +752,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
     assignItemSeat,
     pay,
     printReceipt,
+    printPaidOrder,
     refund,
     clearSelection: () => setSelectedTableId(null),
     balance: activeOrder ? balanceDue(activeOrder) : 0,

@@ -91,10 +91,11 @@ export function PaymentModal({
                   } else {
                     toast("Pago registrado", "success");
                   }
+                  // Ticket solo tras cobro (el pedido ya quedó pagado)
                   try {
                     await printReceipt();
                   } catch {
-                    /* print optional */
+                    /* si la mesa ya cerró, reimprimir desde historial */
                   }
                   onClose();
                 } catch (e) {

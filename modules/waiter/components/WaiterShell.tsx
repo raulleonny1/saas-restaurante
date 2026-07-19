@@ -33,7 +33,7 @@ const TABS = [
   { href: "/waiter/pedido", label: "Pedido", icon: ShoppingBag },
   { href: "/waiter/cobrar", label: "Cobrar", icon: Receipt },
   { href: "/waiter/qr", label: "QR", icon: QrCode },
-  { href: "/waiter/historial", label: "Historial", icon: History },
+  { href: "/waiter/historial", label: "Caja", icon: History },
   { href: "/waiter/notificaciones", label: "Avisos", icon: Bell },
 ];
 

@@ -52,10 +52,25 @@ export function resolveTableFloorTone(
 
   if (!order || order.items.length === 0) return "occupied";
 
+  // Pedido ya cobrado / cerrado → no parpadear «Listo»
+  if (order.status === "paid" || order.status === "cancelled") {
+    return table.status === "dirty" ? "dirty" : "free";
+  }
+
   const pending = order.items.filter(itemPendingSend);
   if (pending.length > 0) return "ordering";
 
+  // Solo parpadea si queda algo por retirar (status ready)
   if (order.items.some((i) => i.status === "ready")) return "ready";
+
+  // Todo servido pero aún no cobrado
+  const active = order.items.filter((i) => i.status !== "cancelled");
+  if (
+    active.length > 0 &&
+    active.every((i) => i.status === "delivered")
+  ) {
+    return "sent";
+  }
 
   return "sent";
 }

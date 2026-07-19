@@ -20,7 +20,14 @@ export function ReadyPickupBanner() {
   const { notifications, markRead, unlockAudio } = useWaiterNotifications();
   const [soundOn, setSoundOn] = useState(false);
 
-  const pickups = notifications.filter((n) => n.id.startsWith("ready_"));
+  const pickups = notifications.filter((n) => {
+    if (!n.id.startsWith("ready_")) return false;
+    const order = openOrders.find((o) => o.id === n.referenceId);
+    // Sin pedido activo o sin líneas listas → no mostrar
+    if (!order) return false;
+    if (order.status === "paid" || order.status === "cancelled") return false;
+    return order.items.some((i) => i.status === "ready");
+  });
   const top = pickups[0] ?? null;
 
   useEffect(() => {
@@ -29,11 +36,8 @@ export function ReadyPickupBanner() {
 
   if (!top) return null;
 
-  const order = openOrders.find((o) => o.id === top.referenceId);
-  const rawTable =
-    order?.tableName?.trim() ||
-    top.title.replace(/^.*·\s*/, "").trim() ||
-    "mesa";
+  const order = openOrders.find((o) => o.id === top.referenceId)!;
+  const rawTable = order.tableName?.trim() || "mesa";
   const tableLabel = /^mesa\b/i.test(rawTable) ? rawTable : `Mesa ${rawTable}`;
 
   return (
