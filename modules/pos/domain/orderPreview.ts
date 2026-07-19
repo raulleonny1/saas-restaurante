@@ -12,8 +12,22 @@ export function orderPreviewLines(
 ): string[] {
   const items = activeOrderItems(order);
   if (!items.length) return [];
-  const lines = items.slice(0, limit).map((i) => `${i.quantity}× ${i.name}`);
-  const rest = items.length - limit;
+  // Prioriza listos para retirar
+  const ranked = [...items].sort((a, b) => {
+    const rank = (s: string) =>
+      s === "ready" ? 0 : s === "delivered" ? 2 : 1;
+    return rank(a.status) - rank(b.status);
+  });
+  const lines = ranked.slice(0, limit).map((i) => {
+    const prefix =
+      i.status === "ready"
+        ? "Listo · "
+        : i.status === "delivered"
+          ? "Servido · "
+          : "";
+    return `${prefix}${i.quantity}× ${i.name}`;
+  });
+  const rest = ranked.length - limit;
   if (rest > 0) lines.push(`+${rest} más`);
   return lines;
 }

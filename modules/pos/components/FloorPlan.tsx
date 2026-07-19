@@ -24,6 +24,7 @@ const LEGEND: TableFloorTone[] = [
   "occupied",
   "ordering",
   "sent",
+  "ready",
   "reserved",
   "dirty",
 ];

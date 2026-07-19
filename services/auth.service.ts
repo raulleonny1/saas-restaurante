@@ -198,12 +198,20 @@ async function ensureUserProfile(
     fallbackRole,
   );
 
-  // Create-only: never overwrite a profile written by signUp
-  await runTransaction(getDb(), async (tx) => {
-    const snap = await tx.get(userRef);
-    if (snap.exists()) return;
-    tx.set(userRef, stripUndefined({ ...appUser }));
-  });
+  // Create-only: never overwrite a profile written by signUp.
+  // Si otro login/registro ya lo creó → ignore already-exists.
+  try {
+    await runTransaction(getDb(), async (tx) => {
+      const snap = await tx.get(userRef);
+      if (snap.exists()) return;
+      tx.set(userRef, stripUndefined({ ...appUser }));
+    });
+  } catch (error) {
+    const code = firebaseErrorCode(error);
+    if (code !== "already-exists" && code !== "aborted") {
+      throw error;
+    }
+  }
 
   existing = await readUserProfile(fbUser.uid);
   if (!existing) return appUser;
@@ -456,10 +464,15 @@ export async function signInOrActivate(
         displayName,
         "cliente",
       );
-      await setDoc(
-        doc(getDb(), "users", cred.user.uid),
-        stripUndefined({ ...stub }),
-      );
+      try {
+        await setDoc(
+          doc(getDb(), "users", cred.user.uid),
+          stripUndefined({ ...stub }),
+        );
+      } catch (error) {
+        const code = firebaseErrorCode(error);
+        if (code !== "already-exists") throw error;
+      }
 
       const accepted = await acceptPendingInvites(stub);
       if (accepted === 0) {

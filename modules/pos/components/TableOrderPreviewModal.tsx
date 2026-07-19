@@ -5,6 +5,7 @@ import {
   activeOrderItems,
   formatElapsedShort,
 } from "@/modules/pos/domain/orderPreview";
+import { orderItemStatusLabel } from "@/modules/waiter/domain/itemStatus";
 import type { Order, Table } from "@/types/orders";
 import { Badge, Button, Modal } from "@/ui";
 
@@ -97,7 +98,13 @@ export function TableOrderPreviewModal({
               <li
                 key={item.id}
                 className={`flex items-start justify-between gap-2 rounded-[var(--radius-md)] border px-3 py-2 text-sm ${
-                  waiter ? "border-white/10 bg-white/5" : "border-border"
+                  item.status === "ready"
+                    ? waiter
+                      ? "border-cyan-400/50 bg-cyan-950/40"
+                      : "border-cyan-500/40 bg-cyan-500/10"
+                    : waiter
+                      ? "border-white/10 bg-white/5"
+                      : "border-border"
                 }`}
               >
                 <div className="min-w-0">
@@ -107,12 +114,16 @@ export function TableOrderPreviewModal({
                   </p>
                   <p
                     className={
-                      waiter
-                        ? "text-[11px] text-[#8fa08c]"
-                        : "text-caption text-fg-muted"
+                      item.status === "ready"
+                        ? waiter
+                          ? "text-[11px] font-medium text-cyan-300"
+                          : "text-caption font-medium text-cyan-700"
+                        : waiter
+                          ? "text-[11px] text-[#8fa08c]"
+                          : "text-caption text-fg-muted"
                     }
                   >
-                    {item.status}
+                    {orderItemStatusLabel(item.status)}
                     {itemWhen(item, order)
                       ? ` · hace ${itemWhen(item, order)}`
                       : ""}

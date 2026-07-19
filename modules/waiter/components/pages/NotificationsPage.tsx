@@ -62,7 +62,6 @@ export function WaiterNotificationsPage() {
                     selectTable(order.tableId);
                     router.push("/waiter/pedido");
                   }
-                  void markRead(n.id);
                 }}
               >
                 Ir al pedido

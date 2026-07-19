@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { resolveItemStation } from "@/modules/kitchen/domain/stations";
+import { advanceTicketColumn } from "@/modules/kitchen/services/kitchen.service";
 import { printOrderReceipt } from "@/modules/pos/domain/print";
 import { balanceDue } from "@/modules/pos/domain/totals";
 import {
@@ -118,6 +119,8 @@ interface PosContextValue {
   setDiscount: (percent: number, amount?: number) => Promise<void>;
   setTip: (percent: number, amount?: number) => Promise<void>;
   sendKitchen: () => Promise<void>;
+  /** Mesero: lleva a mesa → marca ítems listos como servidos. */
+  markItemsServed: (itemIds: string[]) => Promise<void>;
   moveToTable: (targetTableId: string) => Promise<void>;
   mergeWithTables: (tableIds: string[]) => Promise<void>;
   applySplit: (parts: number) => Promise<void>;
@@ -500,6 +503,20 @@ export function PosProvider({ children }: { children: ReactNode }) {
     await sendToKitchen(rid, order, taxPercent, uid, products, categories);
   }, [requireOrder, taxPercent, products, categories]);
 
+  const markItemsServed = useCallback(
+    async (itemIds: string[]) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      await advanceTicketColumn({
+        restaurantId: rid,
+        order,
+        itemIds,
+        toColumn: "delivered",
+        actorUid: uid,
+      });
+    },
+    [requireOrder],
+  );
+
   const moveToTable = useCallback(
     async (targetTableId: string) => {
       const { order, restaurantId: rid, uid } = requireOrder();
@@ -695,6 +712,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
     setDiscount,
     setTip,
     sendKitchen,
+    markItemsServed,
     moveToTable,
     mergeWithTables,
     applySplit,

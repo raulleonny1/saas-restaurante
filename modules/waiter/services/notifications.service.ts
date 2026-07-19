@@ -71,11 +71,11 @@ export function kitchenReadyAlerts(orders: Order[]): AppNotification[] {
         restaurantId: o.restaurantId,
         uid: "local",
         type: "order" as const,
-        title: `Listo · ${o.tableName ?? "Mesa"}`,
+        title: `¡Retirar de cocina! · ${o.tableName ?? "Mesa"}`,
         body:
           readyItems.length > 0
             ? readyItems.map((i) => `${i.quantity}× ${i.name}`).join(", ")
-            : "Pedido listo para servir",
+            : "Pedido listo para llevar a la mesa",
         href: "/waiter/pedido",
         read: false,
         referenceType: "order" as const,

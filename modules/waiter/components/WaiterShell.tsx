@@ -5,6 +5,7 @@ import { useRestaurant } from "@/context/RestaurantProvider";
 import { canManageRestaurant, isWaiterOnlyRole } from "@/lib/roles";
 import { OfflineBanner } from "@/modules/pos/components/OfflineBanner";
 import { usePos } from "@/modules/pos/context/PosProvider";
+import { useWaiterNotifications } from "@/modules/waiter/context/WaiterNotificationsProvider";
 import {
   Bell,
   History,
@@ -38,6 +39,7 @@ export function WaiterShell({
   const { user, role, signOut } = useAuth();
   const { restaurant, loading } = useRestaurant();
   const { ready, syncStatus, selectedTableId, tables } = usePos();
+  const { unlockAudio } = useWaiterNotifications();
   const pathname = usePathname();
   const router = useRouter();
   const table = tables.find((t) => t.id === selectedTableId);
@@ -73,7 +75,10 @@ export function WaiterShell({
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[#0e1410] text-[#e7efe4]">
+    <div
+      className="flex min-h-dvh flex-col bg-[#0e1410] text-[#e7efe4]"
+      onPointerDown={() => void unlockAudio()}
+    >
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0e1410]/95 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
         <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
           <div className="min-w-0">

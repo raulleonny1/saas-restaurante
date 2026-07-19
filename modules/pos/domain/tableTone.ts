@@ -5,7 +5,8 @@ import type { Order, Table } from "@/types/orders";
  * - free: libre
  * - occupied (rojo): mesa ocupada sin líneas, o sin pedido aún
  * - ordering (amarillo): hay ítems sin enviar a cocina
- * - sent (verde): todo el pedido actual ya se envió
+ * - sent (verde): pedido enviado / en cocina
+ * - ready (cian): hay platos listos para retirar
  * - reserved / dirty: estados especiales
  */
 export type TableFloorTone =
@@ -13,6 +14,7 @@ export type TableFloorTone =
   | "occupied"
   | "ordering"
   | "sent"
+  | "ready"
   | "reserved"
   | "dirty";
 
@@ -52,6 +54,9 @@ export function resolveTableFloorTone(
 
   const pending = order.items.filter(itemPendingSend);
   if (pending.length > 0) return "ordering";
+
+  if (order.items.some((i) => i.status === "ready")) return "ready";
+
   return "sent";
 }
 
@@ -59,7 +64,8 @@ export const TABLE_TONE_LABEL: Record<TableFloorTone, string> = {
   free: "Libre",
   occupied: "Ocupada",
   ordering: "Pidiendo",
-  sent: "Pedido enviado",
+  sent: "En cocina",
+  ready: "Listo · retirar",
   reserved: "Reservada",
   dirty: "Sucia",
 };
@@ -72,6 +78,8 @@ export const TABLE_TONE_ADMIN: Record<TableFloorTone, string> = {
   ordering:
     "border-amber-500/70 bg-amber-400/20 text-amber-950 dark:text-amber-50 hover:border-amber-500",
   sent: "border-emerald-500/70 bg-emerald-500/15 text-emerald-950 dark:text-emerald-50 hover:border-emerald-500",
+  ready:
+    "border-cyan-500/80 bg-cyan-400/25 text-cyan-950 dark:text-cyan-50 hover:border-cyan-400",
   reserved: "border-sky-500/50 bg-sky-500/10",
   dirty: "border-stone-400/50 bg-stone-400/15",
 };
@@ -82,6 +90,7 @@ export const TABLE_TONE_WAITER: Record<TableFloorTone, string> = {
   occupied: "border-red-500/60 bg-red-950/55",
   ordering: "border-amber-400/60 bg-amber-950/45",
   sent: "border-emerald-500/60 bg-emerald-950/50",
+  ready: "border-cyan-400/80 bg-cyan-950/60 animate-pulse",
   reserved: "border-sky-500/40 bg-sky-950/30",
   dirty: "border-stone-400/40 bg-stone-900/50",
 };

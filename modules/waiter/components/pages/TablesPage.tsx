@@ -30,6 +30,7 @@ const LEGEND: TableFloorTone[] = [
   "occupied",
   "ordering",
   "sent",
+  "ready",
 ];
 
 function TablesContent() {
