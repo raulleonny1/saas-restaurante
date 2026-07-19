@@ -1,6 +1,10 @@
 "use client";
 
 import { useAuth } from "@/context/AuthProvider";
+import { isSalaAdminRole } from "@/lib/roles";
+import {
+  EmployeesProvider,
+} from "@/modules/employees/context/EmployeesProvider";
 import { FloorPlan } from "@/modules/pos/components/FloorPlan";
 import { HistoryDrawer } from "@/modules/pos/components/HistoryDrawer";
 import { ManageTablesModal } from "@/modules/pos/components/ManageTablesModal";
@@ -11,6 +15,7 @@ import { PaymentModal } from "@/modules/pos/components/PaymentModal";
 import { ProductGrid } from "@/modules/pos/components/ProductGrid";
 import { SplitBillModal } from "@/modules/pos/components/SplitBillModal";
 import { TicketPanel } from "@/modules/pos/components/TicketPanel";
+import { WaiterAttentionPanel } from "@/modules/pos/components/WaiterAttentionPanel";
 import { PosProvider, usePos } from "@/modules/pos/context/PosProvider";
 import {
   Alert,
@@ -21,11 +26,11 @@ import {
   Skeleton,
   toast,
 } from "@/ui";
-import { History, LayoutGrid, Settings2 } from "lucide-react";
+import { History, LayoutGrid, Settings2, Users } from "lucide-react";
 import { useState } from "react";
 
 function PosWorkspace() {
-  const { can } = useAuth();
+  const { can, role } = useAuth();
   const {
     ready,
     error,
@@ -39,6 +44,7 @@ function PosWorkspace() {
     bootstrap,
   } = usePos();
 
+  const salaAdmin = isSalaAdminRole(role);
   const [payOpen, setPayOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
@@ -46,6 +52,9 @@ function PosWorkspace() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [manageTablesOpen, setManageTablesOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<"floor" | "ticket">("floor");
+  const [floorMode, setFloorMode] = useState<"plan" | "waiters">(
+    salaAdmin ? "waiters" : "plan",
+  );
   const [bootstrapping, setBootstrapping] = useState(false);
 
   if (!ready) {
@@ -71,7 +80,11 @@ function PosWorkspace() {
     <div className="flex min-h-[calc(100vh-8rem)] flex-col pb-20 lg:pb-0">
       <PageHeader
         title="POS"
-        description="Plano, ticket y cobro en tiempo real con Firestore."
+        description={
+          salaAdmin
+            ? "Supervisa meseros, atención en mesas, pedidos y tiempos. Plano y cobro en tiempo real."
+            : "Plano, ticket y cobro en tiempo real con Firestore."
+        }
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             {branchId && branches.length > 0 ? (
@@ -143,14 +156,13 @@ function PosWorkspace() {
         </Alert>
       ) : null}
 
-      {/* Mobile tabs: floor vs ticket */}
       <div className="mb-3 grid grid-cols-2 gap-2 lg:hidden">
         <Button
           variant={mobileTab === "floor" ? "primary" : "secondary"}
           size="sm"
           onClick={() => setMobileTab("floor")}
         >
-          Plano
+          {salaAdmin && floorMode === "waiters" ? "Meseros" : "Plano"}
         </Button>
         <Button
           variant={mobileTab === "ticket" ? "primary" : "secondary"}
@@ -172,10 +184,36 @@ function PosWorkspace() {
             mobileTab === "floor" ? "block" : "hidden xl:block"
           }`}
         >
-          <h2 className="mb-3 text-sm font-medium text-fg-muted">
-            Plano de mesas
-          </h2>
-          <FloorPlan />
+          {salaAdmin ? (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant={floorMode === "waiters" ? "primary" : "secondary"}
+                onClick={() => setFloorMode("waiters")}
+              >
+                <Users className="h-3.5 w-3.5" /> Meseros
+              </Button>
+              <Button
+                size="sm"
+                variant={floorMode === "plan" ? "primary" : "secondary"}
+                onClick={() => setFloorMode("plan")}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" /> Plano
+              </Button>
+            </div>
+          ) : (
+            <h2 className="mb-3 text-sm font-medium text-fg-muted">
+              Plano de mesas
+            </h2>
+          )}
+
+          {salaAdmin && floorMode === "waiters" ? (
+            <div className="max-h-[70vh] overflow-hidden xl:max-h-[calc(100vh-14rem)]">
+              <WaiterAttentionPanel />
+            </div>
+          ) : (
+            <FloorPlan />
+          )}
         </section>
 
         <section
@@ -219,7 +257,9 @@ function PosWorkspace() {
 export function PosView() {
   return (
     <PosProvider>
-      <PosWorkspace />
+      <EmployeesProvider>
+        <PosWorkspace />
+      </EmployeesProvider>
     </PosProvider>
   );
 }
