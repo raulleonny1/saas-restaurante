@@ -6,6 +6,7 @@ import {
   listRestaurantsForUser,
   setStoredRestaurantId,
 } from "@/services/restaurant.service";
+import type { AppUser } from "@/types/auth";
 import type { Restaurant } from "@/types/restaurant";
 import {
   createContext,
@@ -14,6 +15,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useAuthSession } from "./AuthProvider";
@@ -24,7 +26,7 @@ interface RestaurantContextValue {
   restaurantId: string | null;
   loading: boolean;
   setRestaurantId: (id: string) => void;
-  refresh: () => Promise<void>;
+  refresh: (opts?: { silent?: boolean }) => Promise<void>;
   create: (name: string) => Promise<Restaurant>;
 }
 
@@ -32,30 +34,50 @@ const RestaurantContext = createContext<RestaurantContextValue | null>(null);
 
 export function RestaurantProvider({ children }: { children: ReactNode }) {
   const { user } = useAuthSession();
+  const uid = user?.uid ?? null;
+  const idsKey = user?.restaurantIds?.join(",") ?? "";
+  const userRef = useRef<AppUser | null>(user);
+  userRef.current = user;
+
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [restaurantId, setRestaurantIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const hasLoadedRef = useRef(false);
 
-  const refresh = useCallback(async () => {
-    if (!user) {
-      setRestaurants([]);
-      setRestaurantIdState(null);
-      setLoading(false);
-      return;
-    }
+  const refresh = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const u = userRef.current;
+      if (!u) {
+        setRestaurants([]);
+        setRestaurantIdState(null);
+        setLoading(false);
+        hasLoadedRef.current = false;
+        return;
+      }
 
-    setLoading(true);
-    const list = await listRestaurantsForUser(user);
-    setRestaurants(list);
+      // No apagar toda la UI en refrescos (evita parpadeo en /waiter)
+      const silent = opts?.silent ?? hasLoadedRef.current;
+      if (!silent) setLoading(true);
 
-    const stored = getStoredRestaurantId();
-    const nextId =
-      (stored && list.some((r) => r.id === stored) && stored) || list[0]?.id || null;
+      try {
+        const list = await listRestaurantsForUser(u);
+        setRestaurants(list);
 
-    setRestaurantIdState(nextId);
-    if (nextId) setStoredRestaurantId(nextId);
-    setLoading(false);
-  }, [user]);
+        const stored = getStoredRestaurantId();
+        const nextId =
+          (stored && list.some((r) => r.id === stored) && stored) ||
+          list[0]?.id ||
+          null;
+
+        setRestaurantIdState(nextId);
+        if (nextId) setStoredRestaurantId(nextId);
+        hasLoadedRef.current = true;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [uid, idsKey],
+  );
 
   useEffect(() => {
     void refresh();
@@ -68,13 +90,14 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
 
   const create = useCallback(
     async (name: string) => {
-      if (!user) throw new Error("No autenticado");
-      const created = await createRestaurant(user, name);
-      await refresh();
+      const u = userRef.current;
+      if (!u) throw new Error("No autenticado");
+      const created = await createRestaurant(u, name);
+      await refresh({ silent: false });
       setRestaurantId(created.id);
       return created;
     },
-    [user, refresh, setRestaurantId],
+    [refresh, setRestaurantId],
   );
 
   const restaurant = restaurants.find((r) => r.id === restaurantId) ?? null;

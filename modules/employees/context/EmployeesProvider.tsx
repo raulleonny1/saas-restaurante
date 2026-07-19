@@ -9,11 +9,17 @@ import {
   linkEmployeeUid,
   markEmployeeInviteSent,
   restoreEmployee,
+  setEmployeeAssignedTables,
   setEmployeeStatus,
   subscribeEmployees,
   upsertEmployee,
   upsertEmployeeEmailIndex,
 } from "@/modules/employees/services/employees.service";
+import {
+  deleteEmployeeRecord,
+  subscribeEmployeeRecords,
+  upsertEmployeeRecord,
+} from "@/modules/employees/services/records.service";
 import {
   deleteShift,
   subscribeShifts,
@@ -23,9 +29,12 @@ import {
   ensureStaffInvite,
   inviteMember,
 } from "@/modules/tenant/services/members.service";
+import { resetPassword } from "@/services/auth.service";
 import type {
   Employee,
   EmployeeIdDocumentType,
+  EmployeeRecord,
+  EmployeeRecordType,
   EmployeeShift,
   EmploymentType,
 } from "@/types/employees";
@@ -73,10 +82,14 @@ interface EmployeesContextValue {
   }) => Promise<Employee>;
   /** Send / resend Auth invite and mark inviteSentAt on the employee. */
   sendAccessInvite: (employeeId: string) => Promise<void>;
+  /** Envía email de Firebase para que el empleado elija una nueva clave. */
+  resetEmployeePassword: (employeeId: string) => Promise<void>;
   /** Eliminar → historial (soft-delete). */
   archive: (employeeId: string) => Promise<void>;
   /** Restaurar desde historial al listado activo. */
   restore: (employeeId: string) => Promise<void>;
+  /** Mesas que atenderá este mesero. */
+  assignTables: (employeeId: string, tableIds: string[]) => Promise<void>;
   setStatus: (
     employeeId: string,
     status: Employee["status"],
@@ -93,6 +106,16 @@ interface EmployeesContextValue {
   }) => Promise<EmployeeShift>;
   removeShift: (shiftId: string) => Promise<void>;
   shiftsForSelected: EmployeeShift[];
+  records: EmployeeRecord[];
+  recordsForSelected: EmployeeRecord[];
+  saveRecord: (input: {
+    record?: EmployeeRecord | null;
+    employeeId: string;
+    type: EmployeeRecordType;
+    title: string;
+    body: string;
+  }) => Promise<EmployeeRecord>;
+  removeRecord: (recordId: string) => Promise<void>;
 }
 
 const Ctx = createContext<EmployeesContextValue | null>(null);
@@ -109,6 +132,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
   const { members, branches } = useTenant();
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<EmployeeShift[]>([]);
+  const [records, setRecords] = useState<EmployeeRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [listMode, setListMode] = useState<EmployeesListMode>("roster");
   const [ready, setReady] = useState(false);
@@ -132,6 +156,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
     if (!restaurantId) {
       setAllEmployees([]);
       setShifts([]);
+      setRecords([]);
       setReady(true);
       return;
     }
@@ -153,9 +178,15 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
       setShifts,
       (e) => setError(e.message),
     );
+    const u3 = subscribeEmployeeRecords(
+      restaurantId,
+      setRecords,
+      (e) => setError(e.message),
+    );
     return () => {
       u1();
       u2();
+      u3();
     };
   }, [restaurantId]);
 
@@ -224,6 +255,11 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
     if (!selectedId) return [];
     return shifts.filter((s) => s.employeeId === selectedId);
   }, [shifts, selectedId]);
+
+  const recordsForSelected = useMemo(() => {
+    if (!selectedId) return [];
+    return records.filter((r) => r.employeeId === selectedId);
+  }, [records, selectedId]);
 
   const saveEmployee = useCallback(
     async (input: {
@@ -329,6 +365,21 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
     [restaurantId, restaurant, user, employees, members],
   );
 
+  const resetEmployeePassword = useCallback(
+    async (employeeId: string) => {
+      const emp = allEmployees.find((e) => e.id === employeeId);
+      if (!emp) throw new Error("Empleado no encontrado");
+      if (emp.deletedAt) {
+        throw new Error("Empleado en historial; restáuralo primero");
+      }
+      if (!emp.email?.trim()) {
+        throw new Error("El empleado no tiene email");
+      }
+      await resetPassword({ email: emp.email });
+    },
+    [allEmployees],
+  );
+
   const archive = useCallback(
     async (employeeId: string) => {
       if (!restaurantId) return;
@@ -356,6 +407,18 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
     [restaurantId, allEmployees],
   );
 
+  const assignTables = useCallback(
+    async (employeeId: string, tableIds: string[]) => {
+      if (!restaurantId) throw new Error("Sin restaurante");
+      await setEmployeeAssignedTables({
+        restaurantId,
+        employeeId,
+        tableIds,
+      });
+    },
+    [restaurantId],
+  );
+
   const value: EmployeesContextValue = {
     ready,
     error,
@@ -369,8 +432,10 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
     selectEmployee: setSelectedId,
     saveEmployee,
     sendAccessInvite,
+    resetEmployeePassword,
     archive,
     restore,
+    assignTables,
     setStatus: async (employeeId, status) => {
       if (!restaurantId) return;
       await setEmployeeStatus({ restaurantId, employeeId, status });
@@ -392,6 +457,25 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
       await deleteShift({ restaurantId, shiftId });
     },
     shiftsForSelected,
+    records,
+    recordsForSelected,
+    saveRecord: async (input) => {
+      if (!restaurantId || !user) throw new Error("Sin restaurante");
+      return upsertEmployeeRecord({
+        restaurantId,
+        record: input.record,
+        employeeId: input.employeeId,
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        createdByUid: user.uid,
+        createdByName: user.displayName || user.email,
+      });
+    },
+    removeRecord: async (recordId) => {
+      if (!restaurantId) return;
+      await deleteEmployeeRecord({ restaurantId, recordId });
+    },
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

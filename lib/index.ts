@@ -11,6 +11,7 @@ export {
   ROLE_RANK,
   ROLES_WITH_VENUE,
   STAFF_ROLES,
+  canCreateVenue,
   canManageRestaurant,
   hasAnyRole,
   hasRole,

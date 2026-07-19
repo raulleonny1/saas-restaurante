@@ -1,35 +1,36 @@
 "use client";
 
+import { useAuth } from "@/context/AuthProvider";
+import { useRestaurant } from "@/context/RestaurantProvider";
 import { formatCurrency } from "@/lib/format";
+import { isWaiterOnlyRole } from "@/lib/roles";
+import { subscribeMyEmployeeAssignment } from "@/modules/employees/services/employees.service";
+import { ManageTablesModal } from "@/modules/pos/components/ManageTablesModal";
 import { usePos } from "@/modules/pos/context/PosProvider";
-import type { TableStatus } from "@/types/orders";
-import { ArrowRightLeft } from "lucide-react";
+import {
+  orderForTable,
+  resolveTableFloorTone,
+  TABLE_TONE_LABEL,
+  TABLE_TONE_WAITER,
+  type TableFloorTone,
+} from "@/modules/pos/domain/tableTone";
+import { ArrowRightLeft, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
-const STATUS: Record<TableStatus, { label: string; className: string }> = {
-  available: {
-    label: "Libre",
-    className: "border-white/15 bg-white/5",
-  },
-  occupied: {
-    label: "Ocupada",
-    className: "border-emerald-600/50 bg-emerald-950/40",
-  },
-  reserved: {
-    label: "Reservada",
-    className: "border-sky-500/40 bg-sky-950/30",
-  },
-  dirty: {
-    label: "Sucia",
-    className: "border-amber-500/40 bg-amber-950/30",
-  },
-};
+const LEGEND: TableFloorTone[] = [
+  "free",
+  "occupied",
+  "ordering",
+  "sent",
+];
 
 function TablesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { can, user, role } = useAuth();
+  const { restaurantId } = useRestaurant();
   const {
     tables,
     openOrders,
@@ -40,31 +41,85 @@ function TablesContent() {
     branchId,
     setBranchId,
   } = usePos();
+  const [manageOpen, setManageOpen] = useState(false);
+  const [assignedTableIds, setAssignedTableIds] = useState<string[] | null>(
+    null,
+  );
+  const canManageTables = can("tables.manage");
+  const floorOnly = isWaiterOnlyRole(role);
+
+  const waiterUid = user?.uid;
+  const waiterEmail = user?.email;
+  useEffect(() => {
+    if (!floorOnly || !restaurantId || !waiterUid || !waiterEmail) {
+      setAssignedTableIds(null);
+      return;
+    }
+    return subscribeMyEmployeeAssignment(
+      restaurantId,
+      waiterUid,
+      waiterEmail,
+      setAssignedTableIds,
+    );
+  }, [floorOnly, restaurantId, waiterUid, waiterEmail]);
+
+  const visibleTables = useMemo(() => {
+    if (!floorOnly) return tables;
+    if (assignedTableIds === null) return [];
+    if (assignedTableIds.length === 0) return [];
+    return tables.filter((t) => assignedTableIds.includes(t.id));
+  }, [floorOnly, tables, assignedTableIds]);
 
   useEffect(() => {
     const tableId = searchParams.get("table") || searchParams.get("tableId");
-    if (!tableId || !tables.length) return;
-    const exists = tables.some((t) => t.id === tableId);
+    if (!tableId || !visibleTables.length) return;
+    const exists = visibleTables.some((t) => t.id === tableId);
     if (!exists) return;
     selectTable(tableId);
     router.replace("/waiter/pedido");
-  }, [searchParams, tables, selectTable, router]);
+  }, [searchParams, visibleTables, selectTable, router]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="font-[family-name:var(--font-display)] text-2xl">
-            Mesas
+            Tu sala
           </h1>
-          <p className="text-sm text-[#a8b5a4]">Toca una mesa para tomar pedido.</p>
+          <p className="text-sm text-[#a8b5a4]">
+            {floorOnly
+              ? "Mesas que te asignó el administrador · toca para pedir."
+              : "Vista completa · toca una mesa para pedir."}
+          </p>
         </div>
-        <Link
-          href="/waiter/mover"
-          className="inline-flex items-center gap-1 rounded-xl border border-white/15 px-3 py-2 text-xs text-[#c5d0c2]"
-        >
-          <ArrowRightLeft className="h-3.5 w-3.5" /> Mover
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          {canManageTables ? (
+            <button
+              type="button"
+              onClick={() => setManageOpen(true)}
+              className="inline-flex items-center gap-1 rounded-xl border border-white/15 px-3 py-2 text-xs text-[#c5d0c2]"
+            >
+              <Settings2 className="h-3.5 w-3.5" /> Gestionar
+            </button>
+          ) : null}
+          <Link
+            href="/waiter/mover"
+            className="inline-flex items-center gap-1 rounded-xl border border-white/15 px-3 py-2 text-xs text-[#c5d0c2]"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5" /> Mover
+          </Link>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 text-[10px] text-[#a8b5a4]">
+        {LEGEND.map((tone) => (
+          <span
+            key={tone}
+            className={`rounded-full border px-2 py-0.5 ${TABLE_TONE_WAITER[tone]}`}
+          >
+            {TABLE_TONE_LABEL[tone]}
+          </span>
+        ))}
       </div>
 
       {branches.length > 1 ? (
@@ -82,12 +137,11 @@ function TablesContent() {
       ) : null}
 
       <div className="grid grid-cols-2 gap-2.5">
-        {tables.map((table) => {
-          const order =
-            openOrders.find((o) => o.id === table.currentOrderId) ??
-            openOrders.find((o) => o.tableId === table.id);
-          const tone = STATUS[table.status];
+        {visibleTables.map((table) => {
+          const order = orderForTable(table, openOrders);
+          const tone = resolveTableFloorTone(table, order);
           const selected = table.id === selectedTableId;
+          const zoneLabel = table.zone ? ` · ${table.zone}` : "";
           return (
             <button
               key={table.id}
@@ -96,17 +150,22 @@ function TablesContent() {
                 selectTable(table.id);
                 router.push("/waiter/pedido");
               }}
-              className={`min-h-[96px] rounded-2xl border p-3 text-left transition ${tone.className} ${
+              className={`min-h-[96px] rounded-2xl border p-3 text-left transition ${TABLE_TONE_WAITER[tone]} ${
                 selected ? "ring-2 ring-emerald-500" : ""
               }`}
             >
               <div className="flex items-start justify-between gap-1">
                 <p className="text-lg font-semibold">{table.name}</p>
-                <span className="text-[10px] text-[#8fa08c]">{tone.label}</span>
+                <span className="text-[10px] text-[#c5d0c2]">
+                  {TABLE_TONE_LABEL[tone]}
+                </span>
               </div>
-              <p className="mt-1 text-xs text-[#8fa08c]">{table.seats} pax</p>
+              <p className="mt-1 text-xs text-[#8fa08c]">
+                {table.seats} asientos
+                {zoneLabel}
+              </p>
               {order ? (
-                <p className="mt-2 text-sm font-medium text-emerald-300">
+                <p className="mt-2 text-sm font-medium text-white/90">
                   {formatCurrency(order.total, currency)}
                 </p>
               ) : (
@@ -117,11 +176,37 @@ function TablesContent() {
         })}
       </div>
 
-      {!tables.length ? (
-        <p className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-[#8fa08c]">
-          No hay mesas. Ábrelas desde el POS (Preparar POS).
-        </p>
+      {!visibleTables.length ? (
+        <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-[#8fa08c]">
+          {floorOnly ? (
+            <>
+              <p>No tienes mesas asignadas.</p>
+              <p className="mt-2 text-xs">
+                El administrador debe asignarte mesas en{" "}
+                <strong>Admin sala</strong>.
+              </p>
+            </>
+          ) : (
+            <>
+              <p>No hay mesas en esta sucursal.</p>
+              {canManageTables ? (
+                <button
+                  type="button"
+                  onClick={() => setManageOpen(true)}
+                  className="mt-3 text-emerald-400 underline-offset-2 hover:underline"
+                >
+                  Crear mesas y barras
+                </button>
+              ) : null}
+            </>
+          )}
+        </div>
       ) : null}
+
+      <ManageTablesModal
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+      />
     </div>
   );
 }
@@ -130,7 +215,9 @@ export function WaiterTablesPage() {
   return (
     <Suspense
       fallback={
-        <p className="py-10 text-center text-sm text-[#8fa08c]">Cargando mesas…</p>
+        <p className="py-10 text-center text-sm text-[#8fa08c]">
+          Cargando mesas…
+        </p>
       }
     >
       <TablesContent />

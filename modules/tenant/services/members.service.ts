@@ -122,29 +122,36 @@ export async function inviteMember(input: {
   const stamp = new Date().toISOString();
   const id = staffInviteId(input.restaurantId, email);
   const ref = doc(getDb(), "memberInvites", id);
-  const existing = await getDoc(ref);
-  if (existing.exists()) {
-    const prev = existing.data() as MemberInvite;
-    if (prev.status === "accepted") return prev;
-    if (prev.status === "pending") {
-      await updateDoc(
-        ref,
-        stripUndefined({
+
+  // getDoc de doc inexistente falla si las reglas no permiten resource == null
+  try {
+    const existing = await getDoc(ref);
+    if (existing.exists()) {
+      const prev = existing.data() as MemberInvite;
+      if (prev.status === "accepted") return prev;
+      if (prev.status === "pending") {
+        await updateDoc(
+          ref,
+          stripUndefined({
+            roleId: input.roleId,
+            branchIds: input.branchIds ?? prev.branchIds ?? [],
+            restaurantName: input.restaurantName,
+            updatedAt: stamp,
+          }),
+        );
+        return {
+          ...prev,
           roleId: input.roleId,
           branchIds: input.branchIds ?? prev.branchIds ?? [],
           restaurantName: input.restaurantName,
           updatedAt: stamp,
-        }),
-      );
-      return {
-        ...prev,
-        roleId: input.roleId,
-        branchIds: input.branchIds ?? prev.branchIds ?? [],
-        restaurantName: input.restaurantName,
-        updatedAt: stamp,
-      };
+        };
+      }
     }
+  } catch {
+    /* seguir a create */
   }
+
   const row: MemberInvite = {
     id,
     restaurantId: input.restaurantId,
@@ -157,7 +164,17 @@ export async function inviteMember(input: {
     createdAt: stamp,
     updatedAt: stamp,
   };
-  await setDoc(ref, stripUndefined({ ...row }));
+  try {
+    await setDoc(ref, stripUndefined({ ...row }));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/permission|insufficient/i.test(msg)) {
+      throw new Error(
+        "Firestore denegó crear la invitación. Publica firestore.rules (Firebase Console → Firestore → Reglas) y vuelve a intentar.",
+      );
+    }
+    throw e;
+  }
   return row;
 }
 
@@ -170,15 +187,11 @@ export async function ensureStaffInvite(input: {
   branchIds?: string[];
   invitedBy: string;
 }): Promise<boolean> {
-  const email = input.email.trim().toLowerCase();
-  const id = staffInviteId(input.restaurantId, email);
-  const snap = await getDoc(doc(getDb(), "memberInvites", id));
-  if (snap.exists()) {
-    const status = (snap.data() as MemberInvite).status;
-    if (status === "pending" || status === "accepted") return false;
+  try {
+    return Boolean(await inviteMember(input));
+  } catch {
+    return false;
   }
-  await inviteMember(input);
-  return true;
 }
 
 export async function listPendingInvites(
@@ -274,6 +287,19 @@ export async function activateFromEmployeeEmailIndex(
         doc(getDb(), "restaurants", data.restaurantId, "members", user.uid),
         stripUndefined({ ...member }),
       );
+    } else {
+      const currentRole = existing.roleId ?? existing.role;
+      if (currentRole !== data.roleId) {
+        await updateMember({
+          restaurantId: data.restaurantId,
+          uid: user.uid,
+          patch: {
+            roleId: data.roleId,
+            displayName: data.name || existing.displayName || user.displayName,
+            active: true,
+          },
+        });
+      }
     }
 
     const restaurantIds = new Set(user.restaurantIds);
@@ -329,7 +355,13 @@ export async function acceptPendingInvites(user: AppUser): Promise<number> {
   try {
     snap = await getDocs(q);
   } catch (e) {
-    console.warn("[acceptPendingInvites] query invites:", e);
+    // Permisos / reglas no publicadas: un solo aviso, sin spamear
+    if (typeof console !== "undefined") {
+      console.warn(
+        "[acceptPendingInvites] no se pudieron leer invitaciones (¿firestore.rules publicadas?):",
+        e instanceof Error ? e.message : e,
+      );
+    }
     const fromIndex = await activateFromEmployeeEmailIndex(user);
     return fromIndex ? 1 : 0;
   }
@@ -350,6 +382,20 @@ export async function acceptPendingInvites(user: AppUser): Promise<number> {
         doc(getDb(), "restaurants", inv.restaurantId, "members", user.uid),
         stripUndefined({ ...member }),
       );
+    } else {
+      const currentRole = existing.roleId ?? existing.role;
+      // Race: membership stamped as cliente — force invite role
+      if (currentRole !== inv.roleId) {
+        await updateMember({
+          restaurantId: inv.restaurantId,
+          uid: user.uid,
+          patch: {
+            roleId: inv.roleId,
+            branchIds: inv.branchIds,
+            active: true,
+          },
+        });
+      }
     }
     restaurantIds.add(inv.restaurantId);
     if (!primaryRole) primaryRole = inv.roleId;

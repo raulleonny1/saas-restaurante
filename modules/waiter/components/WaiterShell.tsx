@@ -2,18 +2,21 @@
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
+import { canManageRestaurant, isWaiterOnlyRole } from "@/lib/roles";
 import { OfflineBanner } from "@/modules/pos/components/OfflineBanner";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import {
   Bell,
   History,
+  LayoutDashboard,
   LayoutGrid,
+  LogOut,
   QrCode,
   Receipt,
   ShoppingBag,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
 const TABS = [
@@ -32,20 +35,23 @@ export function WaiterShell({
   children: ReactNode;
   unread?: number;
 }) {
-  const { user } = useAuth();
+  const { user, role, signOut } = useAuth();
   const { restaurant, loading } = useRestaurant();
   const { ready, syncStatus, selectedTableId, tables } = usePos();
   const pathname = usePathname();
+  const router = useRouter();
   const table = tables.find((t) => t.id === selectedTableId);
+  const floorOnly = isWaiterOnlyRole(role);
+  const isAdmin = canManageRestaurant(role ?? undefined);
 
   if (!user) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-[#0e1410] px-6 text-center text-[#e7efe4]">
         <p className="font-[family-name:var(--font-display)] text-3xl">
-          App camareros
+          Sala · Meseros
         </p>
         <p className="text-sm text-[#a8b5a4]">
-          Inicia sesión con tu cuenta de personal.
+          Inicia sesión con tu cuenta de mesero o cajero.
         </p>
         <Link
           href="/login?next=/waiter"
@@ -57,10 +63,11 @@ export function WaiterShell({
     );
   }
 
-  if (loading || !ready) {
+  // Solo pantalla de carga en la primera vez (no en refrescos → evita parpadeo)
+  if ((!ready || loading) && !restaurant) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-[#0e1410] text-[#e7efe4]">
-        Cargando sala…
+        Cargando tu sala…
       </div>
     );
   }
@@ -71,17 +78,41 @@ export function WaiterShell({
         <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate font-[family-name:var(--font-display)] text-xl leading-none">
-              {restaurant?.name ?? "Sala"}
+              {floorOnly ? "Mi sala" : (restaurant?.name ?? "Sala")}
             </p>
             <p className="mt-1 text-xs text-[#8fa08c]">
               {user.displayName}
+              {restaurant?.name && floorOnly ? ` · ${restaurant.name}` : ""}
               {table ? ` · Mesa ${table.name}` : ""}
               {syncStatus === "offline" ? " · Offline" : ""}
             </p>
           </div>
-          <Link href="/pos" className="shrink-0 text-xs text-emerald-400">
-            POS
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            {isAdmin ? (
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-[#c5d0c2]"
+              >
+                <LayoutDashboard className="h-3.5 w-3.5" /> Admin sala
+              </Link>
+            ) : null}
+            {isAdmin ? (
+              <Link href="/pos" className="text-xs text-emerald-400">
+                POS
+              </Link>
+            ) : null}
+            {floorOnly ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void signOut().then(() => router.replace("/login"));
+                }}
+                className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-[#c5d0c2]"
+              >
+                <LogOut className="h-3.5 w-3.5" /> Salir
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className="mx-auto mt-2 max-w-lg">
           <OfflineBanner />
@@ -100,10 +131,6 @@ export function WaiterShell({
               t.match === "exact"
                 ? pathname === t.href
                 : pathname.startsWith(t.href);
-            const label =
-              t.href === "/waiter/notificaciones" && unread
-                ? `${t.label}`
-                : t.label;
             return (
               <Link
                 key={t.href}
@@ -113,7 +140,7 @@ export function WaiterShell({
                 }`}
               >
                 <Icon className="h-5 w-5" />
-                <span className="truncate">{label}</span>
+                <span className="truncate">{t.label}</span>
                 {t.href === "/waiter/notificaciones" && unread > 0 ? (
                   <span className="absolute right-1 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[9px] text-white">
                     {unread > 9 ? "9+" : unread}

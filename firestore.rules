@@ -51,7 +51,9 @@ service cloud.firestore {
     }
 
     function authEmail() {
-      return request.auth.token.email;
+      return request.auth.token.email != null
+        ? request.auth.token.email.lower()
+        : '';
     }
 
     // Public slug index — members of that restaurant (bootstrap + managers)
@@ -77,7 +79,13 @@ service cloud.firestore {
 
     // Cross-tenant invites (email lookup); data still references one restaurantId
     match /memberInvites/{inviteId} {
-      allow read: if isSignedIn() && (
+      // resource == null: get de doc inexistente (necesario antes de crear invitación)
+      allow get: if isSignedIn() && (
+        resource == null
+        || resource.data.email == authEmail()
+        || canManage(resource.data.restaurantId)
+      );
+      allow list: if isSignedIn() && (
         resource.data.email == authEmail()
         || canManage(resource.data.restaurantId)
       );
@@ -364,6 +372,40 @@ service cloud.firestore {
         match /messages/{messageId} {
           allow read, write: if isMember(restaurantId);
         }
+      }
+
+      // Plano de mesas / barras (POS + /waiter) — seats = asientos
+      match /tables/{tableId} {
+        allow read: if isMember(restaurantId) && (
+          !('branchId' in resource.data) ||
+          resource.data.branchId == null ||
+          canAccessBranch(restaurantId, resource.data.branchId)
+        );
+        allow create: if isMember(restaurantId)
+          && request.resource.data.restaurantId == restaurantId
+          && request.resource.data.branchId is string
+          && request.resource.data.name is string
+          && request.resource.data.seats is number
+          && request.resource.data.seats >= 1
+          && request.resource.data.seats <= 50
+          && canAccessBranch(restaurantId, request.resource.data.branchId);
+        allow update: if isMember(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == restaurantId
+          && (
+            !('branchId' in resource.data) ||
+            resource.data.branchId == null ||
+            canAccessBranch(restaurantId, resource.data.branchId)
+          )
+          && (
+            !('seats' in request.resource.data) ||
+            (
+              request.resource.data.seats is number
+              && request.resource.data.seats >= 1
+              && request.resource.data.seats <= 50
+            )
+          );
+        allow delete: if canManage(restaurantId);
       }
 
       // Default tenant collections — membership + branch ACL

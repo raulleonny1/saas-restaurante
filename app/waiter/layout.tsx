@@ -3,12 +3,12 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "Camareros · SmartServe",
-  description: "App móvil para tomar pedidos, cobrar y gestionar mesas.",
+  title: "Mi sala · SmartServe",
+  description: "Dashboard del mesero: mesas, pedidos y cobro.",
   manifest: "/manifest-waiter.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "Sala",
+    title: "Mi sala",
     statusBarStyle: "black-translucent",
   },
   robots: { index: false, follow: false },

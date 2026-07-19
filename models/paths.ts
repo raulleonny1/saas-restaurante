@@ -30,6 +30,10 @@ export const firestorePaths = {
     `restaurants/${restaurantId}/employees/${employeeId}`,
   employeeShifts: (restaurantId: string) =>
     `restaurants/${restaurantId}/employeeShifts`,
+  employeeRecords: (restaurantId: string) =>
+    `restaurants/${restaurantId}/employeeRecords`,
+  employeeRecord: (restaurantId: string, recordId: string) =>
+    `restaurants/${restaurantId}/employeeRecords/${recordId}`,
 
   // Catalog
   categories: (restaurantId: string) => `restaurants/${restaurantId}/categories`,

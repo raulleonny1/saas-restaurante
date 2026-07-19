@@ -3,6 +3,7 @@
 import { useAuth } from "@/context/AuthProvider";
 import { FloorPlan } from "@/modules/pos/components/FloorPlan";
 import { HistoryDrawer } from "@/modules/pos/components/HistoryDrawer";
+import { ManageTablesModal } from "@/modules/pos/components/ManageTablesModal";
 import { MergeTablesModal } from "@/modules/pos/components/MergeTablesModal";
 import { MoveTableModal } from "@/modules/pos/components/MoveTableModal";
 import { OfflineBanner } from "@/modules/pos/components/OfflineBanner";
@@ -20,7 +21,7 @@ import {
   Skeleton,
   toast,
 } from "@/ui";
-import { History, LayoutGrid } from "lucide-react";
+import { History, LayoutGrid, Settings2 } from "lucide-react";
 import { useState } from "react";
 
 function PosWorkspace() {
@@ -43,6 +44,7 @@ function PosWorkspace() {
   const [mergeOpen, setMergeOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [manageTablesOpen, setManageTablesOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<"floor" | "ticket">("floor");
   const [bootstrapping, setBootstrapping] = useState(false);
 
@@ -93,6 +95,15 @@ function PosWorkspace() {
             >
               <History className="h-4 w-4" /> Historial
             </Button>
+            {can("tables.manage") ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setManageTablesOpen(true)}
+              >
+                <Settings2 className="h-4 w-4" /> Mesas
+              </Button>
+            ) : null}
             {needsBootstrap ? (
               <Button
                 size="sm"
@@ -197,6 +208,10 @@ function PosWorkspace() {
       <MergeTablesModal open={mergeOpen} onClose={() => setMergeOpen(false)} />
       <SplitBillModal open={splitOpen} onClose={() => setSplitOpen(false)} />
       <HistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      <ManageTablesModal
+        open={manageTablesOpen}
+        onClose={() => setManageTablesOpen(false)}
+      />
     </div>
   );
 }

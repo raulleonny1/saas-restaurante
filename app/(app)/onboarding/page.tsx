@@ -1,18 +1,71 @@
 "use client";
 
+import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
-import { Button, Input, toast } from "@/ui";
+import { useTenant } from "@/context/TenantProvider";
+import { canCreateVenue, homePathForRole } from "@/lib/roles";
+import { reloadCurrentUser } from "@/services/auth.service";
+import { Button, Input, Skeleton, toast } from "@/ui";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 export default function OnboardingPage() {
-  const { create } = useRestaurant();
+  const { user, role, loading: authLoading } = useAuth();
+  const { create, restaurant, refresh } = useRestaurant();
+  const { refreshInvites } = useTenant();
   const router = useRouter();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const inviteAttempted = useRef(false);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+
+    if (restaurant) {
+      router.replace(homePathForRole(role));
+      setChecking(false);
+      return;
+    }
+
+    if (canCreateVenue(role)) {
+      setChecking(false);
+      return;
+    }
+
+    // Invitado (gerente, etc.): unirse al local del dueño, no crear uno nuevo
+    if (inviteAttempted.current) {
+      router.replace(homePathForRole(role));
+      setChecking(false);
+      return;
+    }
+    inviteAttempted.current = true;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const n = await refreshInvites();
+        await reloadCurrentUser();
+        if (n > 0) await refresh();
+      } finally {
+        if (!cancelled) {
+          setChecking(false);
+          router.replace(homePathForRole(role));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user, role, restaurant, refreshInvites, refresh, router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!canCreateVenue(role)) {
+      toast("Solo el propietario puede crear el restaurante", "error");
+      return;
+    }
     setLoading(true);
     try {
       await create(name.trim() || "Mi restaurante");
@@ -25,11 +78,25 @@ export default function OnboardingPage() {
     }
   }
 
+  if (authLoading || checking || !canCreateVenue(role)) {
+    return (
+      <div className="mx-auto max-w-lg space-y-3 py-10">
+        <Skeleton className="h-10 w-64" />
+        <p className="text-sm text-fg-muted">
+          {!canCreateVenue(role)
+            ? "Comprobando tu acceso al restaurante…"
+            : "Cargando…"}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-lg py-10">
       <h1 className="font-display text-4xl tracking-tight">Tu primer restaurante</h1>
       <p className="mt-3 text-fg-muted">
-        Todo quedará aislado por <code>restaurantId</code>. Podrás añadir más locales después.
+        Solo el propietario crea el local. Gerentes y supervisores entran por
+        invitación del dueño (Iniciar sesión), sin crear un restaurante nuevo.
       </p>
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
         <Input

@@ -54,7 +54,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     bindAuthProfileHook((next) => {
-      setUser(next);
+      setUser((prev) => {
+        if (
+          prev &&
+          prev.uid === next.uid &&
+          prev.role === next.role &&
+          prev.updatedAt === next.updatedAt &&
+          (prev.restaurantIds?.join(",") ?? "") ===
+            (next.restaurantIds?.join(",") ?? "") &&
+          prev.displayName === next.displayName &&
+          prev.email === next.email
+        ) {
+          return prev;
+        }
+        return next;
+      });
       setStatus("authenticated");
     });
     return () => bindAuthProfileHook(null);

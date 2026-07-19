@@ -14,11 +14,13 @@ import {
   subscribeMember,
   subscribeMembers,
 } from "@/modules/tenant/services/members.service";
+import { reloadCurrentUser } from "@/services/auth.service";
 import {
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -42,11 +44,20 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [invoices, setInvoices] = useState<TenantContextValue["invoices"]>([]);
   const [ready, setReady] = useState(false);
 
+  // Una sola pasada por uid (evitar spam de permisos + parpadeo)
+  const inviteTriedUid = useRef<string | null>(null);
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      inviteTriedUid.current = null;
+      return;
+    }
+    if (inviteTriedUid.current === user.uid) return;
+    inviteTriedUid.current = user.uid;
     void acceptPendingInvites(user)
-      .then((n) => {
-        if (n > 0) void refreshRestaurants();
+      .then(async (n) => {
+        if (n <= 0) return;
+        await reloadCurrentUser();
+        await refreshRestaurants({ silent: true });
       })
       .catch((e) => {
         console.warn("[TenantProvider] acceptPendingInvites:", e);
@@ -132,8 +143,13 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   const refreshInvites = useCallback(async () => {
     if (!user) return 0;
+    inviteTriedUid.current = null; // permitir reintento manual
     const n = await acceptPendingInvites(user);
-    if (n > 0) await refreshRestaurants();
+    inviteTriedUid.current = user.uid;
+    if (n > 0) {
+      await reloadCurrentUser();
+      await refreshRestaurants({ silent: true });
+    }
     return n;
   }, [user, refreshRestaurants]);
 

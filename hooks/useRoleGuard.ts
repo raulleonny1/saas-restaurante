@@ -1,13 +1,14 @@
 "use client";
 
 import { useAuth } from "@/context/AuthProvider";
+import { homePathForRole } from "@/lib/roles";
 import type { RoleId } from "@/types/rbac";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 /** Redirects when the signed-in user lacks one of the allowed roles. */
 export function useRoleGuard(allowed: RoleId[]) {
-  const { user, loading, hasAnyRole } = useAuth();
+  const { user, loading, hasAnyRole, role } = useAuth();
   const router = useRouter();
   const allowedAccess = hasAnyRole(allowed);
 
@@ -18,9 +19,9 @@ export function useRoleGuard(allowed: RoleId[]) {
       return;
     }
     if (!allowedAccess) {
-      router.replace("/dashboard");
+      router.replace(homePathForRole(role));
     }
-  }, [loading, user, allowedAccess, router]);
+  }, [loading, user, allowedAccess, role, router]);
 
   return { allowed: allowedAccess, loading };
 }

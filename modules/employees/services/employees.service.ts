@@ -39,6 +39,36 @@ export function subscribeEmployees(
   );
 }
 
+/** Asignación de mesas del empleado vinculado al Auth actual (app mesero). */
+export function subscribeMyEmployeeAssignment(
+  restaurantId: string,
+  uid: string,
+  email: string,
+  onData: (assignedTableIds: string[] | null) => void,
+  onError?: (e: Error) => void,
+): Unsubscribe {
+  const emailNorm = email.trim().toLowerCase();
+  return onSnapshot(
+    collection(getDb(), "restaurants", restaurantId, "employees"),
+    (snap) => {
+      const rows = snap.docs.map(
+        (d) => ({ id: d.id, ...d.data() }) as Employee,
+      );
+      const me =
+        rows.find((e) => !e.deletedAt && e.uid === uid) ??
+        rows.find(
+          (e) => !e.deletedAt && e.email.trim().toLowerCase() === emailNorm,
+        );
+      if (!me) {
+        onData(null);
+        return;
+      }
+      onData(me.assignedTableIds ?? []);
+    },
+    (err) => onError?.(err),
+  );
+}
+
 export async function clearEmployeeEmailIndex(email: string): Promise<void> {
   const key = email.trim().toLowerCase();
   if (!key) return;
@@ -87,6 +117,7 @@ export async function upsertEmployee(input: {
     uid: input.uid ?? input.employee?.uid,
     inviteSentAt,
     branchIds: input.branchIds,
+    assignedTableIds: input.employee?.assignedTableIds ?? [],
     name: input.name.trim(),
     email: input.email.trim().toLowerCase(),
     phone: input.phone?.trim() || undefined,
@@ -208,6 +239,27 @@ export async function linkEmployeeUid(input: {
     ),
     {
       uid: input.uid,
+      updatedAt: nowIso(),
+    },
+  );
+}
+
+/** Asigna mesas que el mesero debe atender (panel administrador). */
+export async function setEmployeeAssignedTables(input: {
+  restaurantId: string;
+  employeeId: string;
+  tableIds: string[];
+}): Promise<void> {
+  await updateDoc(
+    doc(
+      getDb(),
+      "restaurants",
+      input.restaurantId,
+      "employees",
+      input.employeeId,
+    ),
+    {
+      assignedTableIds: input.tableIds,
       updatedAt: nowIso(),
     },
   );

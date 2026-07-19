@@ -14,6 +14,8 @@ export interface Employee extends Timestamps, SoftDelete {
   /** Last Auth invite sent for this email (pending until they register/login). */
   inviteSentAt?: ISODateString;
   branchIds: string[];
+  /** Mesas que el mesero debe atender (asignadas por el administrador). */
+  assignedTableIds?: string[];
   name: string;
   email: string;
   phone?: string;
@@ -39,4 +41,22 @@ export interface EmployeeShift extends Timestamps {
   endsAt: ISODateString;
   roleId: RoleId;
   notes?: string;
+}
+
+/** Entrada del expediente: llamados de atención, incidencias, notas, reconocimientos. */
+export type EmployeeRecordType =
+  | "warning"
+  | "incident"
+  | "note"
+  | "praise";
+
+export interface EmployeeRecord extends Timestamps {
+  id: string;
+  restaurantId: string;
+  employeeId: string;
+  type: EmployeeRecordType;
+  title: string;
+  body: string;
+  createdByUid: string;
+  createdByName: string;
 }

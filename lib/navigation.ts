@@ -4,6 +4,7 @@ import {
   Brain,
   CalendarDays,
   ChefHat,
+  ClipboardList,
   Globe,
   LayoutDashboard,
   Megaphone,
@@ -26,8 +27,15 @@ export interface NavItem {
 /** Single source of truth for app navigation. */
 export const APP_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "dashboard" },
+  {
+    href: "/admin",
+    label: "Admin sala",
+    icon: ClipboardList,
+    module: "admin",
+  },
   { href: "/pos", label: "POS", icon: ShoppingBag, module: "pos" },
-  { href: "/waiter", label: "Camareros", icon: Smartphone, module: "waiter" },
+  /** Vista sala (dueño); el mesero entra directo a /waiter, no ve este menú. */
+  { href: "/waiter", label: "Sala meseros", icon: Smartphone, module: "waiter" },
   { href: "/kitchen", label: "Cocina", icon: ChefHat, module: "kitchen" },
   { href: "/inventory", label: "Inventario", icon: Package, module: "inventory" },
   { href: "/customers", label: "Clientes", icon: Users, module: "customers" },

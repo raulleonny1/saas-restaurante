@@ -18,6 +18,11 @@ export const ROLES_WITH_VENUE: RoleId[] = SYSTEM_ROLES.filter((r) => r.createsVe
   (r) => r.id,
 );
 
+/** Only these roles may create a venue via /onboarding. Invited staff never. */
+export function canCreateVenue(role: RoleId | string | null | undefined): boolean {
+  return !!role && ROLES_WITH_VENUE.includes(role as RoleId);
+}
+
 /** Staff roles (non-customer, non-platform). */
 export const STAFF_ROLES: RoleId[] = SYSTEM_ROLES.filter(
   (r) => r.scope === "tenant" && r.id !== "cliente",
@@ -49,6 +54,36 @@ export function isStaff(role: RoleId | undefined): boolean {
 
 export function canManageRestaurant(role: RoleId | undefined): boolean {
   return hasRole(role, ["propietario", "gerente", "super_admin"]);
+}
+
+/**
+ * Personal de sala: solo app /waiter (no dashboard admin del dueño).
+ * Cajero también opera desde sala (cobro en mesas).
+ */
+export const WAITER_ONLY_ROLES: RoleId[] = ["mesero", "cajero"];
+
+export function isWaiterOnlyRole(role: RoleId | null | undefined): boolean {
+  return !!role && WAITER_ONLY_ROLES.includes(role);
+}
+
+/** Dueño / gerente / supervisor: gestionan sala (mesas + meseros + asignación). */
+export function isSalaAdminRole(role: RoleId | null | undefined): boolean {
+  return hasRole(role ?? undefined, [
+    "propietario",
+    "gerente",
+    "supervisor",
+    "super_admin",
+  ]);
+}
+
+/** Destino post-login / home según rol. */
+export function homePathForRole(role: RoleId | string | null | undefined): string {
+  if (role === "cliente") return "/";
+  if (isWaiterOnlyRole(role as RoleId)) return "/waiter";
+  if (role === "cocinero" || role === "barista") return "/kitchen";
+  // Administrador de sala (gerente/supervisor) → su panel, no el KPI del dueño
+  if (role === "gerente" || role === "supervisor") return "/admin";
+  return "/dashboard";
 }
 
 /**

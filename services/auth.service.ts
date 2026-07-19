@@ -375,6 +375,12 @@ export async function signUp(input: SignUpCredentials): Promise<AppUser> {
         appUser,
         input.restaurantName ?? "Mi restaurante",
       );
+    } else if (resolvedRole !== "cliente") {
+      // Staff: unirse al local del dueño (invite / employeeEmailIndex)
+      const accepted = await acceptPendingInvites(appUser);
+      if (accepted > 0) {
+        appUser = (await readUserProfile(cred.user.uid)) ?? appUser;
+      }
     }
 
     // Final stamp — beats any concurrent ensureUserProfile(cliente)
@@ -539,7 +545,9 @@ export async function reloadCurrentUser(): Promise<AppUser | null> {
   if (!isFirebaseConfigured()) return null;
   const fbUser = getFirebaseAuth().currentUser;
   if (!fbUser) return null;
-  return ensureUserProfile(fbUser);
+  const profile = await ensureUserProfile(fbUser);
+  if (profile) pushProfileToSession(profile);
+  return profile;
 }
 
 type ProfileHook = (user: AppUser) => void;

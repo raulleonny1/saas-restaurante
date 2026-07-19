@@ -1,7 +1,7 @@
 "use client";
 
 import { isFirebaseConfigured } from "@/lib/firebase";
-import { ROLES_WITH_VENUE, isUserRole } from "@/lib/roles";
+import { ROLES_WITH_VENUE, homePathForRole, isUserRole } from "@/lib/roles";
 import { AuthShell, RoleSelect } from "@/modules/auth";
 import { signUp } from "@/services/auth.service";
 import type { RoleId } from "@/types/rbac";
@@ -42,7 +42,7 @@ function RegisterForm() {
     e.preventDefault();
     setLoading(true);
     try {
-      await signUp({
+      const user = await signUp({
         email,
         password,
         displayName: displayName.trim() || "Usuario",
@@ -59,7 +59,7 @@ function RegisterForm() {
             : null;
         router.replace(slug ? `/c/${slug}` : "/");
       } else {
-        router.replace("/dashboard");
+        router.replace(homePathForRole(user.role));
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error al registrar";
@@ -76,7 +76,7 @@ function RegisterForm() {
       subtitle={
         isCliente
           ? "Registro de cliente para pedidos, reservas y puntos."
-          : "Registro con Firebase Auth y rol de plataforma."
+          : "Dueño: crea tu restaurante. Si el dueño te dio de alta como gerente o mesero, usa Iniciar sesión (no registres un local nuevo)."
       }
     >
       {!firebaseReady ? (

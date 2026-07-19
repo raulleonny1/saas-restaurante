@@ -25,6 +25,7 @@ export const RESTAURANT_COLLECTIONS = [
   "invoices",
   "employees",
   "employeeShifts",
+  "employeeRecords",
   // catalog
   "categories",
   "products",

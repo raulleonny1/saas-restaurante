@@ -16,6 +16,7 @@
  *
  *   employees/{employeeId}
  *   employeeShifts/{shiftId}
+ *   employeeRecords/{recordId}
  *
  *   categories/{categoryId}
  *   products/{productId}          // recipe[] restaurant-wide

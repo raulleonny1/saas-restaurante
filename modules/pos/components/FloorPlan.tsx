@@ -2,41 +2,24 @@
 
 import { cn } from "@/lib/cn";
 import { formatCurrency } from "@/lib/format";
+import {
+  orderForTable,
+  resolveTableFloorTone,
+  TABLE_TONE_ADMIN,
+  TABLE_TONE_LABEL,
+  type TableFloorTone,
+} from "@/modules/pos/domain/tableTone";
 import { usePos } from "@/modules/pos/context/PosProvider";
-import type { Table, TableStatus } from "@/types/orders";
 import { Badge } from "@/ui";
 
-const statusTone: Record<
-  TableStatus,
-  { label: string; className: string }
-> = {
-  available: {
-    label: "Libre",
-    className: "border-border bg-bg-elevated hover:border-accent/50",
-  },
-  occupied: {
-    label: "Ocupada",
-    className: "border-accent/50 bg-accent-soft/40",
-  },
-  reserved: {
-    label: "Reservada",
-    className: "border-info/40 bg-[var(--info-soft)]",
-  },
-  dirty: {
-    label: "Sucia",
-    className: "border-warning/40 bg-[var(--warning-soft)]",
-  },
-};
-
-function tableAmount(
-  table: Table,
-  openOrders: ReturnType<typeof usePos>["openOrders"],
-) {
-  const order =
-    openOrders.find((o) => o.id === table.currentOrderId) ??
-    openOrders.find((o) => o.tableId === table.id);
-  return order?.total ?? 0;
-}
+const LEGEND: TableFloorTone[] = [
+  "free",
+  "occupied",
+  "ordering",
+  "sent",
+  "reserved",
+  "dirty",
+];
 
 export function FloorPlan() {
   const {
@@ -50,8 +33,8 @@ export function FloorPlan() {
   if (!tables.length) {
     return (
       <div className="flex h-full min-h-[240px] items-center justify-center rounded-[var(--radius-xl)] border border-dashed border-border bg-bg-muted/40 p-6 text-center text-sm text-fg-muted">
-        No hay mesas en esta sucursal. Usa «Preparar POS» para crear el plano en
-        Firestore.
+        No hay mesas en esta sucursal. Usa «Mesas» para crearlas con asientos, o
+        «Preparar POS» para un plano de ejemplo.
       </div>
     );
   }
@@ -59,17 +42,22 @@ export function FloorPlan() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-3 flex flex-wrap gap-2">
-        {(Object.keys(statusTone) as TableStatus[]).map((s) => (
-          <Badge key={s} tone="neutral">
-            {statusTone[s].label}
+        {LEGEND.map((tone) => (
+          <Badge
+            key={tone}
+            tone="neutral"
+            className={cn("border", TABLE_TONE_ADMIN[tone])}
+          >
+            {TABLE_TONE_LABEL[tone]}
           </Badge>
         ))}
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4">
         {tables.map((table) => {
+          const order = orderForTable(table, openOrders);
+          const tone = resolveTableFloorTone(table, order);
           const selected = table.id === selectedTableId;
-          const amount = tableAmount(table, openOrders);
-          const tone = statusTone[table.status];
+          const amount = order?.total ?? 0;
           return (
             <button
               key={table.id}
@@ -78,7 +66,7 @@ export function FloorPlan() {
               className={cn(
                 "flex min-h-[88px] flex-col items-start justify-between rounded-[var(--radius-lg)] border p-3 text-left transition-all duration-[var(--duration-fast)]",
                 "focus-visible:outline-none focus-visible:shadow-[0_0_0_4px_var(--ring)]",
-                tone.className,
+                TABLE_TONE_ADMIN[tone],
                 selected && "ring-2 ring-accent shadow-[var(--shadow-md)]",
               )}
             >
@@ -86,11 +74,11 @@ export function FloorPlan() {
                 <span className="text-base font-medium tracking-tight">
                   {table.name}
                 </span>
-                <span className="text-caption">{tone.label}</span>
+                <span className="text-caption">{TABLE_TONE_LABEL[tone]}</span>
               </div>
               <div className="mt-2 w-full">
                 <p className="text-caption">
-                  {table.seats} pax
+                  {table.seats} asientos
                   {table.mergedWith?.length
                     ? ` · +${table.mergedWith.length}`
                     : ""}

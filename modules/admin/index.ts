@@ -1,0 +1,1 @@
+export { AdminSalaView } from "./AdminSalaView";

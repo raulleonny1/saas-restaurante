@@ -69,7 +69,7 @@ function EmployeesWorkspace() {
         description={
           inHistory
             ? "Empleados eliminados del equipo. Puedes consultar su ficha y turnos, o restaurarlos."
-            : "Equipo activo, roles, sucursales y turnos. Eliminar mueve al historial (no borra del todo)."
+            : "Ficha completa: datos, jornada, turnos y expediente (llamados de atención). Eliminar mueve al historial."
         }
         actions={
           <div className="flex flex-wrap gap-2">

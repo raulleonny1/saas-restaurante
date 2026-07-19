@@ -41,7 +41,12 @@ import {
   refundPayment,
   subscribePaymentsForOrder,
 } from "@/modules/pos/services/payments.service";
-import { subscribeTables } from "@/modules/pos/services/tables.service";
+import {
+  createTable,
+  deleteTable,
+  subscribeTables,
+  updateTable,
+} from "@/modules/pos/services/tables.service";
 import type { Product, ProductCategory } from "@/types/catalog";
 import type {
   Order,
@@ -86,6 +91,18 @@ interface PosContextValue {
   currency: string;
   restaurantName: string;
   bootstrap: () => Promise<{ tablesCreated: number; productsCreated: number }>;
+  createFloorTable: (input: {
+    name: string;
+    seats: number;
+    zone?: "sala" | "barra" | "terraza";
+  }) => Promise<Table>;
+  updateFloorTable: (input: {
+    tableId: string;
+    name?: string;
+    seats?: number;
+    zone?: string;
+  }) => Promise<void>;
+  removeFloorTable: (tableId: string) => Promise<void>;
   openSelectedTable: () => Promise<void>;
   addProduct: (input: {
     product: Product;
@@ -576,6 +593,55 @@ export function PosProvider({ children }: { children: ReactNode }) {
     [requireOrder, payments, tables, taxPercent],
   );
 
+  const createFloorTable = useCallback(
+    async (input: {
+      name: string;
+      seats: number;
+      zone?: "sala" | "barra" | "terraza";
+    }) => {
+      if (!restaurantId || !branchId) throw new Error("Sin sucursal");
+      return createTable({
+        restaurantId,
+        branchId,
+        name: input.name,
+        seats: input.seats,
+        zone: input.zone,
+        existingCount: tables.length,
+      });
+    },
+    [restaurantId, branchId, tables.length],
+  );
+
+  const updateFloorTable = useCallback(
+    async (input: {
+      tableId: string;
+      name?: string;
+      seats?: number;
+      zone?: string;
+    }) => {
+      if (!restaurantId) throw new Error("Sin restaurante");
+      await updateTable({
+        restaurantId,
+        tableId: input.tableId,
+        name: input.name,
+        seats: input.seats,
+        zone: input.zone,
+      });
+    },
+    [restaurantId],
+  );
+
+  const removeFloorTable = useCallback(
+    async (tableId: string) => {
+      if (!restaurantId) throw new Error("Sin restaurante");
+      const table = tables.find((t) => t.id === tableId);
+      if (!table) throw new Error("Mesa no encontrada");
+      await deleteTable({ restaurantId, table });
+      if (selectedTableId === tableId) setSelectedTableId(null);
+    },
+    [restaurantId, tables, selectedTableId],
+  );
+
   const value: PosContextValue = {
     ready,
     error,
@@ -598,6 +664,9 @@ export function PosProvider({ children }: { children: ReactNode }) {
     currency,
     restaurantName,
     bootstrap,
+    createFloorTable,
+    updateFloorTable,
+    removeFloorTable,
     openSelectedTable,
     addProduct,
     setItemQty,

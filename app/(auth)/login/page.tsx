@@ -2,8 +2,9 @@
 
 import { AuthShell } from "@/modules/auth";
 import { isFirebaseConfigured } from "@/lib/firebase";
-import { STAFF_ROLES } from "@/lib/roles";
+import { homePathForRole, isWaiterOnlyRole } from "@/lib/roles";
 import { signInOrActivate } from "@/services/auth.service";
+import type { RoleId } from "@/types/rbac";
 import { Button, Input, toast } from "@/ui";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -14,13 +15,28 @@ function safeNext(raw: string | null): string | null {
   return raw;
 }
 
-function postLoginPath(role: string): string {
-  if (role === "mesero" || role === "cajero") return "/waiter";
-  if (role === "cliente") return "/";
-  if (STAFF_ROLES.includes(role as (typeof STAFF_ROLES)[number])) {
-    return "/dashboard";
+/** Mesero/cajero nunca van al panel admin, aunque venga ?next=/dashboard */
+function resolvePostLogin(
+  role: RoleId | string,
+  next: string | null,
+): string {
+  if (isWaiterOnlyRole(role as RoleId)) return "/waiter";
+  if (role === "cliente") {
+    if (typeof window !== "undefined") {
+      const slug = localStorage.getItem("customerSlug");
+      if (slug) return `/c/${slug}`;
+    }
+    return next?.startsWith("/c/") ? next : "/";
   }
-  return "/dashboard";
+  // No mandar gerente/supervisor al dashboard/onboarding del dueño
+  if (
+    (role === "gerente" || role === "supervisor") &&
+    (next === "/dashboard" || next === "/onboarding")
+  ) {
+    return homePathForRole(role);
+  }
+  if (next) return next;
+  return homePathForRole(role);
 }
 
 function LoginForm() {
@@ -51,17 +67,7 @@ function LoginForm() {
       }
 
       toast("Sesión iniciada", "success");
-      if (next) {
-        router.replace(next);
-      } else if (user.role === "cliente") {
-        const slug =
-          typeof window !== "undefined"
-            ? localStorage.getItem("customerSlug")
-            : null;
-        router.replace(slug ? `/c/${slug}` : "/");
-      } else {
-        router.replace(postLoginPath(user.role));
-      }
+      router.replace(resolvePostLogin(user.role, next));
     } catch (err) {
       toast(err instanceof Error ? err.message : "Error al entrar", "error");
     } finally {
