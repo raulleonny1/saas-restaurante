@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { formatCurrency } from "@/lib/format";
 import { isWaiterOnlyRole } from "@/lib/roles";
+import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { subscribeMyEmployeeAssignment } from "@/modules/employees/services/employees.service";
 import { ManageTablesModal } from "@/modules/pos/components/ManageTablesModal";
 import { TableOrderPreviewModal } from "@/modules/pos/components/TableOrderPreviewModal";
@@ -39,6 +40,7 @@ function TablesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { can, user, role } = useAuth();
+  const routes = useFloorRoutes();
   const { restaurantId } = useRestaurant();
   const {
     tables,
@@ -115,7 +117,7 @@ function TablesContent() {
             </button>
           ) : null}
           <Link
-            href="/waiter/mover"
+            href={routes.move}
             className="inline-flex items-center gap-1 rounded-xl border border-white/15 px-3 py-2 text-xs text-[#c5d0c2]"
           >
             <ArrowRightLeft className="h-3.5 w-3.5" /> Mover
@@ -236,7 +238,7 @@ function TablesContent() {
         onClose={() => {
           setPreviewTable(null);
           if (searchParams.get("table") || searchParams.get("tableId")) {
-            router.replace("/waiter");
+            router.replace(routes.home);
           }
         }}
         table={previewTable}
@@ -247,7 +249,7 @@ function TablesContent() {
           if (!previewTable) return;
           selectTable(previewTable.id);
           setPreviewTable(null);
-          router.push("/waiter/pedido");
+          router.push(routes.order);
         }}
       />
 

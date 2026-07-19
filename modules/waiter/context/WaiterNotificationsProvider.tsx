@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
+import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import {
   playWaiterPickupAlarm,
@@ -65,6 +66,8 @@ export function WaiterNotificationsProvider({
   const { user } = useAuth();
   const { restaurantId } = useRestaurant();
   const { openOrders, tables } = usePos();
+  const { base } = useFloorRoutes();
+  const alertsEnabled = base === "/waiter";
   const [remote, setRemote] = useState<AppNotification[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const seenReadyRef = useRef<Set<string>>(new Set());
@@ -89,10 +92,12 @@ export function WaiterNotificationsProvider({
 
   const kitchen = useMemo(
     () =>
-      kitchenReadyAlerts(openOrders, activeTableIds).filter(
-        (n) => !dismissed.has(n.id),
-      ),
-    [openOrders, activeTableIds, dismissed],
+      alertsEnabled
+        ? kitchenReadyAlerts(openOrders, activeTableIds).filter(
+            (n) => !dismissed.has(n.id),
+          )
+        : [],
+    [alertsEnabled, openOrders, activeTableIds, dismissed],
   );
 
   const notifications = useMemo(() => {

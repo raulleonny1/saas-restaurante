@@ -28,7 +28,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/r/") ||
     pathname.startsWith("/c/") ||
-    pathname.startsWith("/waiter")
+    pathname.startsWith("/waiter") ||
+    pathname.startsWith("/caja")
   ) {
     return NextResponse.next();
   }

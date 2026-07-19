@@ -57,13 +57,26 @@ export function canManageRestaurant(role: RoleId | undefined): boolean {
 }
 
 /**
- * Personal de sala: solo app /waiter (no dashboard admin del dueño).
- * Cajero también opera desde sala (cobro en mesas).
+ * Mesero: solo app /waiter (no dashboard admin del dueño).
  */
-export const WAITER_ONLY_ROLES: RoleId[] = ["mesero", "cajero"];
+export const WAITER_ONLY_ROLES: RoleId[] = ["mesero"];
 
 export function isWaiterOnlyRole(role: RoleId | null | undefined): boolean {
   return !!role && WAITER_ONLY_ROLES.includes(role);
+}
+
+/**
+ * Cajero: solo app /caja (cobros e historial; no panel del dueño).
+ */
+export const CASHIER_ONLY_ROLES: RoleId[] = ["cajero"];
+
+export function isCashierOnlyRole(role: RoleId | null | undefined): boolean {
+  return !!role && CASHIER_ONLY_ROLES.includes(role);
+}
+
+/** Apps de piso (mesero / cajero): fuera del shell admin. */
+export function isFloorAppRole(role: RoleId | null | undefined): boolean {
+  return isWaiterOnlyRole(role) || isCashierOnlyRole(role);
 }
 
 /** Cocina / barra: solo KDS + carta (sin panel del dueño). */
@@ -87,6 +100,7 @@ export function isSalaAdminRole(role: RoleId | null | undefined): boolean {
 export function homePathForRole(role: RoleId | string | null | undefined): string {
   if (role === "cliente") return "/";
   if (isWaiterOnlyRole(role as RoleId)) return "/waiter";
+  if (isCashierOnlyRole(role as RoleId)) return "/caja";
   if (role === "cocinero") return "/kitchen";
   if (role === "barista") return "/bar";
   // Administrador de sala (gerente/supervisor) → su panel, no el KPI del dueño

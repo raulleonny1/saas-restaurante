@@ -6,8 +6,8 @@ import { useTenant } from "@/context/TenantProvider";
 import {
   canCreateVenue,
   homePathForRole,
+  isFloorAppRole,
   isKitchenStaffRole,
-  isWaiterOnlyRole,
 } from "@/lib/roles";
 import { reloadCurrentUser } from "@/services/auth.service";
 import { Button, Skeleton } from "@/ui";
@@ -41,7 +41,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Mesero / cajero: no entran al panel del dueño
   useEffect(() => {
     if (!ready || loading || !user) return;
-    if (isWaiterOnlyRole(role)) {
+    if (isFloorAppRole(role)) {
       router.replace(homePathForRole(role));
     }
   }, [ready, loading, user, role, router]);
@@ -63,7 +63,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Solo el dueño crea restaurante. Gerente/supervisor/staff invitado NUNCA /onboarding.
   useEffect(() => {
     if (!ready || loading || restLoading || !user || !role) return;
-    if (isWaiterOnlyRole(role)) return;
+    if (isFloorAppRole(role)) return;
 
     if (!restaurant && canCreateVenue(role) && pathname !== "/onboarding") {
       router.replace("/onboarding");
@@ -78,7 +78,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Staff sin local: aceptar invitaciones / índice de empleados y recargar perfil
   useEffect(() => {
     if (!ready || loading || restLoading || !user || !role) return;
-    if (restaurant || canCreateVenue(role) || isWaiterOnlyRole(role)) return;
+    if (restaurant || canCreateVenue(role) || isFloorAppRole(role)) return;
     if (joinTried || joining) return;
 
     let cancelled = false;
@@ -114,7 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     refresh,
   ]);
 
-  if (!ready || loading || !user || isWaiterOnlyRole(role)) {
+  if (!ready || loading || !user || isFloorAppRole(role)) {
     return (
       <div className="flex min-h-screen items-center justify-center p-8">
         <div className="w-full max-w-sm space-y-3">

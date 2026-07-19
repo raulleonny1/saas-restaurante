@@ -1,0 +1,396 @@
+"use client";
+
+import { useRestaurant } from "@/context/RestaurantProvider";
+import { formatCurrency } from "@/lib/format";
+import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
+import { isDrinkStation } from "@/modules/kitchen/domain/stations";
+import { usePos } from "@/modules/pos/context/PosProvider";
+import { balanceDue, roundMoney } from "@/modules/pos/domain/totals";
+import { subscribePaymentsForBranch } from "@/modules/pos/services/payments.service";
+import { orderItemStatusLabel } from "@/modules/waiter/domain/itemStatus";
+import type { Order, OrderItem, OrderStatus } from "@/types/orders";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+
+function startOfTodayIso() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+function isToday(iso?: string) {
+  if (!iso) return false;
+  return iso >= startOfTodayIso();
+}
+
+function elapsedLabel(iso?: string) {
+  if (!iso) return "";
+  const mins = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 60_000));
+  if (mins < 1) return "ahora";
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  return `${h}h ${mins % 60}m`;
+}
+
+function itemStationLabel(item: OrderItem): "Barra" | "Cocina" | "Mesa" {
+  if (item.status === "open" || !item.sentAt) return "Mesa";
+  const station = item.kitchenStation;
+  if (station && isDrinkStation(station)) return "Barra";
+  return "Cocina";
+}
+
+function itemTone(status: OrderStatus): string {
+  switch (status) {
+    case "open":
+      return "border-amber-500/30 bg-amber-950/30 text-amber-100";
+    case "sent":
+    case "preparing":
+      return "border-sky-500/30 bg-sky-950/30 text-sky-100";
+    case "ready":
+      return "border-cyan-400/40 bg-cyan-950/40 text-cyan-100";
+    case "delivered":
+      return "border-emerald-500/25 bg-emerald-950/25 text-emerald-100";
+    case "cancelled":
+      return "border-white/10 bg-white/5 text-[#8fa08c] line-through";
+    default:
+      return "border-white/10 bg-white/5 text-[#c5d0c2]";
+  }
+}
+
+function orderPhase(order: Order): {
+  label: string;
+  className: string;
+} {
+  const items = order.items.filter((i) => i.status !== "cancelled");
+  if (items.length === 0) {
+    return { label: "Abierta", className: "text-amber-300" };
+  }
+  if (items.some((i) => i.status === "ready")) {
+    return { label: "Listo · retirar", className: "text-cyan-300" };
+  }
+  if (items.some((i) => i.status === "open" || !i.sentAt)) {
+    return { label: "Mesero tomando", className: "text-amber-300" };
+  }
+  if (items.every((i) => i.status === "delivered")) {
+    return { label: "Servido · por cobrar", className: "text-emerald-300" };
+  }
+  if (items.some((i) => i.status === "preparing" || i.status === "sent")) {
+    const hasBar = items.some(
+      (i) =>
+        (i.status === "sent" || i.status === "preparing") &&
+        i.kitchenStation &&
+        isDrinkStation(i.kitchenStation),
+    );
+    const hasKitchen = items.some(
+      (i) =>
+        (i.status === "sent" || i.status === "preparing") &&
+        (!i.kitchenStation || !isDrinkStation(i.kitchenStation)),
+    );
+    if (hasBar && hasKitchen) {
+      return { label: "Cocina + barra", className: "text-sky-300" };
+    }
+    if (hasBar) return { label: "En barra", className: "text-sky-300" };
+    return { label: "En cocina", className: "text-sky-300" };
+  }
+  return {
+    label: orderItemStatusLabel(order.status),
+    className: "text-[#a8b5a4]",
+  };
+}
+
+function countByStation(items: OrderItem[]) {
+  let mesa = 0;
+  let cocina = 0;
+  let barra = 0;
+  let listo = 0;
+  let servido = 0;
+  for (const i of items) {
+    if (i.status === "cancelled") continue;
+    if (i.status === "ready") {
+      listo += i.quantity;
+      continue;
+    }
+    if (i.status === "delivered") {
+      servido += i.quantity;
+      continue;
+    }
+    const st = itemStationLabel(i);
+    if (st === "Mesa") mesa += i.quantity;
+    else if (st === "Barra") barra += i.quantity;
+    else cocina += i.quantity;
+  }
+  return { mesa, cocina, barra, listo, servido };
+}
+
+export function CashierHomePage() {
+  const router = useRouter();
+  const routes = useFloorRoutes();
+  const { restaurantId } = useRestaurant();
+  const {
+    openOrders,
+    currency,
+    branchId,
+    branches,
+    setBranchId,
+    selectTable,
+  } = usePos();
+  const [cashToday, setCashToday] = useState(0);
+  const [cardToday, setCardToday] = useState(0);
+  const [tipsToday, setTipsToday] = useState(0);
+  /** Re-tick every 30s so “hace X min” stays fresh */
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!restaurantId || !branchId) return;
+    return subscribePaymentsForBranch(restaurantId, branchId, (payments) => {
+      let cash = 0;
+      let card = 0;
+      let tips = 0;
+      for (const p of payments) {
+        if (!isToday(p.paidAt ?? p.createdAt)) continue;
+        if (p.status === "refunded") {
+          if (p.method === "cash") cash -= p.amount;
+          continue;
+        }
+        if (p.status !== "completed") continue;
+        tips += p.tipAmount ?? 0;
+        if (p.method === "cash") cash += p.amount;
+        else if (p.method === "card") card += p.amount;
+      }
+      setCashToday(roundMoney(cash));
+      setCardToday(roundMoney(card));
+      setTipsToday(roundMoney(tips));
+    });
+  }, [restaurantId, branchId]);
+
+  const liveOrders = useMemo(() => {
+    return [...openOrders]
+      .filter((o) => o.status !== "paid" && o.status !== "cancelled")
+      .map((o) => ({
+        order: o,
+        due: balanceDue(o),
+        phase: orderPhase(o),
+        counts: countByStation(o.items),
+      }))
+      .sort((a, b) => b.order.updatedAt.localeCompare(a.order.updatedAt));
+  }, [openOrders]);
+
+  const liveSummary = useMemo(() => {
+    let mesero = 0;
+    let cocina = 0;
+    let barra = 0;
+    let listo = 0;
+    let porCobrar = 0;
+    for (const row of liveOrders) {
+      mesero += row.counts.mesa;
+      cocina += row.counts.cocina;
+      barra += row.counts.barra;
+      listo += row.counts.listo;
+      if (row.due > 0.009) porCobrar += 1;
+    }
+    return { mesero, cocina, barra, listo, porCobrar, mesas: liveOrders.length };
+  }, [liveOrders]);
+
+  function openPay(order: Order) {
+    if (order.tableId) selectTable(order.tableId);
+    router.push(routes.pay);
+  }
+
+  function openOrder(order: Order) {
+    if (order.tableId) selectTable(order.tableId);
+    router.push(routes.order);
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="font-[family-name:var(--font-display)] text-2xl">
+              Caja en vivo
+            </h1>
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-950/40 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+              En vivo
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-[#8fa08c]">
+            Pedidos de meseros, cocina y barra · se actualiza solo
+          </p>
+        </div>
+        {branches.length > 1 ? (
+          <select
+            value={branchId ?? ""}
+            onChange={(e) => {
+              if (e.target.value) setBranchId(e.target.value);
+            }}
+            className="rounded-lg border border-white/15 bg-[#121a14] px-2 py-1.5 text-xs"
+          >
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[#8fa08c]">
+            Efectivo
+          </p>
+          <p className="mt-1 text-sm font-medium">
+            {formatCurrency(cashToday, currency)}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[#8fa08c]">
+            Tarjeta
+          </p>
+          <p className="mt-1 text-sm font-medium">
+            {formatCurrency(cardToday, currency)}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[#8fa08c]">
+            Propinas
+          </p>
+          <p className="mt-1 text-sm font-medium">
+            {formatCurrency(tipsToday, currency)}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 text-[10px]">
+        <span className="rounded-full border border-white/15 px-2 py-1 text-[#c5d0c2]">
+          {liveSummary.mesas} mesas
+        </span>
+        <span className="rounded-full border border-amber-500/30 bg-amber-950/20 px-2 py-1 text-amber-200">
+          Mesero {liveSummary.mesero}
+        </span>
+        <span className="rounded-full border border-sky-500/30 bg-sky-950/20 px-2 py-1 text-sky-200">
+          Cocina {liveSummary.cocina}
+        </span>
+        <span className="rounded-full border border-violet-500/30 bg-violet-950/20 px-2 py-1 text-violet-200">
+          Barra {liveSummary.barra}
+        </span>
+        <span className="rounded-full border border-cyan-400/35 bg-cyan-950/25 px-2 py-1 text-cyan-200">
+          Listo {liveSummary.listo}
+        </span>
+        <span className="rounded-full border border-emerald-500/30 bg-emerald-950/20 px-2 py-1 text-emerald-200">
+          Por cobrar {liveSummary.porCobrar}
+        </span>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-medium text-[#c5d0c2]">
+          Actividad en sala ({liveOrders.length})
+        </h2>
+        <Link href={routes.history} className="text-xs text-emerald-400">
+          Caja del día
+        </Link>
+      </div>
+
+      {liveOrders.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-white/15 px-4 py-10 text-center text-sm text-[#8fa08c]">
+          No hay pedidos abiertos. Cuando un mesero abra mesa, aparecerá aquí al
+          instante.
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {liveOrders.map(({ order, due, phase, counts }) => (
+            <li
+              key={order.id}
+              className="rounded-2xl border border-white/10 bg-white/[0.04] p-3.5"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">
+                    Mesa {order.tableName || "—"}
+                  </p>
+                  <p className={`mt-0.5 text-xs font-medium ${phase.className}`}>
+                    {phase.label}
+                    <span className="font-normal text-[#6f7f6c]">
+                      {" "}
+                      · {elapsedLabel(order.updatedAt)}
+                    </span>
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-semibold text-emerald-300">
+                    {formatCurrency(due, currency)}
+                  </p>
+                  <p className="text-[10px] text-[#8fa08c]">pendiente</p>
+                </div>
+              </div>
+
+              <div className="mt-2 flex flex-wrap gap-1 text-[10px] text-[#a8b5a4]">
+                {counts.mesa > 0 ? <span>Mesa {counts.mesa}</span> : null}
+                {counts.cocina > 0 ? <span>· Cocina {counts.cocina}</span> : null}
+                {counts.barra > 0 ? <span>· Barra {counts.barra}</span> : null}
+                {counts.listo > 0 ? (
+                  <span className="text-cyan-300">· Listo {counts.listo}</span>
+                ) : null}
+                {counts.servido > 0 ? (
+                  <span className="text-emerald-300">
+                    · Servido {counts.servido}
+                  </span>
+                ) : null}
+              </div>
+
+              <ul className="mt-2.5 space-y-1.5">
+                {order.items
+                  .filter((i) => i.status !== "cancelled")
+                  .map((item) => {
+                    const station = itemStationLabel(item);
+                    return (
+                      <li
+                        key={item.id}
+                        className={`flex items-center justify-between gap-2 rounded-xl border px-2.5 py-1.5 text-xs ${itemTone(item.status)}`}
+                      >
+                        <span className="min-w-0 truncate">
+                          {item.quantity}× {item.name}
+                          {item.variantName ? ` (${item.variantName})` : ""}
+                        </span>
+                        <span className="shrink-0 text-[10px] opacity-90">
+                          {station === "Mesa"
+                            ? "Mesero"
+                            : station}
+                          {" · "}
+                          {orderItemStatusLabel(item.status)}
+                        </span>
+                      </li>
+                    );
+                  })}
+              </ul>
+
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => openOrder(order)}
+                  className="flex-1 rounded-xl border border-white/15 py-2 text-xs text-[#c5d0c2]"
+                >
+                  Ver pedido
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openPay(order)}
+                  disabled={due <= 0.009}
+                  className="flex-[1.4] rounded-xl bg-emerald-700 py-2 text-xs font-medium disabled:opacity-40"
+                >
+                  Cobrar
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

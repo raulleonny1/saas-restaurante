@@ -1,5 +1,6 @@
 "use client";
 
+import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { useWaiterNotifications } from "@/modules/waiter/context/WaiterNotificationsProvider";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import Link from "next/link";
@@ -7,6 +8,7 @@ import { useRouter } from "next/navigation";
 
 export function WaiterNotificationsPage() {
   const router = useRouter();
+  const routes = useFloorRoutes();
   const { notifications, markRead } = useWaiterNotifications();
   const { openOrders, selectTable } = usePos();
 
@@ -60,7 +62,7 @@ export function WaiterNotificationsPage() {
                   const order = openOrders.find((o) => o.id === n.referenceId);
                   if (order?.tableId) {
                     selectTable(order.tableId);
-                    router.push("/waiter/pedido");
+                    router.push(routes.order);
                   }
                 }}
               >

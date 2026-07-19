@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/context/AuthProvider";
 import { formatCurrency } from "@/lib/format";
+import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { printOrderReceipt } from "@/modules/pos/domain/print";
 import { roundMoney } from "@/modules/pos/domain/totals";
 import { usePos } from "@/modules/pos/context/PosProvider";
@@ -21,6 +22,7 @@ const CASH_CHIPS = [5, 10, 20, 50, 100];
 
 export function WaiterPayPage() {
   const { can } = useAuth();
+  const routes = useFloorRoutes();
   const {
     activeOrder,
     balance,
@@ -65,7 +67,7 @@ export function WaiterPayPage() {
           Tu cuenta aún no tiene cobro. Cierra sesión y vuelve a entrar, o pide
           al dueño que actualice el rol mesero.
         </p>
-        <Link href="/waiter/pedido" className="mt-4 inline-block text-emerald-400">
+        <Link href={routes.order} className="mt-4 inline-block text-emerald-400">
           Volver al pedido
         </Link>
       </div>
@@ -76,8 +78,8 @@ export function WaiterPayPage() {
     return (
       <div className="py-10 text-center text-sm text-[#a8b5a4]">
         Selecciona una mesa con ticket abierto.{" "}
-        <Link href="/waiter" className="text-emerald-400">
-          Ir a mesas
+        <Link href={routes.home} className="text-emerald-400">
+          Ver pedidos en vivo
         </Link>
       </div>
     );
@@ -315,7 +317,7 @@ export function WaiterPayPage() {
             Ver / imprimir ticket
           </button>
           <Link
-            href="/waiter/historial"
+            href={routes.history}
             className="block text-center text-xs text-emerald-400"
           >
             Ir a Archivo · Caja del día

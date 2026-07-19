@@ -1,5 +1,6 @@
 "use client";
 
+import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import { useWaiterNotifications } from "@/modules/waiter/context/WaiterNotificationsProvider";
 import {
@@ -16,6 +17,7 @@ import { useEffect, useState } from "react";
  */
 export function ReadyPickupBanner() {
   const router = useRouter();
+  const routes = useFloorRoutes();
   const { selectTable, openOrders, tables } = usePos();
   const { notifications, markRead, unlockAudio } = useWaiterNotifications();
   const [soundOn, setSoundOn] = useState(false);
@@ -108,9 +110,9 @@ export function ReadyPickupBanner() {
                 await playWaiterPickupAlarm();
                 if (order?.tableId) {
                   selectTable(order.tableId);
-                  router.push("/waiter/pedido");
+                  router.push(routes.order);
                 } else {
-                  router.push("/waiter/notificaciones");
+                  router.push(routes.notifications);
                 }
               })();
             }}

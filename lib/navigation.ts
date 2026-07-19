@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Banknote,
   BarChart3,
   Brain,
   CalendarDays,
@@ -61,6 +62,14 @@ export const APP_NAV: NavItem[] = [
     icon: Smartphone,
     module: "waiter",
     anyOf: ["pos.access"],
+    mobile: true,
+  },
+  {
+    href: "/caja",
+    label: "Caja",
+    icon: Banknote,
+    module: "pos",
+    anyOf: ["payments.charge", "payments.cash_drawer"],
     mobile: true,
   },
   {

@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/context/AuthProvider";
 import { formatCurrency } from "@/lib/format";
+import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { ProductGrid } from "@/modules/pos/components/ProductGrid";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import { lineTotal } from "@/modules/pos/domain/totals";
@@ -12,6 +13,7 @@ import { useMemo, useState } from "react";
 
 export function WaiterOrderPage() {
   const { can } = useAuth();
+  const routes = useFloorRoutes();
   const {
     selectedTableId,
     tables,
@@ -48,17 +50,19 @@ export function WaiterOrderPage() {
         <p className="text-sm text-[#a8b5a4]">Selecciona una mesa o escanea QR.</p>
         <div className="flex justify-center gap-2">
           <Link
-            href="/waiter"
+            href={routes.home}
             className="rounded-xl bg-emerald-700 px-4 py-2 text-sm"
           >
-            Mesas
+            {routes.base === "/caja" ? "En vivo" : "Mesas"}
           </Link>
-          <Link
-            href="/waiter/qr"
-            className="rounded-xl border border-white/20 px-4 py-2 text-sm"
-          >
-            Escanear QR
-          </Link>
+          {routes.base === "/waiter" ? (
+            <Link
+              href={routes.qr}
+              className="rounded-xl border border-white/20 px-4 py-2 text-sm"
+            >
+              Escanear QR
+            </Link>
+          ) : null}
         </div>
       </div>
     );
@@ -68,11 +72,11 @@ export function WaiterOrderPage() {
     return (
       <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-5">
         <Link
-          href="/waiter"
+          href={routes.home}
           className="inline-flex items-center gap-1.5 text-sm text-emerald-400"
         >
           <ArrowLeft className="h-4 w-4" />
-          Volver a mesas
+          {routes.base === "/caja" ? "Volver" : "Volver a mesas"}
         </Link>
         <h1 className="font-[family-name:var(--font-display)] text-2xl">
           Mesa {table.name}
@@ -106,11 +110,11 @@ export function WaiterOrderPage() {
   return (
     <div className="space-y-3">
       <Link
-        href="/waiter"
+        href={routes.home}
         className="inline-flex items-center gap-1.5 text-sm text-emerald-400"
       >
         <ArrowLeft className="h-4 w-4" />
-        Volver a mesas
+        {routes.base === "/caja" ? "Volver" : "Volver a mesas"}
         <span className="font-normal text-[#8fa08c]">
           · el pedido se guarda
         </span>
@@ -128,14 +132,14 @@ export function WaiterOrderPage() {
         <div className="flex gap-1.5">
           {canMove ? (
             <Link
-              href="/waiter/mover"
+              href={routes.move}
               className="rounded-lg border border-white/15 px-2.5 py-1.5 text-xs"
             >
               Mover
             </Link>
           ) : null}
           <Link
-            href="/waiter/cobrar"
+            href={routes.pay}
             className="rounded-lg bg-emerald-800 px-2.5 py-1.5 text-xs"
           >
             Cobrar

@@ -4,8 +4,8 @@ import { AuthShell } from "@/modules/auth";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import {
   homePathForRole,
+  isFloorAppRole,
   isKitchenStaffRole,
-  isWaiterOnlyRole,
 } from "@/lib/roles";
 import { signInOrActivate } from "@/services/auth.service";
 import type { RoleId } from "@/types/rbac";
@@ -24,7 +24,7 @@ function resolvePostLogin(
   role: RoleId | string,
   next: string | null,
 ): string {
-  if (isWaiterOnlyRole(role as RoleId)) return "/waiter";
+  if (isFloorAppRole(role as RoleId)) return homePathForRole(role);
   if (isKitchenStaffRole(role as RoleId)) return homePathForRole(role);
   if (role === "cliente") {
     if (typeof window !== "undefined") {

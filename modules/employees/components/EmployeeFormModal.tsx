@@ -240,8 +240,9 @@ export function EmployeeFormModal({
 
       {!employee ? (
         <p className="mt-4 text-xs text-fg-muted">
-          El mesero no se registra aparte: entra en <strong>/login</strong> con
-          este email y elige su contraseña la primera vez.
+          El empleado no se registra aparte: entra en <strong>/login</strong> con
+          este email y elige su contraseña la primera vez. Mesero → /waiter ·
+          Cajero → /caja.
         </p>
       ) : null}
     </Modal>

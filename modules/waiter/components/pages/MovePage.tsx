@@ -1,12 +1,14 @@
 "use client";
 
 import { useAuth } from "@/context/AuthProvider";
+import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import Link from "next/link";
 import { useState } from "react";
 
 export function WaiterMovePage() {
   const { can } = useAuth();
+  const routes = useFloorRoutes();
   const { tables, activeOrder, moveToTable, selectTable } = usePos();
   const [targetId, setTargetId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,7 +36,7 @@ export function WaiterMovePage() {
     return (
       <div className="py-10 text-center text-sm text-[#a8b5a4]">
         Abre un ticket primero.{" "}
-        <Link href="/waiter" className="text-emerald-400">
+        <Link href={routes.home} className="text-emerald-400">
           Mesas
         </Link>
       </div>

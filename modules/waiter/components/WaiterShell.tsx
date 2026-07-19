@@ -2,7 +2,8 @@
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
-import { canManageRestaurant, isWaiterOnlyRole } from "@/lib/roles";
+import { canManageRestaurant, isFloorAppRole } from "@/lib/roles";
+import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { OfflineBanner } from "@/modules/pos/components/OfflineBanner";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import { ReadyPickupBanner } from "@/modules/waiter/components/ReadyPickupBanner";
@@ -21,21 +22,12 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   isWaiterAudioUnlocked,
   playWaiterPickupAlarm,
   unlockWaiterAudio,
 } from "@/modules/waiter/domain/alertSound";
-
-const TABS = [
-  { href: "/waiter", label: "Mesas", icon: LayoutGrid, match: "exact" as const },
-  { href: "/waiter/pedido", label: "Pedido", icon: ShoppingBag },
-  { href: "/waiter/cobrar", label: "Cobrar", icon: Receipt },
-  { href: "/waiter/qr", label: "QR", icon: QrCode },
-  { href: "/waiter/historial", label: "Caja", icon: History },
-  { href: "/waiter/notificaciones", label: "Avisos", icon: Bell },
-];
 
 export function WaiterShell({
   children,
@@ -48,24 +40,57 @@ export function WaiterShell({
   const { restaurant, loading } = useRestaurant();
   const { ready, syncStatus, selectedTableId, tables } = usePos();
   const { unlockAudio } = useWaiterNotifications();
+  const routes = useFloorRoutes();
   const pathname = usePathname();
   const router = useRouter();
   const table = tables.find((t) => t.id === selectedTableId);
-  const floorOnly = isWaiterOnlyRole(role);
+  const floorOnly = isFloorAppRole(role);
+  const isCashier = routes.base === "/caja";
   const isAdmin = canManageRestaurant(role ?? undefined);
   const [audioReady, setAudioReady] = useState(false);
+
+  const tabs = useMemo(() => {
+    if (isCashier) {
+      return [
+        {
+          href: routes.home,
+          label: "En vivo",
+          icon: LayoutGrid,
+          match: "exact" as const,
+        },
+        { href: routes.pay, label: "Cobrar", icon: Receipt },
+        { href: routes.history, label: "Caja", icon: History },
+        { href: routes.order, label: "Pedido", icon: ShoppingBag },
+      ];
+    }
+    return [
+      {
+        href: routes.home,
+        label: "Mesas",
+        icon: LayoutGrid,
+        match: "exact" as const,
+      },
+      { href: routes.order, label: "Pedido", icon: ShoppingBag },
+      { href: routes.pay, label: "Cobrar", icon: Receipt },
+      { href: routes.qr, label: "QR", icon: QrCode },
+      { href: routes.history, label: "Caja", icon: History },
+      { href: routes.notifications, label: "Avisos", icon: Bell },
+    ];
+  }, [isCashier, routes]);
 
   if (!user) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-[#0e1410] px-6 text-center text-[#e7efe4]">
         <p className="font-[family-name:var(--font-display)] text-3xl">
-          Sala · Meseros
+          {isCashier ? "Caja" : "Sala · Meseros"}
         </p>
         <p className="text-sm text-[#a8b5a4]">
-          Inicia sesión con tu cuenta de mesero o cajero.
+          {isCashier
+            ? "Inicia sesión con tu cuenta de cajero."
+            : "Inicia sesión con tu cuenta de mesero."}
         </p>
         <Link
-          href="/login?next=/waiter"
+          href={`/login?next=${routes.home}`}
           className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-medium"
         >
           Entrar
@@ -78,7 +103,7 @@ export function WaiterShell({
   if ((!ready || loading) && !restaurant) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-[#0e1410] text-[#e7efe4]">
-        Cargando tu sala…
+        {isCashier ? "Cargando caja…" : "Cargando tu sala…"}
       </div>
     );
   }
@@ -87,18 +112,23 @@ export function WaiterShell({
     <div
       className="flex min-h-dvh flex-col bg-[#0e1410] text-[#e7efe4]"
       onPointerDown={() => {
+        if (isCashier) return;
         void unlockAudio().then(() => {
           if (isWaiterAudioUnlocked()) setAudioReady(true);
         });
       }}
     >
-      <ReadyPickupBanner />
+      {!isCashier ? <ReadyPickupBanner /> : null}
 
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0e1410]/95 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
         <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate font-[family-name:var(--font-display)] text-xl leading-none">
-              {floorOnly ? "Mi sala" : (restaurant?.name ?? "Sala")}
+              {isCashier
+                ? "Mi caja"
+                : floorOnly
+                  ? "Mi sala"
+                  : (restaurant?.name ?? "Sala")}
             </p>
             <p className="mt-1 text-xs text-[#8fa08c]">
               {user.displayName}
@@ -108,7 +138,7 @@ export function WaiterShell({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {!audioReady ? (
+            {!isCashier && !audioReady ? (
               <button
                 type="button"
                 onClick={() => {
@@ -157,7 +187,7 @@ export function WaiterShell({
 
       <main
         className={`mx-auto w-full max-w-lg flex-1 px-4 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] ${
-          unread > 0 ? "pt-36" : ""
+          !isCashier && unread > 0 ? "pt-36" : ""
         }`}
       >
         {children}
@@ -165,7 +195,7 @@ export function WaiterShell({
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#121a14]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
         <div className="mx-auto flex max-w-lg justify-between gap-0.5 px-1 py-1.5">
-          {TABS.map((t) => {
+          {tabs.map((t) => {
             const Icon = t.icon;
             const active =
               t.match === "exact"
@@ -181,7 +211,9 @@ export function WaiterShell({
               >
                 <Icon className="h-5 w-5" />
                 <span className="truncate">{t.label}</span>
-                {t.href === "/waiter/notificaciones" && unread > 0 ? (
+                {!isCashier &&
+                t.href === routes.notifications &&
+                unread > 0 ? (
                   <span className="absolute right-1 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[9px] text-white">
                     {unread > 9 ? "9+" : unread}
                   </span>

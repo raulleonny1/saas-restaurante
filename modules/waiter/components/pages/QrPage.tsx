@@ -1,5 +1,6 @@
 "use client";
 
+import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import { QrScanner } from "@/modules/waiter/components/QrScanner";
 import { encodeTableQr } from "@/modules/waiter/domain/qr";
@@ -8,6 +9,7 @@ import { useCallback, useState } from "react";
 
 export function WaiterQrPage() {
   const router = useRouter();
+  const routes = useFloorRoutes();
   const { tables, selectTable, selectedTableId } = usePos();
   const [last, setLast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -22,9 +24,9 @@ export function WaiterQrPage() {
       setError(null);
       setLast(table.name);
       selectTable(table.id);
-      router.push("/waiter/pedido");
+      router.push(routes.order);
     },
-    [tables, selectTable, router],
+    [tables, selectTable, router, routes.order],
   );
 
   const selected = tables.find((t) => t.id === selectedTableId);
