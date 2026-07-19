@@ -6,7 +6,12 @@ import { formatCurrency } from "@/lib/format";
 import { isWaiterOnlyRole } from "@/lib/roles";
 import { subscribeMyEmployeeAssignment } from "@/modules/employees/services/employees.service";
 import { ManageTablesModal } from "@/modules/pos/components/ManageTablesModal";
+import { TableOrderPreviewModal } from "@/modules/pos/components/TableOrderPreviewModal";
 import { usePos } from "@/modules/pos/context/PosProvider";
+import {
+  formatElapsedShort,
+  orderPreviewLines,
+} from "@/modules/pos/domain/orderPreview";
 import {
   orderForTable,
   resolveTableFloorTone,
@@ -14,6 +19,7 @@ import {
   TABLE_TONE_WAITER,
   type TableFloorTone,
 } from "@/modules/pos/domain/tableTone";
+import type { Table } from "@/types/orders";
 import { ArrowRightLeft, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -42,6 +48,7 @@ function TablesContent() {
     setBranchId,
   } = usePos();
   const [manageOpen, setManageOpen] = useState(false);
+  const [previewTable, setPreviewTable] = useState<Table | null>(null);
   const [assignedTableIds, setAssignedTableIds] = useState<string[] | null>(
     null,
   );
@@ -73,11 +80,14 @@ function TablesContent() {
   useEffect(() => {
     const tableId = searchParams.get("table") || searchParams.get("tableId");
     if (!tableId || !visibleTables.length) return;
-    const exists = visibleTables.some((t) => t.id === tableId);
+    const exists = visibleTables.find((t) => t.id === tableId);
     if (!exists) return;
-    selectTable(tableId);
-    router.replace("/waiter/pedido");
-  }, [searchParams, visibleTables, selectTable, router]);
+    setPreviewTable(exists);
+  }, [searchParams, visibleTables]);
+
+  const previewOrder = previewTable
+    ? orderForTable(previewTable, openOrders)
+    : null;
 
   return (
     <div className="space-y-4">
@@ -87,9 +97,8 @@ function TablesContent() {
             Tu sala
           </h1>
           <p className="text-sm text-[#a8b5a4]">
-            {floorOnly
-              ? "Mesas que te asignó el administrador · toca para pedir."
-              : "Vista completa · toca una mesa para pedir."}
+            En cada mesa ves lo pedido y el total. Toca para la previa; luego
+            entra al pedido si quieres.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -142,15 +151,16 @@ function TablesContent() {
           const tone = resolveTableFloorTone(table, order);
           const selected = table.id === selectedTableId;
           const zoneLabel = table.zone ? ` · ${table.zone}` : "";
+          const lines = orderPreviewLines(order, 3);
+          const elapsed = order
+            ? formatElapsedShort(order.openedAt)
+            : "";
           return (
             <button
               key={table.id}
               type="button"
-              onClick={() => {
-                selectTable(table.id);
-                router.push("/waiter/pedido");
-              }}
-              className={`min-h-[96px] rounded-2xl border p-3 text-left transition ${TABLE_TONE_WAITER[tone]} ${
+              onClick={() => setPreviewTable(table)}
+              className={`min-h-[120px] rounded-2xl border p-3 text-left transition ${TABLE_TONE_WAITER[tone]} ${
                 selected ? "ring-2 ring-emerald-500" : ""
               }`}
             >
@@ -160,12 +170,27 @@ function TablesContent() {
                   {TABLE_TONE_LABEL[tone]}
                 </span>
               </div>
-              <p className="mt-1 text-xs text-[#8fa08c]">
+              <p className="mt-0.5 text-[11px] text-[#8fa08c]">
                 {table.seats} asientos
                 {zoneLabel}
+                {elapsed ? ` · ${elapsed}` : ""}
               </p>
+              {lines.length ? (
+                <ul className="mt-2 space-y-0.5">
+                  {lines.map((line) => (
+                    <li
+                      key={line}
+                      className="truncate text-[11px] leading-snug text-[#d5e0d2]"
+                    >
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-xs text-[#5a6b57]">Sin pedidos</p>
+              )}
               {order ? (
-                <p className="mt-2 text-sm font-medium text-white/90">
+                <p className="mt-2 text-sm font-semibold text-white/95">
                   {formatCurrency(order.total, currency)}
                 </p>
               ) : (
@@ -202,6 +227,26 @@ function TablesContent() {
           )}
         </div>
       ) : null}
+
+      <TableOrderPreviewModal
+        open={Boolean(previewTable)}
+        onClose={() => {
+          setPreviewTable(null);
+          if (searchParams.get("table") || searchParams.get("tableId")) {
+            router.replace("/waiter");
+          }
+        }}
+        table={previewTable}
+        order={previewOrder}
+        currency={currency}
+        tone="waiter"
+        onEnter={() => {
+          if (!previewTable) return;
+          selectTable(previewTable.id);
+          setPreviewTable(null);
+          router.push("/waiter/pedido");
+        }}
+      />
 
       <ManageTablesModal
         open={manageOpen}

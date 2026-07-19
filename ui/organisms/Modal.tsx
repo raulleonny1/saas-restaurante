@@ -63,14 +63,15 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         className={cn(
-          "relative z-10 w-full rounded-[var(--radius-xl)] border border-border bg-bg-elevated p-5 shadow-[var(--shadow-lg)] animate-scale-in sm:p-6",
+          // text-fg: no heredar color claro de shells oscuros (/waiter)
+          "relative z-10 w-full rounded-[var(--radius-xl)] border border-border bg-bg-elevated p-5 text-fg shadow-[var(--shadow-lg)] animate-scale-in sm:p-6",
           sizes[size],
           className,
         )}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-title">{title}</h2>
+            <h2 className="text-title text-fg">{title}</h2>
             {description ? (
               <p className="mt-1 text-sm text-fg-muted">{description}</p>
             ) : null}

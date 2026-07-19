@@ -388,11 +388,13 @@ export function PosProvider({ children }: { children: ReactNode }) {
         name: input.product.name,
         quantity: input.quantity ?? 1,
         unitPrice,
-        variantId: variant?.id,
-        variantName: variant?.name,
-        modifiers: input.modifiers,
-        kitchenNotes: input.kitchenNotes,
         status: "open",
+        ...(variant?.id ? { variantId: variant.id } : {}),
+        ...(variant?.name ? { variantName: variant.name } : {}),
+        ...(input.modifiers?.length ? { modifiers: input.modifiers } : {}),
+        ...(input.kitchenNotes?.trim()
+          ? { kitchenNotes: input.kitchenNotes.trim() }
+          : {}),
       };
       await runOrQueue(
         "updateOrder",

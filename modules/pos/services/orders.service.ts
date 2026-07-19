@@ -1,6 +1,7 @@
 "use client";
 
 import { getDb } from "@/lib/firebase";
+import { stripUndefined } from "@/lib/firestore-safe";
 import { recalculateOrder, roundMoney } from "@/modules/pos/domain/totals";
 import type { CurrencyCode } from "@/types/common";
 import type {
@@ -37,7 +38,10 @@ async function appendEvent(
   const ref = doc(getDb(), "restaurants", restaurantId, "orderEvents", id);
   const batch = writeBatch(getDb());
   const stamp = nowIso();
-  batch.set(ref, { ...event, id, createdAt: stamp, updatedAt: stamp });
+  batch.set(
+    ref,
+    stripUndefined({ ...event, id, createdAt: stamp, updatedAt: stamp }),
+  );
   await batch.commit();
 }
 
@@ -178,7 +182,10 @@ export async function openTable(input: OpenTableInput): Promise<Order> {
   };
 
   const batch = writeBatch(getDb());
-  batch.set(doc(getDb(), "restaurants", restaurantId, "orders", orderId), order);
+  batch.set(
+    doc(getDb(), "restaurants", restaurantId, "orders", orderId),
+    stripUndefined({ ...order }),
+  );
   batch.update(doc(getDb(), "restaurants", restaurantId, "tables", table.id), {
     status: "occupied",
     currentOrderId: orderId,
@@ -240,7 +247,10 @@ export async function patchOrderTotals(
   };
 
   const batch = writeBatch(getDb());
-  batch.set(doc(getDb(), "restaurants", restaurantId, "orders", order.id), next);
+  batch.set(
+    doc(getDb(), "restaurants", restaurantId, "orders", order.id),
+    stripUndefined({ ...next }),
+  );
   await batch.commit();
 
   await appendEvent(restaurantId, {
@@ -273,7 +283,10 @@ export async function saveOrder(
     updatedAt: nowIso(),
   };
   const batch = writeBatch(getDb());
-  batch.set(doc(getDb(), "restaurants", restaurantId, "orders", order.id), next);
+  batch.set(
+    doc(getDb(), "restaurants", restaurantId, "orders", order.id),
+    stripUndefined({ ...next }),
+  );
   await batch.commit();
 
   if (eventType) {

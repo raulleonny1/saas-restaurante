@@ -1,6 +1,7 @@
 "use client";
 
 import { getDb } from "@/lib/firebase";
+import { stripUndefined } from "@/lib/firestore-safe";
 import { balanceDue, recalculateOrder, roundMoney } from "@/modules/pos/domain/totals";
 import type {
   Order,
@@ -111,7 +112,10 @@ export async function chargeOrder(input: ChargeInput): Promise<{
     doc(getDb(), "restaurants", restaurantId, "payments", paymentId),
     payment,
   );
-  batch.set(doc(getDb(), "restaurants", restaurantId, "orders", order.id), next);
+  batch.set(
+    doc(getDb(), "restaurants", restaurantId, "orders", order.id),
+    stripUndefined({ ...next }),
+  );
 
   if (fullyPaid) {
     const related = tables.filter(
@@ -194,7 +198,10 @@ export async function refundPayment(input: {
       updatedAt: stamp,
     },
   );
-  batch.set(doc(getDb(), "restaurants", restaurantId, "orders", order.id), next);
+  batch.set(
+    doc(getDb(), "restaurants", restaurantId, "orders", order.id),
+    stripUndefined({ ...next }),
+  );
 
   if (reopenTable && amountPaid <= 0.001) {
     batch.update(

@@ -129,7 +129,7 @@ export function ProductCustomizeModal({
                   className={`rounded-[var(--radius-md)] border px-3 py-2 text-sm ${
                     variantId === v.id
                       ? "border-accent bg-accent-soft text-accent"
-                      : "border-border bg-bg-elevated"
+                      : "border-border bg-bg-muted text-fg"
                   }`}
                 >
                   {v.name}
@@ -159,7 +159,7 @@ export function ProductCustomizeModal({
                     className={`rounded-[var(--radius-md)] border px-3 py-2 text-sm ${
                       on
                         ? "border-accent bg-accent-soft text-accent"
-                        : "border-border bg-bg-elevated"
+                        : "border-border bg-bg-muted text-fg"
                     }`}
                   >
                     {opt.name}

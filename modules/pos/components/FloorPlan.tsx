@@ -2,6 +2,11 @@
 
 import { cn } from "@/lib/cn";
 import { formatCurrency } from "@/lib/format";
+import { TableOrderPreviewModal } from "@/modules/pos/components/TableOrderPreviewModal";
+import {
+  formatElapsedShort,
+  orderPreviewLines,
+} from "@/modules/pos/domain/orderPreview";
 import {
   orderForTable,
   resolveTableFloorTone,
@@ -10,7 +15,9 @@ import {
   type TableFloorTone,
 } from "@/modules/pos/domain/tableTone";
 import { usePos } from "@/modules/pos/context/PosProvider";
+import type { Table } from "@/types/orders";
 import { Badge } from "@/ui";
+import { useState } from "react";
 
 const LEGEND: TableFloorTone[] = [
   "free",
@@ -29,6 +36,7 @@ export function FloorPlan() {
     selectTable,
     currency,
   } = usePos();
+  const [previewTable, setPreviewTable] = useState<Table | null>(null);
 
   if (!tables.length) {
     return (
@@ -38,6 +46,10 @@ export function FloorPlan() {
       </div>
     );
   }
+
+  const previewOrder = previewTable
+    ? orderForTable(previewTable, openOrders)
+    : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -57,14 +69,17 @@ export function FloorPlan() {
           const order = orderForTable(table, openOrders);
           const tone = resolveTableFloorTone(table, order);
           const selected = table.id === selectedTableId;
-          const amount = order?.total ?? 0;
+          const lines = orderPreviewLines(order, 3);
+          const elapsed = order
+            ? formatElapsedShort(order.openedAt)
+            : "";
           return (
             <button
               key={table.id}
               type="button"
-              onClick={() => selectTable(table.id)}
+              onClick={() => setPreviewTable(table)}
               className={cn(
-                "flex min-h-[88px] flex-col items-start justify-between rounded-[var(--radius-lg)] border p-3 text-left transition-all duration-[var(--duration-fast)]",
+                "flex min-h-[110px] flex-col items-start rounded-[var(--radius-lg)] border p-3 text-left transition-all duration-[var(--duration-fast)]",
                 "focus-visible:outline-none focus-visible:shadow-[0_0_0_4px_var(--ring)]",
                 TABLE_TONE_ADMIN[tone],
                 selected && "ring-2 ring-accent shadow-[var(--shadow-md)]",
@@ -76,25 +91,49 @@ export function FloorPlan() {
                 </span>
                 <span className="text-caption">{TABLE_TONE_LABEL[tone]}</span>
               </div>
-              <div className="mt-2 w-full">
-                <p className="text-caption">
-                  {table.seats} asientos
-                  {table.mergedWith?.length
-                    ? ` · +${table.mergedWith.length}`
-                    : ""}
-                </p>
-                {amount > 0 ? (
-                  <p className="mt-0.5 text-sm font-medium">
-                    {formatCurrency(amount, currency)}
-                  </p>
-                ) : (
-                  <p className="mt-0.5 text-sm text-fg-muted">—</p>
-                )}
-              </div>
+              <p className="mt-0.5 text-caption">
+                {table.seats} asientos
+                {table.mergedWith?.length
+                  ? ` · +${table.mergedWith.length}`
+                  : ""}
+                {elapsed ? ` · ${elapsed}` : ""}
+              </p>
+              {lines.length ? (
+                <ul className="mt-1.5 w-full space-y-0.5">
+                  {lines.map((line) => (
+                    <li
+                      key={line}
+                      className="truncate text-[11px] leading-snug text-fg"
+                    >
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1.5 text-[11px] text-fg-muted">Sin pedidos</p>
+              )}
+              <p className="mt-auto pt-1.5 text-sm font-medium">
+                {order
+                  ? formatCurrency(order.total, currency)
+                  : "Sin ticket"}
+              </p>
             </button>
           );
         })}
       </div>
+
+      <TableOrderPreviewModal
+        open={Boolean(previewTable)}
+        onClose={() => setPreviewTable(null)}
+        table={previewTable}
+        order={previewOrder}
+        currency={currency}
+        onEnter={() => {
+          if (!previewTable) return;
+          selectTable(previewTable.id);
+          setPreviewTable(null);
+        }}
+      />
     </div>
   );
 }
