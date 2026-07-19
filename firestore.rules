@@ -112,7 +112,20 @@ service cloud.firestore {
       match /members/{uid} {
         allow read: if isMember(restaurantId) || isSelf(uid);
         allow create: if canManage(restaurantId) || isSelfMemberCreate(restaurantId, uid);
-        allow update, delete: if canManage(restaurantId);
+        // Managers, or self-heal when users/{uid}.role is staff but member was raced as cliente
+        allow update: if canManage(restaurantId) || (
+          isSelf(uid)
+          && resource.data.uid == request.auth.uid
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+            in ['propietario', 'gerente', 'supervisor', 'cajero', 'mesero', 'cocinero', 'barista', 'repartidor', 'super_admin']
+          && request.resource.data.roleId
+            == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          && request.resource.data.role
+            == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.restaurantId == restaurantId
+        );
+        allow delete: if canManage(restaurantId);
       }
 
       match /branches/{branchId} {

@@ -60,11 +60,39 @@ async function readUserProfile(uid: string): Promise<AppUser | null> {
  * - Create profile only if missing (transaction).
  * - Repair cliente + restaurantIds using membership / ownership.
  */
+async function syncMemberRole(
+  restaurantId: string,
+  uid: string,
+  roleId: RoleId,
+  stamp: string,
+): Promise<void> {
+  const memberRef = doc(
+    getDb(),
+    "restaurants",
+    restaurantId,
+    "members",
+    uid,
+  );
+  const cache = buildMemberPermissionCache({ roleId });
+  await updateDoc(memberRef, {
+    role: roleId,
+    roleId,
+    permissionsCached: cache.permissionsCached,
+    permissionsVersion: cache.permissionsVersion,
+    updatedAt: stamp,
+  });
+}
+
+/**
+ * Fixes signup race: users.role and/or members.roleId left as "cliente"
+ * even though the account owns restaurants.
+ */
 async function repairMislabeledOwner(user: AppUser): Promise<AppUser> {
-  if (user.role !== "cliente" || !user.restaurantIds?.length) return user;
+  if (!user.restaurantIds?.length) return user;
 
   const stamp = new Date().toISOString();
-  let repairedRole: RoleId | null = null;
+  let nextRole: RoleId = user.role;
+  let changed = false;
 
   for (const restaurantId of user.restaurantIds) {
     const memberRef = doc(
@@ -75,48 +103,79 @@ async function repairMislabeledOwner(user: AppUser): Promise<AppUser> {
       user.uid,
     );
     const memberSnap = await getDoc(memberRef);
-    if (!memberSnap.exists()) continue;
+    if (!memberSnap.exists()) {
+      if (user.role === "cliente" || !user.role) {
+        nextRole = "propietario";
+        changed = true;
+      }
+      continue;
+    }
 
     const member = memberSnap.data() as Member;
     const memberRole = (member.roleId ?? member.role) as RoleId;
 
     if (memberRole === "propietario" || memberRole === "gerente") {
-      repairedRole = memberRole;
+      if (user.role !== memberRole) {
+        nextRole = memberRole;
+        changed = true;
+      }
       break;
     }
 
-    // Both profile and member stamped as cliente after signup race → owner
     if (memberRole === "cliente") {
-      const cache = buildMemberPermissionCache({ roleId: "propietario" });
-      await updateDoc(memberRef, {
-        role: "propietario",
-        roleId: "propietario",
-        permissionsCached: cache.permissionsCached,
-        permissionsVersion: cache.permissionsVersion,
-        updatedAt: stamp,
-      });
-      repairedRole = "propietario";
+      // Venue owner membership raced as cliente → force propietario
+      nextRole =
+        user.role && user.role !== "cliente" ? user.role : "propietario";
+      try {
+        await syncMemberRole(restaurantId, user.uid, nextRole, stamp);
+      } catch (e) {
+        console.warn("[auth] no se pudo sincronizar membresía", e);
+      }
+      changed = true;
       break;
     }
 
-    // Invited staff: sync global hint to membership role
-    if (memberRole && memberRole !== "cliente") {
-      repairedRole = memberRole;
+    // Staff invite: align profile to membership
+    if (memberRole && user.role === "cliente") {
+      nextRole = memberRole;
+      changed = true;
       break;
     }
   }
 
-  if (!repairedRole) {
-    // Has restaurants but no usable member role → venue creator
-    repairedRole = "propietario";
+  if (!changed && user.role === "cliente") {
+    nextRole = "propietario";
+    changed = true;
   }
 
+  if (!changed) return user;
+
+  // First ensure users.role is staff so Firestore allows member self-heal
   await updateDoc(doc(getDb(), "users", user.uid), {
-    role: repairedRole,
+    role: nextRole,
     updatedAt: stamp,
   });
 
-  return { ...user, role: repairedRole, updatedAt: stamp };
+  // Retry member sync after profile is propietario (rules allow self-heal)
+  if (nextRole !== "cliente") {
+    for (const restaurantId of user.restaurantIds) {
+      try {
+        const memberSnap = await getDoc(
+          doc(getDb(), "restaurants", restaurantId, "members", user.uid),
+        );
+        if (!memberSnap.exists()) continue;
+        const member = memberSnap.data() as Member;
+        const memberRole = (member.roleId ?? member.role) as RoleId;
+        if (memberRole === "cliente" || memberRole !== nextRole) {
+          await syncMemberRole(restaurantId, user.uid, nextRole, stamp);
+        }
+      } catch {
+        /* ignore per-restaurant */
+      }
+    }
+  }
+
+  return { ...user, role: nextRole, updatedAt: stamp };
 }
 
 async function ensureUserProfile(

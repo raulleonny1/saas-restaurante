@@ -1,11 +1,7 @@
-import { ModulePlaceholder } from "@/components/ModulePlaceholder";
+"use client";
+
+import { EmployeesView } from "@/modules/employees";
 
 export default function EmployeesPage() {
-  return (
-    <ModulePlaceholder
-      title="Empleados"
-      description="Equipo, roles, turnos y rendimiento."
-      modulePath="modules/employees"
-    />
-  );
+  return <EmployeesView />;
 }

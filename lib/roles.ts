@@ -50,3 +50,23 @@ export function isStaff(role: RoleId | undefined): boolean {
 export function canManageRestaurant(role: RoleId | undefined): boolean {
   return hasRole(role, ["propietario", "gerente", "super_admin"]);
 }
+
+/**
+ * Pick the role to show/enforce when profile and membership disagree
+ * (e.g. signup race left members/{uid}.roleId = "cliente").
+ */
+export function resolveDisplayRole(
+  profileRole: RoleId | null | undefined,
+  memberRole: RoleId | null | undefined,
+): RoleId | null {
+  if (!profileRole && !memberRole) return null;
+  if (!memberRole) return profileRole ?? null;
+  if (!profileRole) return memberRole;
+  // Raced membership must not hide a staff/owner profile
+  if (memberRole === "cliente" && profileRole !== "cliente") {
+    return profileRole;
+  }
+  const p = ROLE_RANK[profileRole] ?? 0;
+  const m = ROLE_RANK[memberRole] ?? 0;
+  return p >= m ? profileRole : memberRole;
+}

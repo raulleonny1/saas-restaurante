@@ -2,7 +2,13 @@
 
 import { can as canPermission } from "@/lib/rbac";
 import { resolveEffectivePermissions } from "@/lib/rbac/evaluate";
-import { canManageRestaurant, hasAnyRole, hasRole, isStaff } from "@/lib/roles";
+import {
+  canManageRestaurant,
+  hasAnyRole,
+  hasRole,
+  isStaff,
+  resolveDisplayRole,
+} from "@/lib/roles";
 import {
   bindAuthProfileHook,
   reloadCurrentUser,
@@ -61,21 +67,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Heal raced "cliente" profiles that own restaurants (badge / permissions)
+  // Heal raced roles (profile and/or membership stamped as cliente)
   useEffect(() => {
-    if (!user || user.role !== "cliente" || !user.restaurantIds?.length) {
-      return;
-    }
+    if (!user?.restaurantIds?.length) return;
     let cancelled = false;
     void reloadCurrentUser().then((fresh) => {
-      if (!cancelled && fresh && fresh.role !== "cliente") {
+      if (cancelled || !fresh) return;
+      if (
+        fresh.role !== user.role ||
+        fresh.updatedAt !== user.updatedAt
+      ) {
         setUser(fresh);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- heal once per uid / restaurant set
+  }, [user?.uid, user?.restaurantIds?.join(",")]);
 
   const value = useMemo<AuthSessionValue>(
     () => ({
@@ -107,7 +116,7 @@ export function useAuthSession(): AuthSessionValue {
 
 /**
  * Auth + active-tenant membership.
- * Permissions come from members/{uid} when available; otherwise global users.role.
+ * Badge/permissions use the higher of profile vs membership (fixes cliente race).
  */
 export function useAuth(): AuthContextValue {
   const session = useAuthSession();
@@ -132,25 +141,23 @@ export function useAuth(): AuthContextValue {
       };
     }
 
-    // Prefer per-restaurant membership when TenantProvider is ready with a member
-    if (tenant?.ready && tenant.member?.active) {
-      return {
-        ...session,
-        role: tenant.role,
-        permissions: tenant.permissions,
-        member: tenant.member,
-        hasRole: tenant.hasRole,
-        hasAnyRole: tenant.hasAnyRole,
-        can: tenant.can,
-        isStaff: tenant.isStaff,
-        canManage: tenant.canManage,
-      };
-    }
+    const memberRole =
+      tenant?.ready && tenant.member?.active
+        ? (tenant.member.roleId ?? tenant.member.role ?? tenant.role)
+        : null;
 
-    // Fallback: global profile role (cliente, or before membership loads)
-    const role = user?.role ?? null;
-    const permissions =
-      role != null
+    const role = resolveDisplayRole(user?.role, memberRole);
+
+    // If membership was raced as cliente, don't use its empty permission cache
+    const useMemberPerms =
+      Boolean(tenant?.ready && tenant.member?.active) &&
+      memberRole != null &&
+      memberRole !== "cliente" &&
+      role === memberRole;
+
+    const permissions = useMemberPerms
+      ? tenant!.permissions
+      : role != null
         ? resolveEffectivePermissions({ roleId: role })
         : [];
     const permSet = new Set(permissions);
@@ -160,11 +167,12 @@ export function useAuth(): AuthContextValue {
       role,
       permissions,
       member: tenant?.member ?? null,
-      hasRole: (allowed) => hasRole(user?.role, allowed),
-      hasAnyRole: (allowed) => hasAnyRole(user?.role, allowed),
-      can: (permission) => canPermission(permSet, permission),
-      isStaff: isStaff(user?.role),
-      canManage: canManageRestaurant(user?.role),
+      hasRole: (allowed) => hasRole(role ?? undefined, allowed),
+      hasAnyRole: (allowed) => hasAnyRole(role ?? undefined, allowed),
+      can: (permission) =>
+        Boolean(user?.isSuperAdmin) || canPermission(permSet, permission),
+      isStaff: isStaff(role ?? undefined),
+      canManage: canManageRestaurant(role ?? undefined),
     };
   }, [session, tenant]);
 }

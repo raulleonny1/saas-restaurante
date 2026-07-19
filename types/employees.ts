@@ -6,8 +6,10 @@ export type EmploymentType = "full_time" | "part_time" | "contractor" | "temp";
 export interface Employee extends Timestamps, SoftDelete {
   id: string;
   restaurantId: string;
-  /** Linked Firebase Auth user when invited. */
+  /** Linked Firebase Auth user when they accept invite / match member email. */
   uid?: string;
+  /** Last Auth invite sent for this email (pending until they register/login). */
+  inviteSentAt?: ISODateString;
   branchIds: string[];
   name: string;
   email: string;
