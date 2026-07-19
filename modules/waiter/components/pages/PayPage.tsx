@@ -224,7 +224,9 @@ export function WaiterPayPage() {
                 method === "cash" && tender != null
                   ? roundMoney(Math.max(0, tender - due - tipNum))
                   : 0;
-              await pay(method, due, tipNum, undefined, tender);
+              await pay(method, due, tipNum, undefined, tender, {
+                chargedFrom: routes.base === "/caja" ? "caja" : "waiter",
+              });
               if (method === "cash" && tender != null) {
                 setLastChange(changeDue);
               } else {
@@ -257,7 +259,11 @@ export function WaiterPayPage() {
                 },
                 payments: [...payments, payRow],
               });
-              setMsg("Cobrado · ticket listo abajo · queda en Archivo/Caja");
+              setMsg(
+                routes.base === "/caja"
+                  ? "Cobrado en caja · queda en Archivo de mesero y cajero"
+                  : "Cobrado · ticket listo · queda en Archivo/Caja",
+              );
               setTendered("");
               setTip("0");
             } catch (e) {

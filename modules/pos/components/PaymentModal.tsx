@@ -82,6 +82,7 @@ export function PaymentModal({
                     tipNum,
                     splitSeat,
                     method === "cash" ? tenderedNum : undefined,
+                    { chargedFrom: "pos" },
                   );
                   if (method === "cash" && change > 0) {
                     toast(

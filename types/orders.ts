@@ -17,6 +17,9 @@ export type PaymentMethod = "cash" | "card" | "stripe" | "sumup" | "other";
 
 export type PaymentStatus = "pending" | "completed" | "failed" | "refunded";
 
+/** Origen del cobro: sala (mesero), caja o POS admin. */
+export type PaymentChargedFrom = "waiter" | "caja" | "pos";
+
 export interface Table extends Timestamps, SoftDelete {
   id: string;
   restaurantId: string;
@@ -125,6 +128,10 @@ export interface Payment extends Timestamps {
   tipAmount: number;
   externalRef?: string;
   processedBy: string;
+  /** Nombre visible de quien cobró (mesero/cajero). */
+  processedByName?: string;
+  /** Dónde se cobró: sala, caja o POS. El archivo de mesero incluye todos. */
+  chargedFrom?: PaymentChargedFrom;
   paidAt?: ISODateString;
   /** Seat index when paying a split check. */
   splitSeat?: number;

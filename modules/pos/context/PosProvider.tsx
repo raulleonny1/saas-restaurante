@@ -131,6 +131,7 @@ interface PosContextValue {
     tipAmount?: number,
     splitSeat?: number,
     amountTendered?: number,
+    meta?: { chargedFrom?: "waiter" | "caja" | "pos" },
   ) => Promise<void>;
   printReceipt: () => Promise<void>;
   /** Reimpresión desde archivo (pedido ya cobrado). */
@@ -597,6 +598,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
       tipAmount = 0,
       splitSeat?: number,
       amountTendered?: number,
+      meta?: { chargedFrom?: "waiter" | "caja" | "pos" },
     ) => {
       const { order, restaurantId: rid, uid } = requireOrder();
       await chargeOrder({
@@ -609,10 +611,12 @@ export function PosProvider({ children }: { children: ReactNode }) {
         splitSeat,
         amountTendered,
         uid,
+        processedByName: user?.displayName || user?.email || undefined,
+        chargedFrom: meta?.chargedFrom,
         taxPercent,
       });
     },
-    [requireOrder, tables, taxPercent],
+    [requireOrder, tables, taxPercent, user?.displayName, user?.email],
   );
 
   const printReceipt = useCallback(async () => {

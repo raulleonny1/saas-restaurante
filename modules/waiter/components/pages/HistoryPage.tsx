@@ -2,11 +2,19 @@
 
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { formatCurrency } from "@/lib/format";
+import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { roundMoney } from "@/modules/pos/domain/totals";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import { subscribePaymentsForBranch } from "@/modules/pos/services/payments.service";
-import type { Order, Payment } from "@/types/orders";
+import type { Order, Payment, PaymentChargedFrom } from "@/types/orders";
 import { useEffect, useMemo, useState } from "react";
+
+function chargedFromLabel(from?: PaymentChargedFrom) {
+  if (from === "caja") return "Caja";
+  if (from === "pos") return "POS";
+  if (from === "waiter") return "Sala";
+  return null;
+}
 
 function startOfTodayIso() {
   const d = new Date();
@@ -21,6 +29,8 @@ function isToday(iso?: string) {
 
 export function WaiterHistoryPage() {
   const { restaurantId } = useRestaurant();
+  const routes = useFloorRoutes();
+  const isCashierApp = routes.base === "/caja";
   const {
     historyOrders,
     openOrders,
@@ -70,6 +80,9 @@ export function WaiterHistoryPage() {
     let card = 0;
     let other = 0;
     let tips = 0;
+    let fromCaja = 0;
+    let fromSala = 0;
+    let fromPos = 0;
     for (const p of todayPayments) {
       if (p.status === "refunded") {
         cashIn -= p.method === "cash" ? p.amount : 0;
@@ -84,6 +97,9 @@ export function WaiterHistoryPage() {
       } else {
         other += p.amount;
       }
+      if (p.chargedFrom === "caja") fromCaja += p.amount;
+      else if (p.chargedFrom === "pos") fromPos += p.amount;
+      else fromSala += p.amount; // waiter o sin marcar (cobros antiguos)
     }
     return {
       cashIn: roundMoney(cashIn),
@@ -95,6 +111,9 @@ export function WaiterHistoryPage() {
       tips: roundMoney(tips),
       tickets: todayPaidOrders.length,
       total: roundMoney(cashIn + card + other),
+      fromCaja: roundMoney(fromCaja),
+      fromSala: roundMoney(fromSala),
+      fromPos: roundMoney(fromPos),
     };
   }, [todayPayments, todayPaidOrders.length]);
 
@@ -122,7 +141,9 @@ export function WaiterHistoryPage() {
           Archivo · Caja
         </h1>
         <p className="text-sm text-[#a8b5a4]">
-          Tickets cobrados y resumen para cuadrar con caja al final del turno.
+          {isCashierApp
+            ? "Todos los cobros de la sucursal (caja, sala y POS) para cuadrar el turno."
+            : "Incluye lo cobrado en sala y en caja. El total debe cuadrar con el cajón."}
         </p>
       </div>
 
@@ -187,10 +208,23 @@ export function WaiterHistoryPage() {
                 {formatCurrency(caja.tips, currency)}
               </p>
             </div>
+            <div>
+              <p className="text-[#8fa08c]">Cobrado en sala</p>
+              <p className="text-sm">
+                {formatCurrency(caja.fromSala, currency)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[#8fa08c]">Cobrado en caja</p>
+              <p className="text-sm text-cyan-200">
+                {formatCurrency(caja.fromCaja, currency)}
+              </p>
+            </div>
           </div>
           <p className="text-[11px] text-[#5a6b57]">
-            En caja debe haber el efectivo cobrado. Los cambios ya se descontaron
-            del billete del cliente.
+            Sala + caja{caja.fromPos > 0 ? " + POS" : ""} = total del día. En el
+            cajón debe haber el efectivo cobrado (los cambios ya salieron del
+            billete).
           </p>
         </div>
       ) : null}
@@ -228,6 +262,11 @@ export function WaiterHistoryPage() {
                   {pays.length
                     ? ` · ${pays.map((p) => p.method).join(", ")}`
                     : ""}
+                  {pays.some((p) => p.chargedFrom === "caja")
+                    ? " · cobrado en caja"
+                    : pays.some((p) => p.chargedFrom === "waiter")
+                      ? " · cobrado en sala"
+                      : ""}
                 </p>
               </button>
 
@@ -242,17 +281,22 @@ export function WaiterHistoryPage() {
                         </li>
                       ))}
                   </ul>
-                  {pays.map((p) => (
-                    <p key={p.id} className="text-xs text-[#8fa08c]">
-                      {p.method}: {formatCurrency(p.amount, currency)}
-                      {p.amountTendered != null
-                        ? ` · entregó ${formatCurrency(p.amountTendered, currency)}`
-                        : ""}
-                      {p.changeGiven != null
-                        ? ` · cambio ${formatCurrency(p.changeGiven, currency)}`
-                        : ""}
-                    </p>
-                  ))}
+                  {pays.map((p) => {
+                    const origin = chargedFromLabel(p.chargedFrom);
+                    return (
+                      <p key={p.id} className="text-xs text-[#8fa08c]">
+                        {p.method}: {formatCurrency(p.amount, currency)}
+                        {origin ? ` · ${origin}` : ""}
+                        {p.processedByName ? ` · ${p.processedByName}` : ""}
+                        {p.amountTendered != null
+                          ? ` · entregó ${formatCurrency(p.amountTendered, currency)}`
+                          : ""}
+                        {p.changeGiven != null
+                          ? ` · cambio ${formatCurrency(p.changeGiven, currency)}`
+                          : ""}
+                      </p>
+                    );
+                  })}
                   {canPrint ? (
                     <button
                       type="button"

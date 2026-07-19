@@ -6,6 +6,7 @@ import { balanceDue, recalculateOrder, roundMoney } from "@/modules/pos/domain/t
 import type {
   Order,
   Payment,
+  PaymentChargedFrom,
   PaymentMethod,
   Table,
 } from "@/types/orders";
@@ -80,6 +81,8 @@ export interface ChargeInput {
   /** Efectivo recibido del cliente (solo método cash). */
   amountTendered?: number;
   uid: string;
+  processedByName?: string;
+  chargedFrom?: PaymentChargedFrom;
   taxPercent: number;
 }
 
@@ -97,6 +100,8 @@ export async function chargeOrder(input: ChargeInput): Promise<{
     splitSeat,
     amountTendered,
     uid,
+    processedByName,
+    chargedFrom,
     taxPercent,
   } = input;
 
@@ -133,6 +138,8 @@ export async function chargeOrder(input: ChargeInput): Promise<{
     processedBy: uid,
     paidAt: stamp,
     splitSeat,
+    ...(processedByName ? { processedByName } : {}),
+    ...(chargedFrom ? { chargedFrom } : {}),
     ...(tendered != null ? { amountTendered: tendered } : {}),
     ...(changeGiven != null ? { changeGiven } : {}),
     createdAt: stamp,
