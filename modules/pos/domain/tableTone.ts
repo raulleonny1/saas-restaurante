@@ -96,7 +96,7 @@ export function resolveTableFloorTone(
 }
 
 /** Pedido vivo pero sin ningún ítem (mesa «abierta» en vacío). */
-export function isEmptyOpenOrder(order: Order | null): boolean {
+export function isEmptyOpenOrder(order: Order | null): order is Order {
   if (!isLiveOpenOrder(order)) return false;
   return !order.items.some((i) => i.status !== "cancelled");
 }
