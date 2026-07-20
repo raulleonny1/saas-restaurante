@@ -10,6 +10,7 @@ import {
 import { inviteMember } from "@/modules/tenant/services/members.service";
 import {
   BILLING_PLANS,
+  normalizeBillingPlanId,
   type BillingPlanId,
 } from "@/types/billing";
 import {
@@ -26,10 +27,16 @@ export type ClientRow = {
   id: string;
   name: string;
   ownerEmail: string;
-  planId: string;
+  /** Plan activo ahora */
+  planId: BillingPlanId;
+  /** Plan que eligió al registrarse / contratar */
+  requestedPlanId: BillingPlanId;
   planName: string;
+  requestedPlanName: string;
   amountCents: number;
   status: string;
+  planStatus: string;
+  needsActivation: boolean;
   createdAt: string;
 };
 
@@ -48,6 +55,19 @@ async function bearerHeaders(): Promise<HeadersInit | null> {
   }
 }
 
+function rowNeedsActivation(
+  planId: BillingPlanId,
+  requestedPlanId: BillingPlanId,
+  planStatus: string,
+): boolean {
+  if (requestedPlanId === "trial") return false;
+  return (
+    planId === "trial" ||
+    planStatus === "trialing" ||
+    planId !== requestedPlanId
+  );
+}
+
 /** Lista clientes (índice platformTenants o API Admin). */
 export async function listClients(): Promise<ClientRow[]> {
   const headers = await bearerHeaders();
@@ -60,23 +80,39 @@ export async function listClients(): Promise<ClientRow[]> {
           id: string;
           name: string;
           planId: string;
+          requestedPlanId?: string;
           amountCents: number;
           status: string;
+          planStatus?: string;
+          needsActivation?: boolean;
           createdAt: string;
           owners: { email: string }[];
         }[];
       };
       if (res.ok && data.ok && data.tenants) {
-        return data.tenants.map((t) => ({
-          id: t.id,
-          name: t.name,
-          ownerEmail: t.owners[0]?.email || "—",
-          planId: t.planId,
-          planName: BILLING_PLANS[t.planId as BillingPlanId]?.name || t.planId,
-          amountCents: t.amountCents,
-          status: t.status,
-          createdAt: t.createdAt,
-        }));
+        return data.tenants.map((t) => {
+          const planId = normalizeBillingPlanId(t.planId);
+          const requestedPlanId = normalizeBillingPlanId(
+            t.requestedPlanId || t.planId,
+          );
+          const planStatus = String(t.planStatus || t.status || "—");
+          return {
+            id: t.id,
+            name: t.name,
+            ownerEmail: t.owners[0]?.email || "—",
+            planId,
+            requestedPlanId,
+            planName: BILLING_PLANS[planId].name,
+            requestedPlanName: BILLING_PLANS[requestedPlanId].name,
+            amountCents: t.amountCents,
+            status: String(t.status || "—"),
+            planStatus,
+            needsActivation:
+              t.needsActivation ??
+              rowNeedsActivation(planId, requestedPlanId, planStatus),
+            createdAt: t.createdAt,
+          };
+        });
       }
     } catch {
       /* fallback índice */
@@ -88,15 +124,29 @@ export async function listClients(): Promise<ClientRow[]> {
   return snap.docs
     .map((d) => {
       const x = d.data();
-      const planId = String(x.planId || "starter");
+      const planId = normalizeBillingPlanId(String(x.planId || "trial"));
+      const requestedPlanId = normalizeBillingPlanId(
+        String(x.requestedPlanId || x.planId || "trial"),
+      );
+      const status = String(x.status || "active");
+      const planStatus =
+        status === "pending_payment" ? "trialing" : status;
       return {
         id: d.id,
         name: String(x.name || ""),
         ownerEmail: String(x.ownerEmail || "—"),
         planId,
-        planName: BILLING_PLANS[planId as BillingPlanId]?.name || planId,
-        amountCents: Number(x.amountCents || 0),
-        status: String(x.status || "active"),
+        requestedPlanId,
+        planName: BILLING_PLANS[planId].name,
+        requestedPlanName: BILLING_PLANS[requestedPlanId].name,
+        amountCents: Number(
+          x.amountCents ?? BILLING_PLANS[requestedPlanId].monthlyPriceCents,
+        ),
+        status,
+        planStatus,
+        needsActivation:
+          status === "pending_payment" ||
+          rowNeedsActivation(planId, requestedPlanId, planStatus),
         createdAt: String(x.createdAt || ""),
       };
     })
@@ -152,23 +202,6 @@ export async function altaCliente(input: {
         createdAuthUser?: boolean;
       };
       if (res.ok && data.ok && data.restaurantId) {
-        // índice cliente para listado local
-        try {
-          await setDoc(
-            doc(getDb(), "platformTenants", data.restaurantId),
-            stripUndefined({
-              id: data.restaurantId,
-              name,
-              ownerEmail: email,
-              planId: input.planId,
-              amountCents: BILLING_PLANS[input.planId].monthlyPriceCents,
-              status: "active",
-              createdAt: new Date().toISOString(),
-            }),
-          );
-        } catch {
-          /* ok */
-        }
         return {
           restaurantId: data.restaurantId,
           ownerEmail: email,
@@ -180,9 +213,7 @@ export async function altaCliente(input: {
             : "Cliente creado. El correo ya tenía cuenta: ya puede entrar.",
         };
       }
-      // Si Admin no está, seguimos por Firestore cliente
       if (res.status !== 503 && data.error) {
-        // 403/401 sí fallan fuerte
         if (res.status === 401 || res.status === 403) {
           throw new Error(data.error);
         }
@@ -211,7 +242,9 @@ export async function altaCliente(input: {
   const periodEnd = new Date();
   periodEnd.setMonth(periodEnd.getMonth() + 1);
   const billing = {
-    ...createTenantBillingDocument(restaurant.id, email),
+    ...createTenantBillingDocument(restaurant.id, email, {
+      requestedPlanId: input.planId,
+    }),
     planId: input.planId,
     status: "active" as const,
     seatsIncluded: plan.seatsIncluded,
@@ -242,9 +275,12 @@ export async function altaCliente(input: {
       name,
       ownerEmail: email,
       planId: input.planId,
+      requestedPlanId: input.planId,
       amountCents: plan.monthlyPriceCents,
       status: "active",
+      source: "superadmin",
       createdAt: stamp,
+      updatedAt: stamp,
     }),
   );
 
@@ -279,30 +315,21 @@ export async function altaCliente(input: {
   };
 }
 
+/** Activa o cambia el plan del cliente (lo que eligió o el que indiques). */
 export async function cambiarPlanCliente(
   restaurantId: string,
-  planId: "starter" | "business" | "enterprise",
+  planId: BillingPlanId,
 ): Promise<void> {
+  const normalized = normalizeBillingPlanId(planId);
   const headers = await bearerHeaders();
   if (headers) {
     const res = await fetch(`/api/platform/tenants/${restaurantId}/plan`, {
       method: "PATCH",
       headers,
-      body: JSON.stringify({ planId }),
+      body: JSON.stringify({ planId: normalized }),
     });
     const data = (await res.json()) as { ok?: boolean; error?: string };
-    if (res.ok && data.ok) {
-      try {
-        await updateDoc(doc(getDb(), "platformTenants", restaurantId), {
-          planId,
-          amountCents: BILLING_PLANS[planId].monthlyPriceCents,
-          updatedAt: new Date().toISOString(),
-        });
-      } catch {
-        /* ok */
-      }
-      return;
-    }
+    if (res.ok && data.ok) return;
     if (res.status === 503) {
       /* fallback abajo */
     } else if (data.error) {
@@ -310,15 +337,20 @@ export async function cambiarPlanCliente(
     }
   }
 
-  const plan = BILLING_PLANS[planId];
+  const plan = BILLING_PLANS[normalized];
   const stamp = new Date().toISOString();
   const periodEnd = new Date();
-  periodEnd.setMonth(periodEnd.getMonth() + 1);
+  if (normalized === "trial") {
+    periodEnd.setDate(periodEnd.getDate() + 14);
+  } else {
+    periodEnd.setMonth(periodEnd.getMonth() + 1);
+  }
   await updateDoc(
     doc(getDb(), "restaurants", restaurantId, "billing", "current"),
     {
-      planId,
-      status: "active",
+      planId: normalized,
+      requestedPlanId: normalized,
+      status: normalized === "trial" ? "trialing" : "active",
       seatsIncluded: plan.seatsIncluded,
       branchesIncluded: plan.branchesIncluded,
       amountCents: plan.monthlyPriceCents,
@@ -327,9 +359,20 @@ export async function cambiarPlanCliente(
       updatedAt: stamp,
     },
   );
-  await updateDoc(doc(getDb(), "platformTenants", restaurantId), {
-    planId,
-    amountCents: plan.monthlyPriceCents,
-    updatedAt: stamp,
-  });
+  await setDoc(
+    doc(getDb(), "platformTenants", restaurantId),
+    {
+      planId: normalized,
+      requestedPlanId: normalized,
+      amountCents: plan.monthlyPriceCents,
+      status: normalized === "trial" ? "trialing" : "active",
+      updatedAt: stamp,
+    },
+    { merge: true },
+  );
+}
+
+/** Activa exactamente el plan que el cliente eligió al registrarse. */
+export async function activarPlanElegido(client: ClientRow): Promise<void> {
+  await cambiarPlanCliente(client.id, client.requestedPlanId);
 }

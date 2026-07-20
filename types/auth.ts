@@ -1,3 +1,4 @@
+import type { BillingPlanId } from "./billing";
 import type { ISODateString } from "./common";
 import type { PermissionId, RoleId } from "./rbac";
 
@@ -53,6 +54,8 @@ export interface SignUpCredentials {
   displayName: string;
   role: RoleId;
   restaurantName?: string;
+  /** Plan que el dueño elige al registrarse (trial = gratis). */
+  planId?: BillingPlanId;
 }
 
 export interface ResetPasswordInput {

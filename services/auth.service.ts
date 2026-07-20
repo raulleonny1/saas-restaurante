@@ -6,6 +6,11 @@ import { stripUndefined } from "@/lib/firestore-safe";
 import { buildMemberPermissionCache } from "@/lib/rbac/evaluate";
 import { isUserRole, ROLES_WITH_VENUE, STAFF_ROLES } from "@/lib/roles";
 import {
+  BILLING_PLANS,
+  normalizeBillingPlanId,
+  type BillingPlanId,
+} from "@/types/billing";
+import {
   createBranchDocument,
   createMemberDocument,
   createRestaurantDocument,
@@ -271,6 +276,7 @@ async function writeStep(label: string, fn: () => Promise<void>): Promise<void> 
 async function provisionRestaurantForAdmin(
   user: AppUser,
   restaurantName: string,
+  requestedPlanId: BillingPlanId = "trial",
 ): Promise<AppUser> {
   const restaurant = createRestaurantDocument(
     restaurantName.trim() || "Mi restaurante",
@@ -286,6 +292,10 @@ async function provisionRestaurantForAdmin(
     { ...user, role: "propietario" },
     [],
   );
+
+  const chosen = normalizeBillingPlanId(requestedPlanId);
+  const wantsPaid = chosen !== "trial";
+  const stamp = new Date().toISOString();
 
   // Core tenant (must succeed)
   await writeStep("crear restaurante", () =>
@@ -308,13 +318,41 @@ async function provisionRestaurantForAdmin(
   );
 
   try {
-    const billing = createTenantBillingDocument(restaurant.id, user.email);
+    const billing = createTenantBillingDocument(restaurant.id, user.email, {
+      requestedPlanId: chosen,
+    });
     await setDoc(
       doc(getDb(), "restaurants", restaurant.id, "billing", "current"),
       stripUndefined({ ...billing }),
     );
   } catch (error) {
     console.warn("[signUp] billing no provisionado:", firebaseErrorCode(error));
+  }
+
+  // Índice para superadmin: ve cada registro y el plan elegido
+  try {
+    await setDoc(
+      doc(getDb(), "platformTenants", restaurant.id),
+      stripUndefined({
+        id: restaurant.id,
+        name: restaurant.name,
+        ownerEmail: user.email,
+        ownerName: user.displayName,
+        ownerUid: user.uid,
+        planId: "trial",
+        requestedPlanId: chosen,
+        amountCents: BILLING_PLANS[chosen].monthlyPriceCents,
+        status: wantsPaid ? "pending_payment" : "trialing",
+        source: "self_signup",
+        createdAt: stamp,
+        updatedAt: stamp,
+      }),
+    );
+  } catch (error) {
+    console.warn(
+      "[signUp] platformTenants no escrito:",
+      firebaseErrorCode(error),
+    );
   }
 
   // Website extras (best-effort — requires published firestore.rules)
@@ -406,6 +444,7 @@ export async function signUp(input: SignUpCredentials): Promise<AppUser> {
       appUser = await provisionRestaurantForAdmin(
         appUser,
         input.restaurantName ?? "Mi restaurante",
+        normalizeBillingPlanId(input.planId || "trial"),
       );
     } else if (resolvedRole !== "cliente") {
       // Staff: unirse al local del dueño (invite / employeeEmailIndex)

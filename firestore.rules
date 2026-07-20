@@ -168,9 +168,20 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    /** Índice de clientes de la plataforma (alta superadmin). */
+    /** Índice de clientes: superadmin gestiona; el dueño puede crear al registrarse. */
     match /platformTenants/{tenantId} {
-      allow read, write: if isPlatformAdmin();
+      allow read: if isPlatformAdmin();
+      allow create: if isPlatformAdmin()
+        || (
+          isSignedIn()
+          && request.resource.data.id == tenantId
+          && exists(/databases/$(database)/documents/restaurants/$(tenantId)/members/$(request.auth.uid))
+          && (
+            get(/databases/$(database)/documents/restaurants/$(tenantId)/members/$(request.auth.uid)).data.roleId == 'propietario'
+            || get(/databases/$(database)/documents/restaurants/$(tenantId)/members/$(request.auth.uid)).data.role == 'propietario'
+          )
+        );
+      allow update, delete: if isPlatformAdmin();
     }
 
     match /restaurants/{restaurantId} {

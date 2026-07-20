@@ -38,8 +38,8 @@ export interface BillingPlanDefinition {
 export const BILLING_PLANS: Record<BillingPlanId, BillingPlanDefinition> = {
   trial: {
     id: "trial",
-    name: "Prueba",
-    description: "14 días para evaluar SmartServe",
+    name: "Gratis",
+    description: "Prueba gratis 14 días",
     monthlyPriceCents: 0,
     seatsIncluded: 5,
     branchesIncluded: 1,
@@ -81,6 +81,13 @@ export function formatPlanPrice(cents: number): string {
   return `${(cents / 100).toFixed(2).replace(".", ",")} €`;
 }
 
+/** Estado en el índice platformTenants (vista superadmin). */
+export type PlatformTenantStatus =
+  | "active"
+  | "pending_payment"
+  | "trialing"
+  | "cancelled";
+
 /** Singleton billing state per restaurant: restaurants/{id}/billing/current */
 export interface TenantBilling extends Timestamps {
   id: "current";
@@ -91,6 +98,10 @@ export interface TenantBilling extends Timestamps {
   branchesIncluded: number;
   amountCents: number;
   currency: CurrencyCode;
+  /** Plan que el dueño eligió al registrarse (puede estar pendiente de activar). */
+  requestedPlanId?: BillingPlanId;
+  /** Quién activó el plan de pago (superadmin). */
+  activatedBy?: string;
   trialEndsAt?: ISODateString;
   currentPeriodStart?: ISODateString;
   currentPeriodEnd?: ISODateString;

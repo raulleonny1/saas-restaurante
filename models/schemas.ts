@@ -2,7 +2,7 @@ import { buildMemberPermissionCache } from "@/lib/rbac/evaluate";
 import { createId } from "@/lib/id";
 import { slugify } from "@/modules/website/domain/slug";
 import type { AppUser, UserRole } from "@/types/auth";
-import type { TenantBilling } from "@/types/billing";
+import type { BillingPlanId, TenantBilling } from "@/types/billing";
 import { BILLING_PLANS } from "@/types/billing";
 import type { RoleId } from "@/types/rbac";
 import type { Branch, Member, Restaurant } from "@/types/restaurant";
@@ -117,11 +117,13 @@ export function createOwnerMember(
 export function createTenantBillingDocument(
   restaurantId: string,
   billingEmail?: string,
+  opts?: { requestedPlanId?: BillingPlanId },
 ): TenantBilling {
   const ts = now();
   const trialEnd = new Date();
   trialEnd.setDate(trialEnd.getDate() + 14);
   const plan = BILLING_PLANS.trial;
+  const requestedPlanId = opts?.requestedPlanId ?? "trial";
   return {
     id: "current",
     restaurantId,
@@ -131,6 +133,7 @@ export function createTenantBillingDocument(
     branchesIncluded: plan.branchesIncluded,
     amountCents: plan.monthlyPriceCents,
     currency: "EUR",
+    requestedPlanId,
     trialEndsAt: trialEnd.toISOString(),
     currentPeriodStart: ts,
     currentPeriodEnd: trialEnd.toISOString(),

@@ -8,6 +8,7 @@ import {
   type BillingPlanId,
 } from "@/types/billing";
 import {
+  activarPlanElegido,
   altaCliente,
   cambiarPlanCliente,
   listClients,
@@ -16,10 +17,16 @@ import {
 import { Alert, Button, Input, Select, toast } from "@/ui";
 import { useCallback, useEffect, useState } from "react";
 
-const PLANES: BillingPlanId[] = ["starter", "business", "enterprise"];
+const PLANES_PAGO: BillingPlanId[] = ["starter", "business", "enterprise"];
+const PLANES_TODOS: BillingPlanId[] = [
+  "trial",
+  "starter",
+  "business",
+  "enterprise",
+];
 
 /**
- * Panel SUPERADMIN: dar de alta clientes (dueños) con correo + plan.
+ * Panel SUPERADMIN: ver registros, activar plan elegido, o dar de alta manual.
  */
 export function PlatformDashboard() {
   const { user, role, can } = useAuth();
@@ -31,6 +38,7 @@ export function PlatformDashboard() {
   const [clientes, setClientes] = useState<ClientRow[]>([]);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [activandoId, setActivandoId] = useState<string | null>(null);
 
   const [email, setEmail] = useState("");
   const [nombreDueño, setNombreDueño] = useState("");
@@ -60,20 +68,16 @@ export function PlatformDashboard() {
         <h1 className="text-2xl font-semibold">Superadmin</h1>
         <Alert tone="warning" title="No eres superadmin">
           <p className="mt-2 text-sm">
-            Entra con tu cuenta. Luego en Firebase Console → Firestore →
-            colección <b>users</b> → tu usuario, pon estos campos:
-          </p>
-          <pre className="mt-3 overflow-x-auto rounded bg-black/30 p-3 text-xs">
-{`role: "super_admin"   (string)
-isSuperAdmin: true     (boolean, NO texto "true")`}
-          </pre>
-          <p className="mt-2 text-sm">
-            Recarga la página (o ve a /superadmin) y verás el alta de clientes.
+            En Firebase → users → tu usuario:{" "}
+            <code>role: &quot;super_admin&quot;</code> e{" "}
+            <code>isSuperAdmin: true</code> (boolean).
           </p>
         </Alert>
       </div>
     );
   }
+
+  const pendientes = clientes.filter((c) => c.needsActivation);
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 p-4 pb-20 md:p-8">
@@ -82,16 +86,147 @@ isSuperAdmin: true     (boolean, NO texto "true")`}
           Superadmin
         </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-          Alta de clientes
+          Clientes de la plataforma
         </h1>
         <p className="mt-2 text-sm text-fg-muted">
-          Tú das de alta al dueño del restaurante con su correo y el plan que
-          ha contratado. Él después mete a sus gerentes y empleados.
+          Aquí ves a quien se registra solo (elige gratis o un plan de pago) y
+          puedes activar lo que compró. También puedes dar de alta manualmente.
         </p>
       </header>
 
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-medium">
+            Clientes ({clientes.length})
+            {pendientes.length > 0 ? (
+              <span className="ml-2 text-sm font-normal text-warning">
+                · {pendientes.length} pendientes de activar
+              </span>
+            ) : null}
+          </h2>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={cargando}
+            onClick={() => void refrescar()}
+          >
+            Actualizar
+          </Button>
+        </div>
+
+        {cargando ? (
+          <p className="text-sm text-fg-muted">Cargando…</p>
+        ) : !clientes.length ? (
+          <p className="text-sm text-fg-muted">
+            Aún no hay clientes. Cuando un dueño se registre en /register
+            aparecerá aquí con el plan que eligió.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border rounded-2xl border border-border">
+            {clientes.map((c) => (
+              <li key={c.id} className="space-y-3 p-4">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="font-medium">{c.name}</p>
+                    <p className="text-sm text-fg-muted">{c.ownerEmail}</p>
+                    <p className="mt-1 text-xs text-fg-muted">
+                      Eligió:{" "}
+                      <strong className="text-fg">{c.requestedPlanName}</strong>
+                      {c.requestedPlanId !== "trial"
+                        ? ` (${formatPlanPrice(BILLING_PLANS[c.requestedPlanId].monthlyPriceCents)}/mes)`
+                        : " (gratis)"}
+                      {" · "}
+                      Ahora: {c.planName} ({c.planStatus})
+                    </p>
+                  </div>
+                  {c.needsActivation ? (
+                    <span className="inline-flex w-fit rounded-full bg-warning/15 px-2.5 py-1 text-xs font-medium text-warning">
+                      Pendiente de activar
+                    </span>
+                  ) : (
+                    <span className="inline-flex w-fit rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent">
+                      Activo
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  {c.needsActivation ? (
+                    <Button
+                      size="sm"
+                      disabled={activandoId === c.id}
+                      onClick={() => {
+                        void (async () => {
+                          try {
+                            setActivandoId(c.id);
+                            await activarPlanElegido(c);
+                            toast(
+                              `Activado: ${c.requestedPlanName}`,
+                              "success",
+                            );
+                            await refrescar();
+                          } catch (err) {
+                            toast(
+                              err instanceof Error ? err.message : "Error",
+                              "error",
+                            );
+                          } finally {
+                            setActivandoId(null);
+                          }
+                        })();
+                      }}
+                    >
+                      {activandoId === c.id
+                        ? "Activando…"
+                        : `Activar ${c.requestedPlanName}`}
+                    </Button>
+                  ) : null}
+                  <Select
+                    aria-label={`Cambiar plan de ${c.name}`}
+                    value={c.planId}
+                    disabled={activandoId === c.id}
+                    onChange={(e) => {
+                      const next = e.target.value as BillingPlanId;
+                      void (async () => {
+                        try {
+                          setActivandoId(c.id);
+                          await cambiarPlanCliente(c.id, next);
+                          toast(
+                            `Plan: ${BILLING_PLANS[next].name}`,
+                            "success",
+                          );
+                          await refrescar();
+                        } catch (err) {
+                          toast(
+                            err instanceof Error ? err.message : "Error",
+                            "error",
+                          );
+                        } finally {
+                          setActivandoId(null);
+                        }
+                      })();
+                    }}
+                  >
+                    {PLANES_TODOS.map((id) => (
+                      <option key={id} value={id}>
+                        {BILLING_PLANS[id].name} (
+                        {formatPlanPrice(BILLING_PLANS[id].monthlyPriceCents)})
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <section className="space-y-4 rounded-2xl border border-border bg-bg-elevated p-5">
-        <h2 className="text-lg font-medium">Nuevo cliente</h2>
+        <h2 className="text-lg font-medium">Alta manual</h2>
+        <p className="text-sm text-fg-muted">
+          Si el cliente no se registró solo: creas el local, el plan queda
+          activo y le das acceso por correo.
+        </p>
         <form
           className="grid gap-3"
           onSubmit={(e) => {
@@ -125,7 +260,7 @@ isSuperAdmin: true     (boolean, NO texto "true")`}
           }}
         >
           <Input
-            label="Correo del dueño (cliente)"
+            label="Correo del dueño"
             type="email"
             required
             value={email}
@@ -146,15 +281,15 @@ isSuperAdmin: true     (boolean, NO texto "true")`}
             placeholder="Bar Central"
           />
           <Select
-            label="Plan que ha contratado"
+            label="Plan contratado"
             value={plan}
             onChange={(e) => setPlan(e.target.value as BillingPlanId)}
           >
-            {PLANES.map((id) => (
+            {PLANES_PAGO.map((id) => (
               <option key={id} value={id}>
                 {BILLING_PLANS[id].name} —{" "}
                 {formatPlanPrice(BILLING_PLANS[id].monthlyPriceCents)}/mes
-                {BILLING_PLANS[id].recommended ? " ★ recomendado" : ""}
+                {BILLING_PLANS[id].recommended ? " ★" : ""}
               </option>
             ))}
           </Select>
@@ -176,79 +311,6 @@ isSuperAdmin: true     (boolean, NO texto "true")`}
             ) : null}
           </Alert>
         ) : null}
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-medium">
-            Mis clientes ({clientes.length})
-          </h2>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={cargando}
-            onClick={() => void refrescar()}
-          >
-            Actualizar
-          </Button>
-        </div>
-
-        {cargando ? (
-          <p className="text-sm text-fg-muted">Cargando…</p>
-        ) : !clientes.length ? (
-          <p className="text-sm text-fg-muted">
-            Todavía no hay clientes. Usa el formulario de arriba.
-          </p>
-        ) : (
-          <ul className="divide-y divide-border rounded-2xl border border-border">
-            {clientes.map((c) => (
-              <li
-                key={c.id}
-                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="font-medium">{c.name}</p>
-                  <p className="text-sm text-fg-muted">{c.ownerEmail}</p>
-                </div>
-                <Select
-                  value={
-                    PLANES.includes(c.planId as BillingPlanId)
-                      ? c.planId
-                      : "starter"
-                  }
-                  onChange={(e) => {
-                    const next = e.target.value as
-                      | "starter"
-                      | "business"
-                      | "enterprise";
-                    void (async () => {
-                      try {
-                        await cambiarPlanCliente(c.id, next);
-                        toast(
-                          `Plan cambiado a ${BILLING_PLANS[next].name}`,
-                          "success",
-                        );
-                        await refrescar();
-                      } catch (err) {
-                        toast(
-                          err instanceof Error ? err.message : "Error",
-                          "error",
-                        );
-                      }
-                    })();
-                  }}
-                >
-                  {PLANES.map((id) => (
-                    <option key={id} value={id}>
-                      {BILLING_PLANS[id].name} (
-                      {formatPlanPrice(BILLING_PLANS[id].monthlyPriceCents)})
-                    </option>
-                  ))}
-                </Select>
-              </li>
-            ))}
-          </ul>
-        )}
       </section>
     </div>
   );

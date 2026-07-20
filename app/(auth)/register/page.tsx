@@ -4,11 +4,23 @@ import { isFirebaseConfigured } from "@/lib/firebase";
 import { ROLES_WITH_VENUE, homePathForRole, isUserRole } from "@/lib/roles";
 import { AuthShell, RoleSelect } from "@/modules/auth";
 import { signUp } from "@/services/auth.service";
+import {
+  BILLING_PLANS,
+  formatPlanPrice,
+  type BillingPlanId,
+} from "@/types/billing";
 import type { RoleId } from "@/types/rbac";
-import { Button, Input, toast } from "@/ui";
+import { Button, Input, Select, toast } from "@/ui";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useMemo, useState } from "react";
+
+const PLANES_REGISTRO: BillingPlanId[] = [
+  "trial",
+  "starter",
+  "business",
+  "enterprise",
+];
 
 function safeNext(raw: string | null): string | null {
   if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
@@ -28,6 +40,7 @@ function RegisterForm() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<RoleId>(initialRole);
   const [restaurantName, setRestaurantName] = useState("");
+  const [planId, setPlanId] = useState<BillingPlanId>("trial");
   const [loading, setLoading] = useState(false);
   const firebaseReady = isFirebaseConfigured();
   const needsVenue = ROLES_WITH_VENUE.includes(role);
@@ -48,8 +61,14 @@ function RegisterForm() {
         displayName: displayName.trim() || "Usuario",
         role,
         restaurantName: needsVenue ? restaurantName : undefined,
+        planId: needsVenue ? planId : undefined,
       });
-      toast("Cuenta creada", "success");
+      toast(
+        needsVenue && planId !== "trial"
+          ? "Cuenta creada. El superadmin activará el plan que elegiste al confirmar el pago."
+          : "Cuenta creada",
+        "success",
+      );
       if (next) {
         router.replace(next);
       } else if (isCliente) {
@@ -121,13 +140,35 @@ function RegisterForm() {
         <RoleSelect value={role} onChange={setRole} />
 
         {needsVenue ? (
-          <Input
-            label="Nombre del restaurante"
-            value={restaurantName}
-            onChange={(e) => setRestaurantName(e.target.value)}
-            placeholder="Café Norte"
-            required
-          />
+          <>
+            <Input
+              label="Nombre del restaurante"
+              value={restaurantName}
+              onChange={(e) => setRestaurantName(e.target.value)}
+              placeholder="Café Norte"
+              required
+            />
+            <Select
+              label="Plan que quieres"
+              value={planId}
+              onChange={(e) => setPlanId(e.target.value as BillingPlanId)}
+            >
+              {PLANES_REGISTRO.map((id) => (
+                <option key={id} value={id}>
+                  {BILLING_PLANS[id].name} —{" "}
+                  {id === "trial"
+                    ? "gratis (14 días)"
+                    : `${formatPlanPrice(BILLING_PLANS[id].monthlyPriceCents)}/mes`}
+                  {BILLING_PLANS[id].recommended ? " ★" : ""}
+                </option>
+              ))}
+            </Select>
+            <p className="text-xs text-fg-muted">
+              {planId === "trial"
+                ? "Empiezas gratis. Luego puedes pasar a un plan de pago."
+                : "Quedas en prueba hasta que se confirme el pago y el superadmin active este plan."}
+            </p>
+          </>
         ) : null}
 
         <Button type="submit" className="w-full" disabled={loading || !firebaseReady}>

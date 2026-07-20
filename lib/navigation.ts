@@ -36,7 +36,7 @@ export interface NavItem {
 export const APP_NAV: NavItem[] = [
   {
     href: "/superadmin",
-    label: "Superadmin",
+    label: "Clientes",
     icon: Building2,
     module: "platform",
     anyOf: ["platform.tenants.read", "platform.tenants.manage"],

@@ -33,56 +33,75 @@ export async function PATCH(
   }
 
   const planId = normalizeBillingPlanId(body.planId);
-  if (!body.planId || planId === "trial" || !(planId in BILLING_PLANS)) {
+  if (!body.planId || !(planId in BILLING_PLANS)) {
     return NextResponse.json(
-      { ok: false, error: "planId debe ser starter | business | enterprise" },
+      { ok: false, error: "planId debe ser trial | starter | business | enterprise" },
       { status: 400 },
     );
   }
 
   const admin = getFirebaseAdmin()!;
+  const db = admin.firestore();
   const plan = BILLING_PLANS[planId];
   const stamp = new Date().toISOString();
   const periodEnd = new Date();
-  periodEnd.setMonth(periodEnd.getMonth() + 1);
+  if (planId === "trial") {
+    periodEnd.setDate(periodEnd.getDate() + 14);
+  } else {
+    periodEnd.setMonth(periodEnd.getMonth() + 1);
+  }
 
-  const ref = admin
-    .firestore()
+  const status = planId === "trial" ? "trialing" : "active";
+  const ref = db
     .collection("restaurants")
     .doc(restaurantId)
     .collection("billing")
     .doc("current");
+
+  const payload = {
+    planId,
+    requestedPlanId: planId,
+    status,
+    seatsIncluded: plan.seatsIncluded,
+    branchesIncluded: plan.branchesIncluded,
+    amountCents: plan.monthlyPriceCents,
+    currentPeriodStart: stamp,
+    currentPeriodEnd: periodEnd.toISOString(),
+    updatedAt: stamp,
+    activatedBy: gate.uid,
+    ...(planId === "trial"
+      ? { trialEndsAt: periodEnd.toISOString() }
+      : { trialEndsAt: null }),
+  };
 
   const existing = await ref.get();
   if (!existing.exists) {
     await ref.set({
       id: "current",
       restaurantId,
-      planId,
-      status: "active",
-      seatsIncluded: plan.seatsIncluded,
-      branchesIncluded: plan.branchesIncluded,
-      amountCents: plan.monthlyPriceCents,
       currency: "EUR",
-      currentPeriodStart: stamp,
-      currentPeriodEnd: periodEnd.toISOString(),
       createdAt: stamp,
-      updatedAt: stamp,
-      activatedBy: gate.uid,
+      ...payload,
     });
   } else {
-    await ref.update({
-      planId,
-      status: "active",
-      seatsIncluded: plan.seatsIncluded,
-      branchesIncluded: plan.branchesIncluded,
-      amountCents: plan.monthlyPriceCents,
-      currentPeriodStart: stamp,
-      currentPeriodEnd: periodEnd.toISOString(),
-      updatedAt: stamp,
-      activatedBy: gate.uid,
-    });
+    await ref.update(payload);
   }
+
+  await db
+    .collection("platformTenants")
+    .doc(restaurantId)
+    .set(
+      {
+        planId,
+        requestedPlanId: planId,
+        amountCents: plan.monthlyPriceCents,
+        status: planId === "trial" ? "trialing" : "active",
+        updatedAt: stamp,
+        activatedBy: gate.uid,
+        activatedAt: stamp,
+      },
+      { merge: true },
+    );
 
   return NextResponse.json({
     ok: true,

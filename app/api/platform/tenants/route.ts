@@ -51,17 +51,29 @@ export async function GET(req: Request) {
           displayName: String(md.displayName || ""),
         };
       });
+      const planId = normalizeBillingPlanId(String(billing?.planId || "trial"));
+      const requestedPlanId = normalizeBillingPlanId(
+        String(billing?.requestedPlanId || planId),
+      );
+      const planStatus = String(billing?.status || "—");
+      const needsActivation =
+        requestedPlanId !== "trial" &&
+        (planId === "trial" || planStatus === "trialing") &&
+        planId !== requestedPlanId;
+
       return {
         id: d.id,
         name: String(data.name || ""),
         status: String(data.status || "active"),
         slug: data.slug ? String(data.slug) : null,
         createdAt: String(data.createdAt || ""),
-        planId: normalizeBillingPlanId(
-          String(billing?.planId || "trial"),
+        planId,
+        requestedPlanId,
+        planStatus,
+        needsActivation,
+        amountCents: Number(
+          billing?.amountCents ?? BILLING_PLANS[requestedPlanId].monthlyPriceCents,
         ),
-        planStatus: String(billing?.status || "—"),
-        amountCents: Number(billing?.amountCents || 0),
         owners,
       };
     }),
@@ -296,6 +308,21 @@ export async function POST(req: Request) {
       updatedAt: stamp,
     },
   );
+
+  batch.set(db.collection("platformTenants").doc(restaurantId), {
+    id: restaurantId,
+    name: restaurantName,
+    ownerEmail: email,
+    ownerName,
+    ownerUid: uid,
+    planId,
+    requestedPlanId: planId,
+    amountCents: plan.monthlyPriceCents,
+    status: "active",
+    source: "superadmin",
+    createdAt: stamp,
+    updatedAt: stamp,
+  });
 
   await batch.commit();
 
