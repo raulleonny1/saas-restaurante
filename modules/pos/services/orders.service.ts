@@ -21,6 +21,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   Unsubscribe,
   where,
   writeBatch,
@@ -372,7 +373,7 @@ export async function patchOrderTotals(
   return next;
 }
 
-/** Safer update via updateDoc-compatible batch set merge. */
+/** Safer update: rechaza si otro cliente (cocina/sala) ya escribió encima. */
 export async function saveOrder(
   restaurantId: string,
   order: Order,
@@ -381,18 +382,32 @@ export async function saveOrder(
   eventType?: string,
 ): Promise<Order> {
   const totals = recalculateOrder(order, taxPercent);
+  const stamp = nowIso();
   const next: Order = {
     ...order,
     ...totals,
     amountPaid: order.amountPaid ?? 0,
-    updatedAt: nowIso(),
+    updatedAt: stamp,
   };
-  const batch = writeBatch(getDb());
-  batch.set(
-    doc(getDb(), "restaurants", restaurantId, "orders", order.id),
-    stripUndefined({ ...next }),
-  );
-  await batch.commit();
+  const ref = doc(getDb(), "restaurants", restaurantId, "orders", order.id);
+  const expectedUpdatedAt = order.updatedAt;
+
+  await runTransaction(getDb(), async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists()) {
+      const remote = snap.data() as Order;
+      if (
+        expectedUpdatedAt &&
+        remote.updatedAt &&
+        remote.updatedAt !== expectedUpdatedAt
+      ) {
+        throw new Error(
+          "El pedido cambió en cocina o sala. Actualiza e inténtalo de nuevo.",
+        );
+      }
+    }
+    tx.set(ref, stripUndefined({ ...next }));
+  });
 
   if (eventType) {
     await appendEvent(restaurantId, {

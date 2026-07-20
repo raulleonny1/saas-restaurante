@@ -21,6 +21,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { newId } from "./orders.service";
+import { buildWaiterReceiptPrintJob } from "./receipt-print-jobs.service";
 
 function nowIso() {
   return new Date().toISOString();
@@ -206,6 +207,22 @@ export async function chargeOrder(input: ChargeInput): Promise<{
         updatedAt: stamp,
       });
     }
+  }
+
+  // Mesero cobra → cola de impresión en el PC de caja (sin diálogo en el móvil).
+  if (chargedFrom === "waiter") {
+    const job = buildWaiterReceiptPrintJob({
+      restaurantId,
+      branchId: order.branchId,
+      orderId: order.id,
+      paymentId,
+      method,
+      tableName: order.tableName,
+    });
+    batch.set(
+      doc(getDb(), "restaurants", restaurantId, "receiptPrintJobs", job.id),
+      stripUndefined({ ...job }),
+    );
   }
 
   await batch.commit();

@@ -10,14 +10,15 @@ export function escapeHtml(s: string) {
 
 /**
  * Abre el ticket en una ventana aparte (el HTML llama a print al cargar).
- * En cocina/barra: `allowIframeFallback: false` para no bloquear Carta con el diálogo.
+ * En cocina/barra: `allowIframeFallback: false` para no bloquear Carta.
+ * @returns false si no se pudo abrir (popup bloqueado sin iframe).
  */
 export function openPrintHtml(
   html: string,
   title: string,
   opts?: { allowIframeFallback?: boolean },
-) {
-  if (typeof window === "undefined") return;
+): boolean {
+  if (typeof window === "undefined") return false;
   const allowIframe = opts?.allowIframeFallback !== false;
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
@@ -25,10 +26,7 @@ export function openPrintHtml(
   if (!w) {
     if (!allowIframe) {
       URL.revokeObjectURL(url);
-      window.alert(
-        `No se pudo abrir la ventana de impresión (${title}). Permite ventanas emergentes para este sitio y pulsa Imprimir otra vez.`,
-      );
-      return;
+      return false;
     }
     const iframe = document.createElement("iframe");
     iframe.style.position = "fixed";
@@ -47,14 +45,15 @@ export function openPrintHtml(
       } catch {
         /* ignore */
       }
-      window.setTimeout(() => {
-        URL.revokeObjectURL(url);
-        iframe.remove();
-      }, 60_000);
     };
-    return;
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url);
+      iframe.remove();
+    }, 60_000);
+    return true;
   }
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return true;
 }
 
 export function thermalPageCss(paperWidthMm: ThermalPaperWidth = 80): string {

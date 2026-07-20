@@ -28,6 +28,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   Unsubscribe,
   where,
   writeBatch,
@@ -322,54 +323,66 @@ export async function advanceTicketColumn(input: {
   if (!itemIds.length) return;
   const stamp = nowIso();
   const idSet = new Set(itemIds);
+  const ref = doc(getDb(), "restaurants", restaurantId, "orders", order.id);
 
-  const items = order.items.map((item) =>
-    idSet.has(item.id) ? patchItemToColumn(item, toColumn, stamp) : item,
-  );
-  const orderStatus = deriveOrderStatus(items, order.status);
+  let branchId = order.branchId;
+  let fromStatus = order.status;
+  let toStatus: OrderStatus = order.status;
 
-  const readyBody =
-    toColumn === "ready"
-      ? items
-          .filter((i) => idSet.has(i.id))
-          .map((i) => `${i.quantity}× ${i.name}`)
-          .join(", ")
-      : undefined;
-  const stillHasReady = items.some((i) => i.status === "ready");
+  await runTransaction(getDb(), async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Pedido no encontrado");
+    const live = { id: snap.id, ...snap.data() } as Order;
+    branchId = live.branchId;
+    fromStatus = live.status;
 
-  const batch = writeBatch(getDb());
-  batch.update(doc(getDb(), "restaurants", restaurantId, "orders", order.id), {
-    items,
-    status: orderStatus,
-    updatedAt: stamp,
-    ...(toColumn === "ready"
-      ? {
-          waiterAlertAt: stamp,
-          waiterAlertBody: readyBody || "Pedido listo para llevar a la mesa",
-        }
-      : !stillHasReady
+    const items = live.items.map((item) =>
+      idSet.has(item.id) ? patchItemToColumn(item, toColumn, stamp) : item,
+    );
+    toStatus = deriveOrderStatus(items, live.status);
+
+    const readyBody =
+      toColumn === "ready"
+        ? items
+            .filter((i) => idSet.has(i.id))
+            .map((i) => `${i.quantity}× ${i.name}`)
+            .join(", ")
+        : undefined;
+    const stillHasReady = items.some((i) => i.status === "ready");
+
+    tx.update(ref, {
+      items,
+      status: toStatus,
+      updatedAt: stamp,
+      ...(toColumn === "ready"
         ? {
-            waiterAlertAt: deleteField(),
-            waiterAlertBody: deleteField(),
+            waiterAlertAt: stamp,
+            waiterAlertBody: readyBody || "Pedido listo para llevar a la mesa",
           }
-        : {}),
+        : !stillHasReady
+          ? {
+              waiterAlertAt: deleteField(),
+              waiterAlertBody: deleteField(),
+            }
+          : {}),
+    });
   });
 
   const evtId = `evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  const batch = writeBatch(getDb());
   batch.set(doc(getDb(), "restaurants", restaurantId, "orderEvents", evtId), {
     id: evtId,
     restaurantId,
-    branchId: order.branchId,
+    branchId,
     orderId: order.id,
     type: "kitchen.item_status",
-    fromStatus: order.status,
-    toStatus: orderStatus,
+    fromStatus,
+    toStatus,
     actorUid,
     payload: { itemIds, toColumn },
     createdAt: stamp,
     updatedAt: stamp,
   });
-
   await batch.commit();
 }
 

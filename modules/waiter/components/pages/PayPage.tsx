@@ -258,7 +258,7 @@ export function WaiterPayPage() {
             ? printOnCharge
               ? "Cobrado · imprimiendo ticket de ventas…"
               : "Cobrado en caja · puedes imprimir el ticket abajo"
-            : "Cobrado · la mesa queda sucia hasta limpiarla",
+            : "Cobrado · el ticket se imprime en caja · limpia la mesa después",
         );
         setTendered("");
         setTip("0");
@@ -499,7 +499,7 @@ export function WaiterPayPage() {
         <p className="text-center text-xs text-[#5a6b57]">
           {canPrint
             ? "El ticket solo se muestra e imprime cuando el cobro está hecho."
-            : "Tras cobrar, limpia la mesa desde la sala. La impresión es solo en caja."}
+            : "Tras cobrar, el ticket sale en la impresora de caja (deja /caja abierta). Luego limpia la mesa."}
         </p>
       )}
 

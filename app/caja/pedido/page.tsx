@@ -1,5 +1,5 @@
-import { WaiterOrderPage } from "@/modules/waiter/components/pages/OrderPage";
+import { CashierSellPage } from "@/modules/cashier/components/CashierSellPage";
 
 export default function CajaPedidoPage() {
-  return <WaiterOrderPage />;
+  return <CashierSellPage />;
 }

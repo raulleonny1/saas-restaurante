@@ -801,7 +801,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
       zone?: "sala" | "barra" | "terraza";
     }) => {
       if (!restaurantId || !branchId) throw new Error("Sin sucursal");
-      return createTable({
+      const table = await createTable({
         restaurantId,
         branchId,
         name: input.name,
@@ -809,6 +809,14 @@ export function PosProvider({ children }: { children: ReactNode }) {
         zone: input.zone,
         existingCount: tables.length,
       });
+      setTables((prev) =>
+        prev.some((t) => t.id === table.id)
+          ? prev
+          : [...prev, table].sort((a, b) =>
+              a.name.localeCompare(b.name, "es"),
+            ),
+      );
+      return table;
     },
     [restaurantId, branchId, tables.length],
   );

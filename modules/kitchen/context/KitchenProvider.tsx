@@ -88,6 +88,8 @@ interface KitchenContextValue {
   canThermalPrint: boolean;
   /** Comandas nuevas pendientes de imprimir (no abre diálogo sola). */
   pendingPrintCount: number;
+  /** Último error de impresión (popup bloqueado, etc.). */
+  printError: string | null;
   /** Imprime pendientes; solo al pulsar (el diálogo no bloquea Carta al llegar el pedido). */
   printPendingTickets: () => void;
   printTicket: (orderId: string, itemIds: string[]) => void;
@@ -103,6 +105,51 @@ export function useKitchen() {
 
 function stationStorageKey(mode: KitchenBoardMode) {
   return `smartserve_${mode}_station`;
+}
+
+function printedStorageKey(mode: KitchenBoardMode) {
+  return `smartserve_${mode}_printed_v1`;
+}
+
+function pendingStorageKey(mode: KitchenBoardMode) {
+  return `smartserve_${mode}_pending_print_v1`;
+}
+
+function loadKeySet(key: string): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(arr.filter((x): x is string => typeof x === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function persistPrintedKeys(mode: KitchenBoardMode, keys: Set<string>) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      printedStorageKey(mode),
+      JSON.stringify([...keys].slice(-400)),
+    );
+  } catch {
+    /* quota */
+  }
+}
+
+function persistPendingKeys(mode: KitchenBoardMode, keys: string[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      pendingStorageKey(mode),
+      JSON.stringify(keys.slice(-200)),
+    );
+  } catch {
+    /* quota */
+  }
 }
 
 export function KitchenProvider({
@@ -138,6 +185,15 @@ export function KitchenProvider({
   const printedItemKeysRef = useRef<Set<string>>(new Set());
   const printPrimedRef = useRef(false);
   const [pendingPrintKeys, setPendingPrintKeys] = useState<string[]>([]);
+  const [printError, setPrintError] = useState<string | null>(null);
+
+  // Restaura pendientes/impresos de esta sesión (evita perder cola al refrescar).
+  useEffect(() => {
+    printedItemKeysRef.current = loadKeySet(printedStorageKey(mode));
+    const pending = [...loadKeySet(pendingStorageKey(mode))];
+    if (pending.length) setPendingPrintKeys(pending);
+    printPrimedRef.current = false;
+  }, [mode]);
 
   const allowedStations = useMemo(
     () =>
@@ -418,6 +474,7 @@ export function KitchenProvider({
 
     if (!printPrimedRef.current) {
       printPrimedRef.current = true;
+      persistPrintedKeys(mode, printedItemKeysRef.current);
       return;
     }
 
@@ -425,9 +482,11 @@ export function KitchenProvider({
     setPendingPrintKeys((prev) => {
       const set = new Set(prev);
       for (const k of fresh) set.add(k);
-      return [...set];
+      const next = [...set];
+      persistPendingKeys(mode, next);
+      return next;
     });
-  }, [tickets, ready, canThermalPrint]);
+  }, [tickets, ready, canThermalPrint, mode]);
 
   const runPrintBundle = useCallback(
     (bundles: { order: Order; items: OrderItem[] }[]) => {
@@ -438,6 +497,8 @@ export function KitchenProvider({
       );
       const kp = printCfg.printers.kitchen;
       const stationPrint = mode === "bar" ? "bar" : "cocina";
+      const okKeys: string[] = [];
+      let anyFailed = false;
       for (const { order, items } of bundles) {
         if (!items.length) continue;
         const uid = order.servedBy || order.createdBy;
@@ -447,8 +508,9 @@ export function KitchenProvider({
           member?.displayName?.trim() ||
           member?.email ||
           undefined;
+        let ok = false;
         try {
-          printKitchenTicket(
+          ok = printKitchenTicket(
             { ...order, items },
             {
               restaurantName: restaurant?.name ?? "SmartServe",
@@ -462,17 +524,33 @@ export function KitchenProvider({
             },
           );
         } catch {
-          /* ignore */
+          ok = false;
+        }
+        if (!ok) {
+          anyFailed = true;
+          continue;
         }
         for (const item of items) {
-          printedItemKeysRef.current.add(
-            `${order.id}:${item.id}:${item.sentAt ?? ""}`,
-          );
+          const key = `${order.id}:${item.id}:${item.sentAt ?? ""}`;
+          printedItemKeysRef.current.add(key);
+          okKeys.push(key);
         }
       }
-      setPendingPrintKeys((prev) =>
-        prev.filter((k) => !printedItemKeysRef.current.has(k)),
-      );
+      if (okKeys.length) {
+        persistPrintedKeys(mode, printedItemKeysRef.current);
+      }
+      setPendingPrintKeys((prev) => {
+        const next = prev.filter((k) => !printedItemKeysRef.current.has(k));
+        persistPendingKeys(mode, next);
+        return next;
+      });
+      if (anyFailed) {
+        setPrintError(
+          "No se pudo abrir la impresión. Permite ventanas emergentes y pulsa Reintentar.",
+        );
+      } else {
+        setPrintError(null);
+      }
     },
     [restaurantId, restaurant?.settings, restaurant?.name, mode, members],
   );
@@ -581,6 +659,7 @@ export function KitchenProvider({
     alertWaiter,
     canThermalPrint,
     pendingPrintCount: pendingPrintKeys.length,
+    printError,
     printPendingTickets,
     printTicket,
   };

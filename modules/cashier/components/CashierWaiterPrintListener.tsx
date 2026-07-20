@@ -6,7 +6,13 @@ import { openCashDrawer } from "@/modules/pos/domain/cash-drawer";
 import { printOrderReceipt } from "@/modules/pos/domain/print";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import { getOrderById } from "@/modules/pos/services/orders.service";
-import { subscribePaymentsForBranch } from "@/modules/pos/services/payments.service";
+import { subscribePaymentsForOrder } from "@/modules/pos/services/payments.service";
+import {
+  markReceiptPrintJobDone,
+  markReceiptPrintJobFailed,
+  subscribePendingReceiptPrintJobs,
+  type ReceiptPrintJob,
+} from "@/modules/pos/services/receipt-print-jobs.service";
 import type { Payment } from "@/types/orders";
 import { useEffect, useRef, useState } from "react";
 
@@ -19,55 +25,38 @@ function isAutoPrintEnabled(): boolean {
   return raw !== "0";
 }
 
+function loadPaymentsForOrder(
+  restaurantId: string,
+  orderId: string,
+): Promise<Payment[]> {
+  return new Promise((resolve) => {
+    const unsub = subscribePaymentsForOrder(restaurantId, orderId, (pays) => {
+      unsub();
+      resolve(pays);
+    });
+    window.setTimeout(() => {
+      unsub();
+      resolve([]);
+    }, 4000);
+  });
+}
+
 /**
- * Con /caja abierta en el PC de ventas: al cobrar el mesero en sala,
- * imprime el ticket aquí (impresora TPV) y opcionalmente abre el cajón.
- * El mesero no ve diálogo de impresión.
+ * Con /caja abierta: imprime tickets de cobros del mesero (cola receiptPrintJobs).
  */
 export function CashierWaiterPrintListener() {
   const { restaurantId, restaurant } = useRestaurant();
   const { branchId, restaurantName } = usePos();
-  const primedRef = useRef(false);
-  const seenIdsRef = useRef(new Set<string>());
+  const processingRef = useRef(new Set<string>());
   const [banner, setBanner] = useState<string | null>(null);
 
   useEffect(() => {
     if (!restaurantId || !branchId) return;
 
-    primedRef.current = false;
-    seenIdsRef.current = new Set();
-
-    return subscribePaymentsForBranch(restaurantId, branchId, (payments) => {
-      const completed = payments.filter(
-        (p) =>
-          p.status === "completed" &&
-          p.chargedFrom === "waiter" &&
-          Boolean(p.orderId),
-      );
-
-      if (!primedRef.current) {
-        for (const p of completed) seenIdsRef.current.add(p.id);
-        primedRef.current = true;
-        return;
-      }
-
-      if (!isAutoPrintEnabled()) {
-        for (const p of completed) seenIdsRef.current.add(p.id);
-        return;
-      }
-
-      const fresh: Payment[] = [];
-      for (const p of completed) {
-        if (seenIdsRef.current.has(p.id)) continue;
-        seenIdsRef.current.add(p.id);
-        fresh.push(p);
-      }
-      if (!fresh.length) return;
-
-      // Más reciente primero; imprimir en orden de llegada
-      fresh.sort((a, b) =>
-        (a.paidAt ?? a.createdAt).localeCompare(b.paidAt ?? b.createdAt),
-      );
+    return subscribePendingReceiptPrintJobs(restaurantId, branchId, (jobs) => {
+      if (!isAutoPrintEnabled()) return;
+      const pending = jobs.filter((j) => j.status === "pending");
+      if (!pending.length) return;
 
       void (async () => {
         const tpv = getEffectivePrintSettings(
@@ -75,34 +64,20 @@ export function CashierWaiterPrintListener() {
           restaurant?.settings,
         ).printers.tpv;
 
-        for (const payment of fresh) {
+        for (const job of pending) {
+          if (processingRef.current.has(job.id)) continue;
+          processingRef.current.add(job.id);
           try {
-            const order = await getOrderById(restaurantId, payment.orderId);
-            if (!order) continue;
-
-            // Pagos parciales: reunir pagos del mismo pedido ya vistos + este
-            const orderPays = payments.filter(
-              (p) =>
-                p.orderId === payment.orderId &&
-                (p.status === "completed" || p.status === "refunded"),
-            );
-
-            printOrderReceipt(order, orderPays, {
+            await printJob(job, {
+              restaurantId,
               restaurantName,
-              paperWidthMm: tpv?.paperWidthMm ?? 80,
-              printerSystemName: tpv?.systemName,
-              printerLabel: tpv?.label ?? "Ventas · ticket cliente",
+              tpv,
             });
-
-            if (payment.method === "cash") {
-              void openCashDrawer(tpv).catch(() => {});
-            }
-
-            const mesa = order.tableName?.trim() || "Mesa";
+            const mesa = job.tableName?.trim() || "Mesa";
             setBanner(`Ticket sala · ${mesa} · imprimiendo en ventas…`);
             window.setTimeout(() => setBanner(null), 5000);
           } catch {
-            /* siguiente cobro */
+            /* marcado failed dentro de printJob */
           }
         }
       })();
@@ -118,4 +93,45 @@ export function CashierWaiterPrintListener() {
       </p>
     </div>
   );
+}
+
+async function printJob(
+  job: ReceiptPrintJob,
+  ctx: {
+    restaurantId: string;
+    restaurantName: string;
+    tpv: ReturnType<typeof getEffectivePrintSettings>["printers"]["tpv"];
+  },
+) {
+  try {
+    const order = await getOrderById(ctx.restaurantId, job.orderId);
+    if (!order) {
+      await markReceiptPrintJobFailed({
+        restaurantId: ctx.restaurantId,
+        jobId: job.id,
+        error: "Pedido no encontrado",
+      });
+      return;
+    }
+    const payments = await loadPaymentsForOrder(ctx.restaurantId, job.orderId);
+    printOrderReceipt(order, payments, {
+      restaurantName: ctx.restaurantName,
+      paperWidthMm: ctx.tpv?.paperWidthMm ?? 80,
+      printerSystemName: ctx.tpv?.systemName,
+      printerLabel: ctx.tpv?.label ?? "Ventas · ticket cliente",
+    });
+    if (job.openDrawer) {
+      void openCashDrawer(ctx.tpv).catch(() => {});
+    }
+    await markReceiptPrintJobDone({
+      restaurantId: ctx.restaurantId,
+      jobId: job.id,
+    });
+  } catch (e) {
+    await markReceiptPrintJobFailed({
+      restaurantId: ctx.restaurantId,
+      jobId: job.id,
+      error: e instanceof Error ? e.message : "Error al imprimir",
+    });
+  }
 }

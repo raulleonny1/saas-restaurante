@@ -300,12 +300,20 @@ export function CashierHomePage() {
             Pedidos en sala y cobros · déjala abierta para imprimir tickets del
             mesero
           </p>
-          <Link
-            href={routes.printers}
-            className="mt-2 inline-block text-xs text-emerald-400 hover:underline"
-          >
-            Configurar impresora de ventas
-          </Link>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Link
+              href={routes.order}
+              className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-950/40"
+            >
+              Vender ahora
+            </Link>
+            <Link
+              href={routes.printers}
+              className="inline-block text-xs text-emerald-400 hover:underline"
+            >
+              Configurar impresora de ventas
+            </Link>
+          </div>
         </div>
         {branches.length > 1 ? (
           <select

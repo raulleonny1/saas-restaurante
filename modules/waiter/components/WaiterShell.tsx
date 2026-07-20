@@ -18,6 +18,7 @@ import {
   QrCode,
   Receipt,
   ShoppingBag,
+  Store,
   Volume2,
 } from "lucide-react";
 import Link from "next/link";
@@ -66,9 +67,9 @@ export function WaiterShell({
           icon: LayoutGrid,
           match: "exact" as const,
         },
+        { href: routes.order, label: "Vender", icon: Store },
         { href: routes.pay, label: "Cobrar", icon: Receipt },
         { href: routes.history, label: "Caja", icon: History },
-        { href: routes.order, label: "Pedido", icon: ShoppingBag },
         { href: routes.printers, label: "Impr.", icon: Printer },
       ];
     }

@@ -22,6 +22,7 @@ function KitchenWorkspace({ mode }: { mode: KitchenBoardMode }) {
     canThermalPrint,
     pendingPrintCount,
     printPendingTickets,
+    printError,
   } = useKitchen();
   const isBar = mode === "bar";
   const accessOk = isBar
@@ -88,17 +89,21 @@ function KitchenWorkspace({ mode }: { mode: KitchenBoardMode }) {
 
       {canThermalPrint && pendingPrintCount > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-          <p className="text-sm font-medium text-fg">
-            {pendingPrintCount} línea
-            {pendingPrintCount === 1 ? "" : "s"} nueva
-            {pendingPrintCount === 1 ? "" : "s"} para imprimir
-          </p>
-          <Button
-            size="sm"
-            onClick={() => printPendingTickets()}
-          >
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-fg">
+              {pendingPrintCount} línea
+              {pendingPrintCount === 1 ? "" : "s"} pendiente
+              {pendingPrintCount === 1 ? "" : "s"} de imprimir
+            </p>
+            {printError ? (
+              <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200/90">
+                {printError}
+              </p>
+            ) : null}
+          </div>
+          <Button size="sm" onClick={() => printPendingTickets()}>
             <Printer className="h-3.5 w-3.5" />
-            Imprimir comandas
+            {printError ? "Reintentar" : "Imprimir comandas"}
           </Button>
         </div>
       ) : null}

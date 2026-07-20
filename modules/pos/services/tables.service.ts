@@ -94,6 +94,39 @@ export async function createTable(input: {
   return row;
 }
 
+const COUNTER_NAME = "Mostrador";
+
+/**
+ * Punto de venta de caja (mostrador). Reutiliza la mesa si ya existe;
+ * si no, la crea en zona barra.
+ */
+export async function ensureCashierCounterTable(input: {
+  restaurantId: string;
+  branchId: string;
+  tables: Table[];
+}): Promise<Table> {
+  const existing = input.tables.find((t) => {
+    if (t.deletedAt) return false;
+    if (t.branchId !== input.branchId) return false;
+    const n = t.name.trim().toLowerCase();
+    return (
+      n === "mostrador" ||
+      n === "caja" ||
+      n === "venta caja" ||
+      n === "mostrador caja"
+    );
+  });
+  if (existing) return existing;
+  return createTable({
+    restaurantId: input.restaurantId,
+    branchId: input.branchId,
+    name: COUNTER_NAME,
+    seats: 1,
+    zone: "barra",
+    existingCount: input.tables.length,
+  });
+}
+
 export async function updateTable(input: {
   restaurantId: string;
   tableId: string;

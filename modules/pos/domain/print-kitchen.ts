@@ -70,12 +70,12 @@ export type PrintKitchenOptions = {
 export function printKitchenTicket(
   order: Order,
   opts: PrintKitchenOptions = {},
-): void {
+): boolean {
   const restaurantName = opts.restaurantName ?? "SmartServe";
   const mm = opts.paperWidthMm ?? 80;
   const printerLabel = opts.printerLabel ?? "Cocina · comanda";
   const active = order.items.filter((i) => i.status !== "cancelled");
-  if (!active.length) return;
+  if (!active.length) return false;
 
   const food = active.filter(
     (i) => !i.kitchenStation || !isDrinkStation(i.kitchenStation),
@@ -151,7 +151,7 @@ export function printKitchenTicket(
     <script>window.onload=function(){window.print();}</script>
     </body></html>`;
 
-  openPrintHtml(html, `Cocina ${order.tableName ?? ""}`, {
+  return openPrintHtml(html, `Cocina ${order.tableName ?? ""}`, {
     allowIframeFallback: false,
   });
 }
