@@ -18,14 +18,20 @@ import { useEffect, useState } from "react";
 export function ReadyPickupBanner() {
   const router = useRouter();
   const routes = useFloorRoutes();
-  const { selectTable, openOrders, tables } = usePos();
+  const { selectTable, openOrders } = usePos();
   const { notifications, markRead, unlockAudio } = useWaiterNotifications();
   const [soundOn, setSoundOn] = useState(false);
 
   const activeTableIds = new Set(
-    tables
-      .filter((t) => t.currentOrderId || t.status === "occupied")
-      .map((t) => t.id),
+    openOrders
+      .filter(
+        (o) =>
+          o.status !== "paid" &&
+          o.status !== "cancelled" &&
+          o.tableId &&
+          o.items.some((i) => i.status !== "cancelled"),
+      )
+      .map((o) => o.tableId as string),
   );
 
   const pickups = notifications.filter((n) => {

@@ -48,10 +48,11 @@ const TONE_DOT: Record<TableFloorTone, string> = {
 };
 
 function tableNeedsCover(_table: Table, order: Order | null): boolean {
-  // Solo servicio real: no mesas sucias ni «ocupadas» fantasma sin pedido.
-  return Boolean(
-    order && order.status !== "paid" && order.status !== "cancelled",
-  );
+  // Solo mesas con líneas reales (no vacías ni fantasma).
+  if (!order || order.status === "paid" || order.status === "cancelled") {
+    return false;
+  }
+  return order.items.some((i) => i.status !== "cancelled");
 }
 
 function TableCard({
@@ -147,6 +148,7 @@ function TablesContent() {
   const routes = useFloorRoutes();
   const { restaurantId } = useRestaurant();
   const {
+    ready,
     tables,
     openOrders,
     selectedTableId,
@@ -156,6 +158,7 @@ function TablesContent() {
     branchId,
     setBranchId,
     markTableClean,
+    releaseIdleTables,
   } = usePos();
   const [manageOpen, setManageOpen] = useState(false);
   const [previewTable, setPreviewTable] = useState<Table | null>(null);
@@ -180,6 +183,12 @@ function TablesContent() {
       setAssignedTableIds,
     );
   }, [floorOnly, restaurantId, waiterUid, waiterEmail]);
+
+  // Al entrar a sala: libera mesas abiertas sin consumición y fantasmas.
+  useEffect(() => {
+    if (!ready) return;
+    void releaseIdleTables();
+  }, [ready, releaseIdleTables]);
 
   const assignedSet = useMemo(
     () => new Set(assignedTableIds ?? []),

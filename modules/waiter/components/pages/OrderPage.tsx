@@ -19,7 +19,6 @@ export function WaiterOrderPage() {
     selectedTableId,
     tables,
     activeOrder,
-    openSelectedTable,
     setItemQty,
     removeItem,
     sendKitchen,
@@ -69,44 +68,8 @@ export function WaiterOrderPage() {
     );
   }
 
-  if (!activeOrder) {
-    return (
-      <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-5">
-        <Link
-          href={routes.home}
-          className="inline-flex items-center gap-1.5 text-sm text-emerald-400"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {routes.base === "/caja" ? "Volver" : "Volver a mesas"}
-        </Link>
-        <h1 className="font-[family-name:var(--font-display)] text-2xl">
-          Mesa {table.name}
-        </h1>
-        <p className="text-sm text-[#a8b5a4]">Sin pedido abierto.</p>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            void (async () => {
-              try {
-                setBusy(true);
-                await openSelectedTable();
-                setTab("carta");
-              } catch (e) {
-                setMsg(e instanceof Error ? e.message : "Error");
-              } finally {
-                setBusy(false);
-              }
-            })();
-          }}
-          className="w-full touch-manipulation rounded-xl bg-emerald-700 py-4 text-sm font-medium disabled:opacity-50"
-        >
-          {busy ? "Abriendo…" : "Abrir mesa / tomar pedido"}
-        </button>
-        {msg ? <p className="text-xs text-amber-300">{msg}</p> : null}
-      </div>
-    );
-  }
+  const itemCount = activeOrder?.items.length ?? 0;
+  const tableTitle = activeOrder?.tableName ?? table.name;
 
   const ticketPanel = (
     <TicketPanel
@@ -135,7 +98,7 @@ export function WaiterOrderPage() {
         void (async () => {
           try {
             setBusy(true);
-            const ids = activeOrder.items
+            const ids = (activeOrder?.items ?? [])
               .filter((i) => i.status === "ready")
               .map((i) => i.id);
             await markItemsServed(ids);
@@ -162,7 +125,8 @@ export function WaiterOrderPage() {
         })();
       }}
       payHref={routes.pay}
-      emptyHint="Añade platos desde la carta."
+      emptyHint="Añade platos desde la carta. La mesa se abre al primer producto."
+      canPay={Boolean(activeOrder && itemCount > 0)}
     />
   );
 
@@ -176,11 +140,11 @@ export function WaiterOrderPage() {
           <ArrowLeft className="h-4 w-4" />
           {routes.base === "/caja" ? "Volver" : "Volver a mesas"}
           <span className="font-normal text-[#8fa08c]">
-            · el pedido se guarda
+            · {activeOrder ? "el pedido se guarda" : "sin pedido aún"}
           </span>
         </Link>
         <div className="flex gap-2">
-          {canMove ? (
+          {canMove && activeOrder ? (
             <Link
               href={routes.move}
               className="touch-manipulation rounded-xl border border-white/15 px-3 py-2.5 text-sm"
@@ -188,12 +152,14 @@ export function WaiterOrderPage() {
               Mover
             </Link>
           ) : null}
-          <Link
-            href={routes.pay}
-            className="touch-manipulation rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold lg:hidden"
-          >
-            Cobrar
-          </Link>
+          {activeOrder && itemCount > 0 ? (
+            <Link
+              href={routes.pay}
+              className="touch-manipulation rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold lg:hidden"
+            >
+              Cobrar
+            </Link>
+          ) : null}
         </div>
       </div>
 
@@ -205,16 +171,19 @@ export function WaiterOrderPage() {
             </p>
           ) : null}
           <h1 className="font-[family-name:var(--font-display)] text-2xl tracking-tight lg:text-3xl">
-            Mesa {activeOrder.tableName}
+            Mesa {tableTitle}
           </h1>
           <p className="text-xs text-[#8fa08c] lg:text-sm">
-            {activeOrder.status} · pendiente{" "}
-            {formatCurrency(balance, currency)}
+            {activeOrder
+              ? `${activeOrder.status} · pendiente ${formatCurrency(balance, currency)}`
+              : "Toca un producto para empezar el pedido"}
           </p>
         </div>
-        <p className="hidden font-[family-name:var(--font-display)] text-2xl text-emerald-300 lg:block">
-          {formatCurrency(balance, currency)}
-        </p>
+        {activeOrder ? (
+          <p className="hidden font-[family-name:var(--font-display)] text-2xl text-emerald-300 lg:block">
+            {formatCurrency(balance, currency)}
+          </p>
+        ) : null}
       </div>
 
       {/* Móvil / tablet vertical: pestañas */}
@@ -235,16 +204,12 @@ export function WaiterOrderPage() {
             tab === "ticket" ? "bg-emerald-700" : "text-[#a8b5a4]"
           }`}
         >
-          Ticket ({activeOrder.items.length})
+          Ticket ({itemCount})
         </button>
       </div>
 
       <div className="lg:hidden">
-        {tab === "carta" ? (
-          <ProductGrid tone="waiter" />
-        ) : (
-          ticketPanel
-        )}
+        {tab === "carta" ? <ProductGrid tone="waiter" /> : ticketPanel}
       </div>
 
       {/* Monitor ancho: ticket | carta */}
@@ -253,7 +218,7 @@ export function WaiterOrderPage() {
           <div className="mb-2 flex shrink-0 items-center justify-between gap-2 border-b border-white/10 pb-2">
             <p className="text-sm font-semibold text-[#e7efe4]">Ticket</p>
             <span className="rounded-lg bg-white/10 px-2 py-0.5 text-xs text-[#a8b5a4]">
-              {activeOrder.items.length} líneas
+              {itemCount} líneas
             </span>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5">
@@ -282,6 +247,7 @@ function TicketPanel({
   onSendKitchen,
   payHref,
   emptyHint,
+  canPay,
 }: {
   items: OrderItem[];
   readyCount: number;
@@ -296,6 +262,7 @@ function TicketPanel({
   onSendKitchen: () => void;
   payHref: string;
   emptyHint: string;
+  canPay: boolean;
 }) {
   return (
     <div className="flex h-full flex-col gap-3">
@@ -414,12 +381,14 @@ function TicketPanel({
         {busy ? "Enviando…" : "Enviar a cocina"}
       </button>
 
-      <Link
-        href={payHref}
-        className="hidden touch-manipulation items-center justify-center rounded-xl bg-emerald-700 py-4 text-center text-sm font-semibold lg:flex"
-      >
-        Cobrar {formatCurrency(balance, currency)}
-      </Link>
+      {canPay ? (
+        <Link
+          href={payHref}
+          className="hidden touch-manipulation items-center justify-center rounded-xl bg-emerald-700 py-4 text-center text-sm font-semibold lg:flex"
+        >
+          Cobrar {formatCurrency(balance, currency)}
+        </Link>
+      ) : null}
 
       {msg ? (
         <p className="text-center text-xs text-emerald-300">{msg}</p>

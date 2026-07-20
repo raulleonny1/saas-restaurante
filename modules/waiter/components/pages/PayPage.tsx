@@ -14,6 +14,12 @@ import { Delete } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+/** Solo caja imprime tickets / abre cajón. El mesero solo cobra. */
+function useIsCashierFloor() {
+  const routes = useFloorRoutes();
+  return routes.base === "/caja";
+}
+
 const METHODS: { id: PaymentMethod; label: string; accent: string }[] = [
   { id: "cash", label: "Efectivo", accent: "bg-emerald-700 border-emerald-500" },
   { id: "card", label: "Tarjeta", accent: "bg-sky-700 border-sky-500" },
@@ -41,6 +47,9 @@ export function WaiterPayPage() {
   const { can } = useAuth();
   const { restaurantId, restaurant } = useRestaurant();
   const routes = useFloorRoutes();
+  const isCashier = useIsCashierFloor();
+  const canPrint = isCashier;
+  const canKickDrawer = isCashier && can("payments.cash_drawer");
   const {
     activeOrder,
     balance,
@@ -160,10 +169,10 @@ export function WaiterPayPage() {
           order: ticketOrder,
           payments: ticketPayments,
         });
-        if (method === "cash") {
+        if (canKickDrawer && method === "cash") {
           void openCashDrawer(tpvPrinter).catch(() => {});
         }
-        if (printOnCharge) {
+        if (canPrint && printOnCharge) {
           try {
             printOrderReceipt(ticketOrder, ticketPayments, {
               restaurantName,
@@ -176,13 +185,11 @@ export function WaiterPayPage() {
           }
         }
         setMsg(
-          routes.base === "/caja"
+          isCashier
             ? printOnCharge
               ? "Cobrado · imprimiendo ticket de ventas…"
               : "Cobrado en caja · puedes imprimir el ticket abajo"
-            : printOnCharge
-              ? "Cobrado · imprimiendo ticket…"
-              : "Cobrado · ticket listo · queda en Archivo/Caja",
+            : "Cobrado · la mesa queda sucia hasta limpiarla",
         );
         setTendered("");
         setTip("0");
@@ -333,20 +340,24 @@ export function WaiterPayPage() {
             : `Cobrar ${formatCurrency(totalDue, currency)}`}
       </button>
 
-      <label className="flex cursor-pointer items-center gap-2 px-1 text-xs text-[#a8b5a4]">
-        <input
-          type="checkbox"
-          checked={printOnCharge}
-          onChange={(e) => setPrintOnCharge(e.target.checked)}
-          className="rounded border-white/30"
-        />
-        Imprimir ticket de ventas al cobrar
-        {tpvPrinter?.systemName ? (
-          <span className="text-[#8fa08c]">({tpvPrinter.systemName})</span>
-        ) : null}
-      </label>
+      {canPrint ? (
+        <label className="flex cursor-pointer items-center gap-2 px-1 text-xs text-[#a8b5a4]">
+          <input
+            type="checkbox"
+            checked={printOnCharge}
+            onChange={(e) => setPrintOnCharge(e.target.checked)}
+            className="rounded border-white/30"
+          />
+          Imprimir ticket de ventas al cobrar
+          {tpvPrinter?.systemName ? (
+            <span className="text-[#8fa08c]">({tpvPrinter.systemName})</span>
+          ) : null}
+        </label>
+      ) : null}
 
-      {tpvPrinter?.openDrawerOnCash && tpvPrinter.systemName ? (
+      {canKickDrawer &&
+      tpvPrinter?.openDrawerOnCash &&
+      tpvPrinter.systemName ? (
         <button
           type="button"
           className="w-full touch-manipulation rounded-xl border border-amber-500/40 bg-amber-950/30 py-3 text-sm font-medium text-amber-100"
@@ -392,20 +403,22 @@ export function WaiterPayPage() {
                 </li>
               ))}
           </ul>
-          <button
-            type="button"
-            onClick={() => {
-              printOrderReceipt(lastTicket.order, lastTicket.payments, {
-                restaurantName,
-                paperWidthMm: tpvPrinter?.paperWidthMm ?? 80,
-                printerSystemName: tpvPrinter?.systemName,
-                printerLabel: tpvPrinter?.label ?? "TPV · ticket cliente",
-              });
-            }}
-            className="w-full touch-manipulation rounded-xl bg-white/10 py-3 text-sm font-medium text-emerald-200"
-          >
-            Ver / imprimir ticket
-          </button>
+          {canPrint ? (
+            <button
+              type="button"
+              onClick={() => {
+                printOrderReceipt(lastTicket.order, lastTicket.payments, {
+                  restaurantName,
+                  paperWidthMm: tpvPrinter?.paperWidthMm ?? 80,
+                  printerSystemName: tpvPrinter?.systemName,
+                  printerLabel: tpvPrinter?.label ?? "TPV · ticket cliente",
+                });
+              }}
+              className="w-full touch-manipulation rounded-xl bg-white/10 py-3 text-sm font-medium text-emerald-200"
+            >
+              Ver / imprimir ticket
+            </button>
+          ) : null}
           <Link
             href={routes.history}
             className="block text-center text-xs text-emerald-400"
@@ -415,7 +428,9 @@ export function WaiterPayPage() {
         </div>
       ) : (
         <p className="text-center text-xs text-[#5a6b57]">
-          El ticket solo se muestra e imprime cuando el cobro está hecho.
+          {canPrint
+            ? "El ticket solo se muestra e imprime cuando el cobro está hecho."
+            : "Tras cobrar, limpia la mesa desde la sala. La impresión es solo en caja."}
         </p>
       )}
 

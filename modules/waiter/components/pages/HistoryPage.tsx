@@ -234,7 +234,7 @@ export function WaiterHistoryPage() {
           const pays = paymentsByOrder.get(o.id) ?? [];
           const open = expandedId === o.id;
           const canPrint =
-            o.status === "paid" || Boolean(o.paidAt);
+            isCashierApp && (o.status === "paid" || Boolean(o.paidAt));
           return (
             <li
               key={o.id}
@@ -313,11 +313,7 @@ export function WaiterHistoryPage() {
                     >
                       Ver / imprimir ticket
                     </button>
-                  ) : (
-                    <p className="text-[11px] text-amber-300/80">
-                      El ticket solo se imprime cuando ya está cobrado.
-                    </p>
-                  )}
+                  ) : null}
                 </div>
               ) : null}
             </li>

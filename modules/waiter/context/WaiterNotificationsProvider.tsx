@@ -65,7 +65,7 @@ export function WaiterNotificationsProvider({
 }) {
   const { user } = useAuth();
   const { restaurantId } = useRestaurant();
-  const { openOrders, tables } = usePos();
+  const { openOrders } = usePos();
   const { base } = useFloorRoutes();
   const alertsEnabled = base === "/waiter";
   const [remote, setRemote] = useState<AppNotification[]>([]);
@@ -89,13 +89,19 @@ export function WaiterNotificationsProvider({
     return subscribeStaffNotifications(restaurantId, user.uid, setRemote);
   }, [user, restaurantId]);
 
-  /** Solo mesas con pedido activo en el plano (evita avisos fantasma). */
+  /** Solo mesas con líneas reales (evita avisos de mesas vacías/fantasma). */
   const activeTableIds = useMemo(
     () =>
-      tables
-        .filter((t) => t.currentOrderId || t.status === "occupied")
-        .map((t) => t.id),
-    [tables],
+      openOrders
+        .filter(
+          (o) =>
+            o.status !== "paid" &&
+            o.status !== "cancelled" &&
+            o.tableId &&
+            o.items.some((i) => i.status !== "cancelled"),
+        )
+        .map((o) => o.tableId as string),
+    [openOrders],
   );
 
   const kitchen = useMemo(

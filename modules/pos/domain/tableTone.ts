@@ -77,24 +77,28 @@ export function resolveTableFloorTone(
   // Sin pedido abierto real → libre (ignora status ocupada huérfana)
   if (!isLiveOpenOrder(order)) return "free";
 
-  if (order.items.length === 0) return "occupied";
+  // Pedido abierto sin líneas (= abrieron mesa y no pidieron) → sigue libre
+  const activeItems = order.items.filter((i) => i.status !== "cancelled");
+  if (activeItems.length === 0) return "free";
 
-  const pending = order.items.filter(itemPendingSend);
+  const pending = activeItems.filter(itemPendingSend);
   if (pending.length > 0) return "ordering";
 
   // Solo parpadea si queda algo por retirar (status ready)
-  if (order.items.some((i) => i.status === "ready")) return "ready";
+  if (activeItems.some((i) => i.status === "ready")) return "ready";
 
   // Todo servido pero aún no cobrado
-  const active = order.items.filter((i) => i.status !== "cancelled");
-  if (
-    active.length > 0 &&
-    active.every((i) => i.status === "delivered")
-  ) {
+  if (activeItems.every((i) => i.status === "delivered")) {
     return "sent";
   }
 
   return "sent";
+}
+
+/** Pedido vivo pero sin ningún ítem (mesa «abierta» en vacío). */
+export function isEmptyOpenOrder(order: Order | null): boolean {
+  if (!isLiveOpenOrder(order)) return false;
+  return !order.items.some((i) => i.status !== "cancelled");
 }
 
 export const TABLE_TONE_LABEL: Record<TableFloorTone, string> = {

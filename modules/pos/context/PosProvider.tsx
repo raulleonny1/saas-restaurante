@@ -36,6 +36,7 @@ import {
   moveOrderToTable,
   newId,
   openTable,
+  releaseEmptyOpenOrder,
   removeOrderItem,
   saveOrder,
   sendToKitchen,
@@ -45,6 +46,11 @@ import {
   updateOrderItem,
   markPrinted,
 } from "@/modules/pos/services/orders.service";
+import {
+  isEmptyOpenOrder,
+  isStaleOccupiedTable,
+  orderForTable,
+} from "@/modules/pos/domain/tableTone";
 import { applyPaidOrderToCrm } from "@/modules/customers/services/orders-crm.service";
 import { deductOrderFromInventory } from "@/modules/inventory/services/sale-deduction.service";
 import {
@@ -75,6 +81,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -116,6 +123,8 @@ interface PosContextValue {
   removeFloorTable: (tableId: string) => Promise<void>;
   /** Mesa sucia o ocupada fantasma → libre. */
   markTableClean: (tableId: string) => Promise<void>;
+  /** Cancela pedidos vacíos y limpia mesas fantasma (al volver a sala). */
+  releaseIdleTables: () => Promise<void>;
   openSelectedTable: () => Promise<void>;
   addProduct: (input: {
     product: Product;
@@ -428,7 +437,27 @@ export function PosProvider({ children }: { children: ReactNode }) {
       kitchenNotes?: string;
       quantity?: number;
     }) => {
-      const { order, restaurantId: rid, uid } = requireOrder();
+      if (!restaurantId || !user) {
+        throw new Error("Sin sesión");
+      }
+      let order = activeOrder;
+      // Primer producto: abre la mesa al vuelo (no dejar «ocupada» vacía antes).
+      if (!order) {
+        if (!branchId || !selectedTable) {
+          throw new Error("Abre una mesa primero");
+        }
+        order = await openTable({
+          restaurantId,
+          branchId,
+          table: selectedTable,
+          uid: user.uid,
+          waiterName: user.displayName || user.email || undefined,
+          currency: currency as "EUR",
+          taxPercent,
+          tipDefaultPercent: tipDefault,
+        });
+        setActiveOrder(order);
+      }
       const variant = input.product.variants?.find(
         (v) => v.id === input.variantId,
       );
@@ -466,15 +495,33 @@ export function PosProvider({ children }: { children: ReactNode }) {
           ? { kitchenNotes: input.kitchenNotes.trim() }
           : {}),
       };
+      const orderRef = order;
       await runOrQueue(
         "updateOrder",
         async () => {
-          await addItemToOrder(rid, order, item, taxPercent, uid);
+          await addItemToOrder(
+            restaurantId,
+            orderRef,
+            item,
+            taxPercent,
+            user.uid,
+          );
         },
-        { orderId: order.id, item },
+        { orderId: orderRef.id, item },
       );
     },
-    [requireOrder, taxPercent, runOrQueue, categories],
+    [
+      activeOrder,
+      restaurantId,
+      branchId,
+      user,
+      selectedTable,
+      currency,
+      taxPercent,
+      tipDefault,
+      runOrQueue,
+      categories,
+    ],
   );
 
   const setItemQty = useCallback(
@@ -804,6 +851,37 @@ export function PosProvider({ children }: { children: ReactNode }) {
     [restaurantId],
   );
 
+  const tablesRef = useRef(tables);
+  const openOrdersRef = useRef(openOrders);
+  const activeOrderRef = useRef(activeOrder);
+  tablesRef.current = tables;
+  openOrdersRef.current = openOrders;
+  activeOrderRef.current = activeOrder;
+
+  const releaseIdleTables = useCallback(async () => {
+    if (!restaurantId || !user) return;
+    for (const table of tablesRef.current) {
+      const order = orderForTable(table, openOrdersRef.current);
+      try {
+        if (isEmptyOpenOrder(order)) {
+          await releaseEmptyOpenOrder({
+            restaurantId,
+            table,
+            order,
+            uid: user.uid,
+          });
+          if (activeOrderRef.current?.id === order.id) setActiveOrder(null);
+          continue;
+        }
+        if (isStaleOccupiedTable(table, order)) {
+          await markTableCleanService({ restaurantId, tableId: table.id });
+        }
+      } catch {
+        /* permiso / carrera: siguiente visita a sala */
+      }
+    }
+  }, [restaurantId, user]);
+
   const value: PosContextValue = {
     ready,
     error,
@@ -830,6 +908,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
     updateFloorTable,
     removeFloorTable,
     markTableClean,
+    releaseIdleTables,
     openSelectedTable,
     addProduct,
     setItemQty,

@@ -256,6 +256,51 @@ export async function openTable(input: OpenTableInput): Promise<Order> {
   return order;
 }
 
+/**
+ * Cancela un pedido abierto sin líneas y deja la mesa libre.
+ * Evita «ocupada» fantasma tras Abrir mesa sin pedir nada.
+ */
+export async function releaseEmptyOpenOrder(input: {
+  restaurantId: string;
+  table: Table;
+  order: Order;
+  uid: string;
+}): Promise<void> {
+  const { restaurantId, table, order, uid } = input;
+  if (order.status === "paid" || order.status === "cancelled") return;
+  const hasLines = order.items.some((i) => i.status !== "cancelled");
+  if (hasLines) {
+    throw new Error("El pedido tiene líneas; no se puede liberar vacío");
+  }
+
+  const stamp = nowIso();
+  const batch = writeBatch(getDb());
+  batch.update(doc(getDb(), "restaurants", restaurantId, "orders", order.id), {
+    status: "cancelled",
+    cancelledAt: stamp,
+    notes: "Cerrado sin consumo",
+    updatedAt: stamp,
+  });
+  batch.update(doc(getDb(), "restaurants", restaurantId, "tables", table.id), {
+    status: "available",
+    currentOrderId: null,
+    mergedWith: [],
+    updatedAt: stamp,
+  });
+  await batch.commit();
+
+  await appendEvent(restaurantId, {
+    restaurantId,
+    branchId: order.branchId,
+    orderId: order.id,
+    type: "table.released_empty",
+    fromStatus: order.status,
+    toStatus: "cancelled",
+    actorUid: uid,
+    payload: { tableId: table.id, tableName: table.name },
+  });
+}
+
 export async function patchOrderTotals(
   restaurantId: string,
   order: Order,
