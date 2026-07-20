@@ -8,6 +8,7 @@ import {
   homePathForRole,
   isFloorAppRole,
   isKitchenStaffRole,
+  isPlatformSuperAdmin,
 } from "@/lib/roles";
 import { reloadCurrentUser } from "@/services/auth.service";
 import { Button, Skeleton } from "@/ui";
@@ -38,17 +39,31 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, [ready, loading, user, router]);
 
+  const platformAdmin = isPlatformSuperAdmin(user);
+
+  // Superadmin → panel de plataforma (nunca /dashboard ni “Uniendo…”)
+  useEffect(() => {
+    if (!ready || loading || !user || !platformAdmin) return;
+    if (
+      pathname === "/dashboard" ||
+      pathname === "/onboarding" ||
+      pathname === "/platform"
+    ) {
+      router.replace("/superadmin");
+    }
+  }, [ready, loading, user, platformAdmin, pathname, router]);
+
   // Mesero / cajero: no entran al panel del dueño
   useEffect(() => {
-    if (!ready || loading || !user) return;
+    if (!ready || loading || !user || platformAdmin) return;
     if (isFloorAppRole(role)) {
       router.replace(homePathForRole(role));
     }
-  }, [ready, loading, user, role, router]);
+  }, [ready, loading, user, platformAdmin, role, router]);
 
   // Cocinero / barista: solo cocina|barra + carta (nada de dashboard admin)
   useEffect(() => {
-    if (!ready || loading || !user || !role) return;
+    if (!ready || loading || !user || !role || platformAdmin) return;
     if (!isKitchenStaffRole(role)) return;
     const allowed =
       pathname.startsWith("/kitchen") ||
@@ -58,12 +73,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (!allowed) {
       router.replace(homePathForRole(role));
     }
-  }, [ready, loading, user, role, pathname, router]);
+  }, [ready, loading, user, platformAdmin, role, pathname, router]);
 
   // Solo el dueño crea restaurante. Gerente/supervisor/staff invitado NUNCA /onboarding.
   useEffect(() => {
     if (!ready || loading || restLoading || !user || !role) return;
-    if (isFloorAppRole(role)) return;
+    if (platformAdmin || isFloorAppRole(role)) return;
 
     if (!restaurant && canCreateVenue(role) && pathname !== "/onboarding") {
       router.replace("/onboarding");
@@ -73,11 +88,22 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (!restaurant && !canCreateVenue(role) && pathname === "/onboarding") {
       router.replace(homePathForRole(role));
     }
-  }, [ready, loading, user, restLoading, restaurant, role, router, pathname]);
+  }, [
+    ready,
+    loading,
+    user,
+    restLoading,
+    restaurant,
+    role,
+    platformAdmin,
+    router,
+    pathname,
+  ]);
 
   // Staff sin local: aceptar invitaciones / índice de empleados y recargar perfil
   useEffect(() => {
     if (!ready || loading || restLoading || !user || !role) return;
+    if (platformAdmin) return;
     if (restaurant || canCreateVenue(role) || isFloorAppRole(role)) return;
     if (joinTried || joining) return;
 
@@ -107,6 +133,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     restLoading,
     user,
     role,
+    platformAdmin,
     restaurant,
     joinTried,
     joining,
@@ -120,6 +147,20 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="w-full max-w-sm space-y-3">
           <Skeleton className="h-8 w-40" />
           <Skeleton className="h-24 w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  // Super admin de plataforma: panel /superadmin sin restaurante propio
+  if (platformAdmin) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar />
+          <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+          <MobileNav />
         </div>
       </div>
     );

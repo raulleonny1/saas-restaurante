@@ -6,6 +6,7 @@ import {
   canManageRestaurant,
   hasAnyRole,
   hasRole,
+  isPlatformSuperAdmin,
   isStaff,
   resolveDisplayRole,
 } from "@/lib/roles";
@@ -152,11 +153,14 @@ export function useAuth(): AuthContextValue {
   return useMemo<AuthContextValue>(() => {
     const { user } = session;
 
-    if (user?.isSuperAdmin) {
+    if (isPlatformSuperAdmin(user)) {
       const permissions = resolveEffectivePermissions({ roleId: "super_admin" });
       const permSet = new Set(permissions);
       return {
         ...session,
+        user: user
+          ? { ...user, role: "super_admin", isSuperAdmin: true }
+          : null,
         role: "super_admin",
         permissions,
         member: tenant?.member ?? null,
@@ -197,7 +201,7 @@ export function useAuth(): AuthContextValue {
       hasRole: (allowed) => hasRole(role ?? undefined, allowed),
       hasAnyRole: (allowed) => hasAnyRole(role ?? undefined, allowed),
       can: (permission) =>
-        Boolean(user?.isSuperAdmin) || canPermission(permSet, permission),
+        isPlatformSuperAdmin(user) || canPermission(permSet, permission),
       isStaff: isStaff(role ?? undefined),
       canManage: canManageRestaurant(role ?? undefined),
     };

@@ -24,9 +24,24 @@ service cloud.firestore {
       return d.keys().hasAny(['roleId']) ? d.roleId : d.role;
     }
 
+    function isPlatformAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/platformAdmins/$(request.auth.uid))
+        || (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && (
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuperAdmin == true
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin'
+          )
+        )
+      );
+    }
+
     function canManage(restaurantId) {
-      return isMember(restaurantId) &&
-        memberRole(restaurantId) in ['propietario', 'gerente', 'super_admin'];
+      return isPlatformAdmin() || (
+        isMember(restaurantId) &&
+        memberRole(restaurantId) in ['propietario', 'gerente', 'super_admin']
+      );
     }
 
     /** First-time owner bootstrap or invite accept. */
@@ -128,9 +143,18 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if isSelf(uid);
-      allow create: if isSelf(uid);
-      allow update: if isSelf(uid);
+      allow read: if isSelf(uid) || isPlatformAdmin();
+      allow create: if isSelf(uid)
+        && request.resource.data.role != 'super_admin'
+        && request.resource.data.get('isSuperAdmin', false) != true;
+      // Self update OK, pero no auto-elevarse a super_admin
+      allow update: if isSelf(uid)
+        && request.resource.data.get('isSuperAdmin', false)
+          == resource.data.get('isSuperAdmin', false)
+        && (
+          request.resource.data.role != 'super_admin'
+          || resource.data.get('role', '') == 'super_admin'
+        );
       allow delete: if false;
 
       match /fcmTokens/{tokenId} {
@@ -138,9 +162,21 @@ service cloud.firestore {
       }
     }
 
+    /** Operadores de la plataforma SmartServe (solo lectura cliente; alta vía Console/Admin). */
+    match /platformAdmins/{uid} {
+      allow read: if isSelf(uid) || isPlatformAdmin();
+      allow write: if false;
+    }
+
+    /** Índice de clientes de la plataforma (alta superadmin). */
+    match /platformTenants/{tenantId} {
+      allow read, write: if isPlatformAdmin();
+    }
+
     match /restaurants/{restaurantId} {
-      // Isolated: members OR public website. No cross-tenant listing of private tenants.
+      // Isolated: members OR public website OR platform admin.
       allow read: if isMember(restaurantId)
+        || isPlatformAdmin()
         || resource.data.websitePublished == true;
       allow create: if isSignedIn()
         && request.resource.data.id == restaurantId;
@@ -174,16 +210,18 @@ service cloud.firestore {
       }
 
       match /billing/{docId} {
-        // Lectura gestores; escritura sensible vía Admin SDK (/api/admin/billing)
+        // Lectura gestores; escritura de plan vía Admin SDK o superadmin
         allow read: if canManage(restaurantId);
         allow create: if canManage(restaurantId)
           && request.resource.data.restaurantId == restaurantId;
-        allow update, delete: if false;
+        allow update: if isPlatformAdmin();
+        allow delete: if false;
       }
 
       match /invoices/{invoiceId} {
         allow read: if canManage(restaurantId);
-        allow create, update, delete: if false;
+        allow create: if isPlatformAdmin();
+        allow update, delete: if false;
       }
 
       match /websiteSettings/{docId} {

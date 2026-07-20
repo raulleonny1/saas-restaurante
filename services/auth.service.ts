@@ -4,7 +4,7 @@ import { getDb, getFirebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
 import { firebaseErrorCode, mapAuthError } from "@/lib/auth-errors";
 import { stripUndefined } from "@/lib/firestore-safe";
 import { buildMemberPermissionCache } from "@/lib/rbac/evaluate";
-import { ROLES_WITH_VENUE } from "@/lib/roles";
+import { isUserRole, ROLES_WITH_VENUE, STAFF_ROLES } from "@/lib/roles";
 import {
   createBranchDocument,
   createMemberDocument,
@@ -43,7 +43,6 @@ import {
   acceptPendingInvites,
   activateFromEmployeeEmailIndex,
 } from "@/modules/tenant/services/members.service";
-import { STAFF_ROLES } from "@/lib/roles";
 
 function assertFirebase(): void {
   if (!isFirebaseConfigured()) {
@@ -53,10 +52,35 @@ function assertFirebase(): void {
   }
 }
 
+function normalizeProfile(uid: string, data: Record<string, unknown>): AppUser {
+  const roleRaw = data.role;
+  const role = isUserRole(roleRaw) ? roleRaw : "cliente";
+  const flag = data.isSuperAdmin;
+  const isSuperAdmin =
+    flag === true || flag === "true" || flag === 1 || role === "super_admin";
+  const email = typeof data.email === "string" ? data.email : "";
+  const displayName =
+    typeof data.displayName === "string" ? data.displayName : email || "Usuario";
+  return {
+    uid,
+    email,
+    displayName,
+    role: isSuperAdmin ? "super_admin" : role,
+    restaurantIds: Array.isArray(data.restaurantIds)
+      ? data.restaurantIds.filter((id): id is string => typeof id === "string")
+      : [],
+    isSuperAdmin,
+    createdAt:
+      typeof data.createdAt === "string" ? data.createdAt : new Date().toISOString(),
+    updatedAt:
+      typeof data.updatedAt === "string" ? data.updatedAt : new Date().toISOString(),
+  };
+}
+
 async function readUserProfile(uid: string): Promise<AppUser | null> {
   const snap = await getDoc(doc(getDb(), "users", uid));
   if (!snap.exists()) return null;
-  return snap.data() as AppUser;
+  return normalizeProfile(uid, snap.data() as Record<string, unknown>);
 }
 
 /**

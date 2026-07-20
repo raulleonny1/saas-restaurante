@@ -6,6 +6,7 @@ import {
   homePathForRole,
   isFloorAppRole,
   isKitchenStaffRole,
+  isPlatformSuperAdmin,
 } from "@/lib/roles";
 import { signInOrActivate } from "@/services/auth.service";
 import type { RoleId } from "@/types/rbac";
@@ -23,7 +24,11 @@ function safeNext(raw: string | null): string | null {
 function resolvePostLogin(
   role: RoleId | string,
   next: string | null,
+  isSuperAdmin?: boolean,
 ): string {
+  if (role === "super_admin" || isSuperAdmin || isPlatformSuperAdmin({ role: role as RoleId, isSuperAdmin })) {
+    return "/superadmin";
+  }
   if (isFloorAppRole(role as RoleId)) return homePathForRole(role);
   if (isKitchenStaffRole(role as RoleId)) return homePathForRole(role);
   if (role === "cliente") {
@@ -72,7 +77,7 @@ function LoginForm() {
       }
 
       toast("Sesión iniciada", "success");
-      router.replace(resolvePostLogin(user.role, next));
+      router.replace(resolvePostLogin(user.role, next, user.isSuperAdmin));
     } catch (err) {
       toast(err instanceof Error ? err.message : "Error al entrar", "error");
     } finally {

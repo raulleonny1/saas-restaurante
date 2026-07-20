@@ -2,7 +2,13 @@
 
 import { can as canPermission } from "@/lib/rbac";
 import { resolveEffectivePermissions } from "@/lib/rbac/evaluate";
-import { canManageRestaurant, hasAnyRole, hasRole, isStaff } from "@/lib/roles";
+import {
+  canManageRestaurant,
+  hasAnyRole,
+  hasRole,
+  isPlatformSuperAdmin,
+  isStaff,
+} from "@/lib/roles";
 import { PERMISSION_CATALOG_VERSION } from "@/types/rbac";
 import {
   ensureTenantBilling,
@@ -92,7 +98,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       setReady(true);
       const roleId = m?.roleId ?? m?.role;
       const manages =
-        Boolean(user.isSuperAdmin) ||
+        isPlatformSuperAdmin(user) ||
         (Boolean(m?.active) &&
           roleId != null &&
           ["propietario", "gerente", "super_admin"].includes(roleId));
@@ -126,7 +132,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   const role = member?.roleId ?? member?.role ?? null;
   const permissions = useMemo(() => {
-    if (user?.isSuperAdmin) {
+    if (isPlatformSuperAdmin(user)) {
       return resolveEffectivePermissions({ roleId: "super_admin" });
     }
     if (!member || !member.active || !role) return [];
@@ -142,7 +148,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       permissionAllow: member.permissionAllow,
       permissionDeny: member.permissionDeny,
     });
-  }, [user?.isSuperAdmin, member, role]);
+  }, [user, member, role]);
 
   const permSet = useMemo(() => new Set(permissions), [permissions]);
 
@@ -170,13 +176,13 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       permissions,
       branchIds: member?.branchIds ?? [],
       can: (permission) =>
-        Boolean(user?.isSuperAdmin) || canPermission(permSet, permission),
+        isPlatformSuperAdmin(user) || canPermission(permSet, permission),
       hasRole: (allowed) => hasRole(role ?? undefined, allowed),
       hasAnyRole: (allowed) => hasAnyRole(role ?? undefined, allowed),
       isStaff: isStaff(role ?? undefined),
       canManage: canManageRestaurant(role ?? undefined),
       canAccessBranch: (branchId) => {
-        if (user?.isSuperAdmin) return true;
+        if (isPlatformSuperAdmin(user)) return true;
         const ids = member?.branchIds ?? [];
         return ids.length === 0 || ids.includes(branchId);
       },
@@ -192,7 +198,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       role,
       permissions,
       permSet,
-      user?.isSuperAdmin,
+      user,
       refreshInvites,
     ],
   );

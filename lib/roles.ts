@@ -1,5 +1,18 @@
 import { SYSTEM_ROLES } from "@/lib/rbac/defaults";
+import type { AppUser } from "@/types/auth";
 import type { RoleId } from "@/types/rbac";
+
+/**
+ * Platform superadmin — accepts boolean true or string "true" (Firestore console typo).
+ */
+export function isPlatformSuperAdmin(
+  user: Pick<AppUser, "role" | "isSuperAdmin"> | null | undefined,
+): boolean {
+  if (!user) return false;
+  if (user.role === "super_admin") return true;
+  const flag = user.isSuperAdmin as unknown;
+  return flag === true || flag === "true" || flag === 1;
+}
 
 export const ROLE_LABELS: Record<RoleId, string> = Object.fromEntries(
   SYSTEM_ROLES.map((r) => [r.id, r.name]),
@@ -102,6 +115,7 @@ export function isSalaAdminRole(role: RoleId | null | undefined): boolean {
  */
 export function homePathForRole(role: RoleId | string | null | undefined): string {
   if (role === "cliente") return "/";
+  if (role === "super_admin") return "/superadmin";
   if (isWaiterOnlyRole(role as RoleId)) return "/waiter";
   if (isCashierOnlyRole(role as RoleId)) return "/caja";
   if (role === "cocinero") return "/kitchen";
@@ -109,7 +123,7 @@ export function homePathForRole(role: RoleId | string | null | undefined): strin
   if (role === "repartidor") return "/delivery";
   // Administrador de sala (gerente/supervisor) → su panel, no el KPI del dueño
   if (role === "gerente" || role === "supervisor") return "/admin";
-  // propietario / super_admin → panel general
+  // propietario → panel general
   return "/dashboard";
 }
 

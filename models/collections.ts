@@ -14,6 +14,9 @@ export const ROOT_COLLECTIONS = [
   "restaurantSlugs",
   "customDomains",
   "memberInvites",
+  "platformAdmins",
+  "platformTenants",
+  "employeeEmailIndex",
 ] as const;
 
 /** Direct children of restaurants/{restaurantId} */

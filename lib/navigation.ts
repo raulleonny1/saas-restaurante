@@ -3,6 +3,7 @@ import {
   Banknote,
   BarChart3,
   Brain,
+  Building2,
   CalendarDays,
   ChefHat,
   ClipboardList,
@@ -33,6 +34,14 @@ export interface NavItem {
 
 /** Single source of truth for app navigation. */
 export const APP_NAV: NavItem[] = [
+  {
+    href: "/superadmin",
+    label: "Superadmin",
+    icon: Building2,
+    module: "platform",
+    anyOf: ["platform.tenants.read", "platform.tenants.manage"],
+    mobile: true,
+  },
   {
     href: "/dashboard",
     label: "Dashboard",
