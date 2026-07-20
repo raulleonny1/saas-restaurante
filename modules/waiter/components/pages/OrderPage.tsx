@@ -32,10 +32,20 @@ export function WaiterOrderPage() {
 
   const readyCount =
     activeOrder?.items.filter((i) => i.status === "ready").length ?? 0;
+  const pendingSendCount =
+    activeOrder?.items.filter((i) => i.status === "open").length ?? 0;
   const sortedItems = useMemo(() => {
     if (!activeOrder) return [];
     const rank = (s: string) =>
-      s === "ready" ? 0 : s === "delivered" ? 3 : s === "cancelled" ? 4 : 1;
+      s === "ready"
+        ? 0
+        : s === "open"
+          ? 1
+          : s === "delivered"
+            ? 3
+            : s === "cancelled"
+              ? 4
+              : 2;
     return [...activeOrder.items].sort(
       (a, b) => rank(a.status) - rank(b.status),
     );
@@ -75,6 +85,7 @@ export function WaiterOrderPage() {
     <TicketPanel
       items={sortedItems}
       readyCount={readyCount}
+      pendingSendCount={pendingSendCount}
       busy={busy}
       msg={msg}
       currency={currency}
@@ -86,7 +97,7 @@ export function WaiterOrderPage() {
           try {
             setBusy(true);
             await markItemsServed([id]);
-            setMsg("Marcado como servido");
+            setMsg("Entregado al cliente");
           } catch (e) {
             setMsg(e instanceof Error ? e.message : "Error");
           } finally {
@@ -102,7 +113,7 @@ export function WaiterOrderPage() {
               .filter((i) => i.status === "ready")
               .map((i) => i.id);
             await markItemsServed(ids);
-            setMsg("Todo marcado como servido");
+            setMsg("Todo entregado al cliente");
           } catch (e) {
             setMsg(e instanceof Error ? e.message : "Error");
           } finally {
@@ -116,7 +127,11 @@ export function WaiterOrderPage() {
             setBusy(true);
             setMsg(null);
             await sendKitchen();
-            setMsg("Enviado a cocina / barra");
+            setMsg(
+              pendingSendCount === 1
+                ? "1 línea nueva enviada a cocina / barra"
+                : `${pendingSendCount} líneas nuevas enviadas a cocina / barra`,
+            );
           } catch (e) {
             setMsg(e instanceof Error ? e.message : "Error");
           } finally {
@@ -236,6 +251,7 @@ export function WaiterOrderPage() {
 function TicketPanel({
   items,
   readyCount,
+  pendingSendCount,
   busy,
   msg,
   currency,
@@ -251,6 +267,7 @@ function TicketPanel({
 }: {
   items: OrderItem[];
   readyCount: number;
+  pendingSendCount: number;
   busy: boolean;
   msg: string | null;
   currency: string;
@@ -268,8 +285,14 @@ function TicketPanel({
     <div className="flex h-full flex-col gap-3">
       {readyCount > 0 ? (
         <div className="rounded-xl border border-cyan-400/50 bg-cyan-950/40 px-3 py-2.5 text-sm text-cyan-100">
-          {readyCount} listo{readyCount === 1 ? "" : "s"} en cocina · retíralo
-          y pulsa «Ya lo llevé».
+          {readyCount} listo{readyCount === 1 ? "" : "s"} para llevar · cuando
+          lo dejes en la mesa, pulsa «Ya lo llevé al cliente».
+        </div>
+      ) : null}
+      {pendingSendCount > 0 ? (
+        <div className="rounded-xl border border-amber-400/40 bg-amber-950/35 px-3 py-2.5 text-sm text-amber-100">
+          {pendingSendCount} sin enviar · al pulsar Enviar solo va esto (no lo
+          que ya está en cocina/barra).
         </div>
       ) : null}
       <ul className="min-h-0 flex-1 space-y-2">
@@ -318,7 +341,7 @@ function TicketPanel({
                   className="mt-2 flex w-full touch-manipulation items-center justify-center gap-1.5 rounded-lg bg-cyan-700 py-2.5 text-xs font-medium"
                 >
                   <Check className="h-3.5 w-3.5" />
-                  Ya lo llevé a la mesa
+                  Ya lo llevé al cliente
                 </button>
               ) : null}
               {!served && !ready && item.status !== "cancelled" ? (
@@ -367,18 +390,24 @@ function TicketPanel({
           className="flex w-full touch-manipulation items-center justify-center gap-2 rounded-xl border border-cyan-500/50 bg-cyan-950/40 py-3.5 text-sm font-medium text-cyan-100"
         >
           <Check className="h-4 w-4" />
-          Llevé todos los listos
+          Todo entregado a los clientes
         </button>
       ) : null}
 
       <button
         type="button"
-        disabled={busy || !items.length}
+        disabled={busy || pendingSendCount === 0}
         onClick={onSendKitchen}
         className="flex w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-sky-700 py-4 text-sm font-semibold disabled:opacity-50"
       >
         <Send className="h-4 w-4" />
-        {busy ? "Enviando…" : "Enviar a cocina"}
+        {busy
+          ? "Enviando…"
+          : pendingSendCount === 0
+            ? "Nada nuevo que enviar"
+            : pendingSendCount === 1
+              ? "Enviar 1 nuevo a cocina / barra"
+              : `Enviar ${pendingSendCount} nuevos a cocina / barra`}
       </button>
 
       {canPay ? (

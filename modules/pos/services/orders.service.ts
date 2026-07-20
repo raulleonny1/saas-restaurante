@@ -462,6 +462,11 @@ export async function removeOrderItem(
   );
 }
 
+/** Líneas aún no enviadas a cocina/barra (rondas siguientes del mismo ticket). */
+export function pendingKitchenSendItems(order: Order): OrderItem[] {
+  return order.items.filter((i) => i.status === "open");
+}
+
 export async function sendToKitchen(
   restaurantId: string,
   order: Order,
@@ -474,8 +479,19 @@ export async function sendToKitchen(
   const stamp = nowIso();
   const productById = new Map(products.map((p) => [p.id, p]));
   const categoryById = new Map(categories.map((c) => [c.id, c]));
+
+  // Solo líneas nuevas (status open). Nunca reenvía sent/preparing/ready/delivered.
+  const pendingIds = new Set(
+    order.items.filter((i) => i.status === "open").map((i) => i.id),
+  );
+  if (!pendingIds.size) {
+    throw new Error(
+      "No hay líneas nuevas. Añade productos y vuelve a enviar solo lo nuevo.",
+    );
+  }
+
   const items = order.items.map((item) => {
-    if (item.status !== "open" && item.sentAt) return item;
+    if (!pendingIds.has(item.id)) return item;
     const product = productById.get(item.productId);
     const category = product
       ? categoryById.get(product.categoryId)
@@ -483,7 +499,7 @@ export async function sendToKitchen(
     return {
       ...item,
       status: "sent" as OrderStatus,
-      sentAt: item.sentAt ?? stamp,
+      sentAt: stamp,
       kitchenStation:
         item.kitchenStation ?? resolveItemStation(item, product, category),
     };

@@ -43,6 +43,8 @@ export function TicketPanel({
 
   const table = tables.find((t) => t.id === selectedTableId);
   const [noteEditId, setNoteEditId] = useState<string | null>(null);
+  const pendingSend =
+    activeOrder?.items.filter((i) => i.status === "open").length ?? 0;
 
   if (!selectedTableId || !table) {
     return (
@@ -234,9 +236,11 @@ export function TicketPanel({
           <Button
             variant="secondary"
             size="sm"
+            disabled={pendingSend === 0}
             onClick={() => void sendKitchen().catch((e) => alert(e.message))}
           >
-            <Send className="h-3.5 w-3.5" /> Cocina
+            <Send className="h-3.5 w-3.5" />{" "}
+            {pendingSend > 0 ? `Cocina (${pendingSend})` : "Cocina"}
           </Button>
           <Button variant="secondary" size="sm" onClick={onMove}>
             Cambiar mesa

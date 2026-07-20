@@ -60,10 +60,9 @@ export function isStaleOccupiedTable(
 }
 
 function itemPendingSend(item: Order["items"][number]): boolean {
+  // Solo lo que aún no ha ido a cocina/barra (rondas nuevas del ticket).
   if (item.status === "cancelled") return false;
-  if (item.status === "open") return true;
-  if (!item.sentAt) return true;
-  return false;
+  return item.status === "open";
 }
 
 export function resolveTableFloorTone(
