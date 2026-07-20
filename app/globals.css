@@ -289,6 +289,40 @@ body {
   }
 }
 
+/* ─── Marketing landing ─── */
+.landing-hero-img {
+  animation: landing- ken 18s var(--ease-out) both;
+  transform-origin: 55% 40%;
+}
+
+@keyframes landing-ken {
+  from {
+    transform: scale(1.06);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.landing-reveal {
+  animation: fade-up 0.7s var(--ease-out) both;
+}
+
+.landing-reveal-delay-1 {
+  animation-delay: 0.1s;
+}
+.landing-reveal-delay-2 {
+  animation-delay: 0.18s;
+}
+.landing-reveal-delay-3 {
+  animation-delay: 0.26s;
+}
+
+.landing-visual {
+  box-shadow: var(--shadow-md);
+  animation: scale-in 0.65s var(--ease-out) both;
+}
+
 @media print {
   body * {
     visibility: hidden;
