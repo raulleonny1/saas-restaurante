@@ -18,15 +18,11 @@ export function CashierPrintersPage() {
   }, [restaurantId, restaurant?.settings, tick]);
 
   if (!restaurantId || !restaurant) {
-    return (
-      <div className="mx-auto max-w-lg px-4 py-8 text-sm text-[#a8b5a4]">
-        Cargando…
-      </div>
-    );
+    return <div className="py-8 text-sm text-[#a8b5a4]">Cargando…</div>;
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 px-4 py-4 pb-28">
+    <div className="space-y-4">
       <div>
         <Link
           href={routes.home}
@@ -38,10 +34,9 @@ export function CashierPrintersPage() {
           Impresoras
         </h1>
         <p className="mt-1 text-sm text-[#a8b5a4]">
-          Pulsa <strong className="text-[#e7efe4]">Buscar impresoras</strong>{" "}
-          para ver las instaladas en este PC y elige cuál es de{" "}
-          <strong className="text-[#e7efe4]">ventas</strong> y cuál de{" "}
-          <strong className="text-[#e7efe4]">cocina</strong>.
+          Configura la de <strong className="text-[#e7efe4]">ventas</strong> en
+          este PC. Con En vivo o Cobrar abiertos, los cobros del mesero se
+          imprimen aquí automáticamente.
         </p>
       </div>
 

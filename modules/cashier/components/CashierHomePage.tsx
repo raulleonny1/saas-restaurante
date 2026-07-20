@@ -296,14 +296,15 @@ export function CashierHomePage() {
               En vivo
             </span>
           </div>
-          <p className="mt-1 text-sm text-[#8fa08c]">
-            Pedidos y reservas web/app · se actualiza solo
+          <p className="mt-1 text-sm text-[#a8b5a4]">
+            Pedidos en sala y cobros · déjala abierta para imprimir tickets del
+            mesero
           </p>
           <Link
             href={routes.printers}
             className="mt-2 inline-block text-xs text-emerald-400 hover:underline"
           >
-            Configurar impresoras ventas / cocina
+            Configurar impresora de ventas
           </Link>
         </div>
         {branches.length > 1 ? (

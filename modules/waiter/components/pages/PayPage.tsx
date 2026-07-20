@@ -7,10 +7,10 @@ import { getEffectivePrintSettings } from "@/lib/printer-device-prefs";
 import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { openCashDrawer } from "@/modules/pos/domain/cash-drawer";
 import { printOrderReceipt } from "@/modules/pos/domain/print";
-import { roundMoney } from "@/modules/pos/domain/totals";
+import { balanceDue, roundMoney } from "@/modules/pos/domain/totals";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import type { Order, Payment, PaymentMethod } from "@/types/orders";
-import { Delete } from "lucide-react";
+import { Delete, Receipt } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -57,8 +57,23 @@ export function WaiterPayPage() {
     pay,
     payments,
     selectedTableId,
+    selectTable,
     restaurantName,
+    openOrders,
   } = usePos();
+  const chargeableOrders = useMemo(
+    () =>
+      openOrders
+        .filter(
+          (o) =>
+            o.status !== "paid" &&
+            o.status !== "cancelled" &&
+            o.items.some((i) => i.status !== "cancelled") &&
+            balanceDue(o) > 0.009,
+        )
+        .sort((a, b) => (a.tableName ?? "").localeCompare(b.tableName ?? "")),
+    [openOrders],
+  );
   const tpvPrinter = getEffectivePrintSettings(
     restaurantId,
     restaurant?.settings,
@@ -108,11 +123,65 @@ export function WaiterPayPage() {
 
   if (!selectedTableId || !activeOrder) {
     return (
-      <div className="py-10 text-center text-sm text-[#a8b5a4]">
-        Selecciona una mesa con ticket abierto.{" "}
-        <Link href={routes.home} className="text-emerald-400">
-          Ver pedidos en vivo
-        </Link>
+      <div className="space-y-5">
+        <div>
+          <h1 className="font-[family-name:var(--font-display)] text-2xl lg:text-3xl">
+            Cobrar
+          </h1>
+          <p className="mt-1 text-sm text-[#a8b5a4]">
+            {isCashier
+              ? "Elige un ticket abierto. Si cobra el mesero en sala, el ticket sale aquí en la impresora de ventas (deja esta pantalla abierta)."
+              : "Elige una mesa con ticket abierto para cobrar."}
+          </p>
+        </div>
+
+        {chargeableOrders.length ? (
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {chargeableOrders.map((o) => {
+              const dueAmt = balanceDue(o);
+              return (
+                <li key={o.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (o.tableId) selectTable(o.tableId);
+                    }}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/12 bg-white/[0.04] px-4 py-4 text-left transition hover:border-emerald-500/40 hover:bg-emerald-950/30"
+                  >
+                    <span>
+                      <span className="block font-[family-name:var(--font-display)] text-lg">
+                        {o.tableName ?? "Mesa"}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-[#8fa08c]">
+                        {o.items.filter((i) => i.status !== "cancelled").length}{" "}
+                        líneas · pendiente
+                      </span>
+                    </span>
+                    <span className="text-base font-semibold tabular-nums text-emerald-300">
+                      {formatCurrency(dueAmt, currency)}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] px-5 py-10 text-center">
+            <Receipt className="mx-auto h-8 w-8 text-[#5a6b57]" />
+            <p className="mt-3 text-sm font-medium text-[#c5d0c2]">
+              No hay tickets por cobrar
+            </p>
+            <p className="mt-1 text-xs text-[#8fa08c]">
+              Cuando haya pedidos abiertos con importe, aparecerán aquí.
+            </p>
+            <Link
+              href={routes.home}
+              className="mt-5 inline-flex rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-medium"
+            >
+              {isCashier ? "Ir a En vivo" : "Ir a Mesas"}
+            </Link>
+          </div>
+        )}
       </div>
     );
   }

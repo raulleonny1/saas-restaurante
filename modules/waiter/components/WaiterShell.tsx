@@ -50,10 +50,12 @@ export function WaiterShell({
   const isAdmin = canManageRestaurant(role ?? undefined);
   const [audioReady, setAudioReady] = useState(false);
 
-  /** Pedido/cobro en monitor TPV: usar todo el ancho. */
+  /** Caja en monitor TPV: ancho completo. Mesero: ancho en pedido/cobro. */
   const wideTpv =
-    pathname.startsWith(routes.order) || pathname.startsWith(routes.pay);
-  const contentMax = wideTpv ? "max-w-7xl" : "max-w-lg";
+    isCashier ||
+    pathname.startsWith(routes.order) ||
+    pathname.startsWith(routes.pay);
+  const contentMax = wideTpv ? "max-w-5xl" : "max-w-lg";
 
   const tabs = useMemo(() => {
     if (isCashier) {

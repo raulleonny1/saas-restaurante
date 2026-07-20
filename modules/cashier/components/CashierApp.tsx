@@ -6,6 +6,7 @@ import {
   isCashierOnlyRole,
   isWaiterOnlyRole,
 } from "@/lib/roles";
+import { CashierWaiterPrintListener } from "@/modules/cashier/components/CashierWaiterPrintListener";
 import { FloorRoutesProvider } from "@/modules/floor/FloorRoutesContext";
 import { PosProvider } from "@/modules/pos/context/PosProvider";
 import { WaiterShell } from "@/modules/waiter/components/WaiterShell";
@@ -69,6 +70,7 @@ export function CashierApp({ children }: { children: ReactNode }) {
       <PosProvider>
         <AccessGate>
           <WaiterNotificationsProvider>
+            <CashierWaiterPrintListener />
             <WaiterShell>{children}</WaiterShell>
           </WaiterNotificationsProvider>
         </AccessGate>

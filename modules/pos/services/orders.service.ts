@@ -179,6 +179,17 @@ export interface OpenTableInput {
   guestCount?: number;
 }
 
+export async function getOrderById(
+  restaurantId: string,
+  orderId: string,
+): Promise<Order | null> {
+  const snap = await getDoc(
+    doc(getDb(), "restaurants", restaurantId, "orders", orderId),
+  );
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as Order;
+}
+
 export async function openTable(input: OpenTableInput): Promise<Order> {
   const {
     restaurantId,
