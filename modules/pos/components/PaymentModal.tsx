@@ -100,6 +100,8 @@ export function PaymentModal({
                       `Pago OK · cambio ${formatCurrency(change, currency)}`,
                       "success",
                     );
+                  } else if (method === "stripe" || method === "sumup" || method === "card") {
+                    toast("Pago con pasarela registrado", "success");
                   } else {
                     toast("Pago registrado", "success");
                   }

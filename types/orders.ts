@@ -145,6 +145,7 @@ export interface Payment extends Timestamps {
   amount: number;
   currency: CurrencyCode;
   tipAmount: number;
+  /** ID en pasarela (Stripe PI / SumUp checkout). */
   externalRef?: string;
   processedBy: string;
   /** Nombre visible de quien cobró (mesero/cajero). */
@@ -162,6 +163,12 @@ export interface Payment extends Timestamps {
   amountTendered?: number;
   /** Cambio devuelto = max(0, amountTendered − amount). */
   changeGiven?: number;
+  /** true si no había claves PSP y se registró en modo demo. */
+  pspSimulated?: boolean;
+  /** Sesión de caja Z activa al cobrar en efectivo. */
+  cashSessionId?: string;
+  /** Documento fiscal Verifactu / factura simplificada. */
+  fiscalDocumentId?: string;
 }
 
 /** Immutable-ish timeline for an order (historial de pedido). */

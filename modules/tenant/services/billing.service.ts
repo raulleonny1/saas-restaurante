@@ -2,21 +2,18 @@
 
 import { getDb, isFirebaseConfigured } from "@/lib/firebase";
 import { stripUndefined } from "@/lib/firestore-safe";
-import { createId } from "@/lib/id";
 import { createTenantBillingDocument } from "@/models/schemas";
 import type {
   BillingPlanId,
   TenantBilling,
   TenantInvoice,
 } from "@/types/billing";
-import { BILLING_PLANS } from "@/types/billing";
 import {
   collection,
   doc,
   getDoc,
   onSnapshot,
   setDoc,
-  updateDoc,
   type Unsubscribe,
 } from "firebase/firestore";
 
@@ -75,56 +72,27 @@ export async function changePlan(input: {
   restaurantId: string;
   planId: BillingPlanId;
 }): Promise<TenantBilling> {
-  const plan = BILLING_PLANS[input.planId];
-  const stamp = new Date().toISOString();
-  const periodEnd = new Date();
-  periodEnd.setMonth(periodEnd.getMonth() + 1);
-
-  const patch: Partial<TenantBilling> = {
-    planId: input.planId,
-    status: input.planId === "trial" ? "trialing" : "active",
-    seatsIncluded: plan.seatsIncluded,
-    branchesIncluded: plan.branchesIncluded,
-    amountCents: plan.monthlyPriceCents,
-    currentPeriodStart: stamp,
-    currentPeriodEnd: periodEnd.toISOString(),
-    updatedAt: stamp,
-  };
-
-  const ref = doc(getDb(), "restaurants", input.restaurantId, "billing", "current");
-  const existing = await getDoc(ref);
-  if (!existing.exists()) {
-    const created = createTenantBillingDocument(input.restaurantId);
-    await setDoc(ref, stripUndefined({ ...created, ...patch }));
-  } else {
-    await updateDoc(ref, stripUndefined({ ...patch }));
-  }
-
-  // Issue a local invoice record (provider settlement can replace later)
-  if (plan.monthlyPriceCents > 0) {
-    const invId = createId("invc");
-    const invoice: TenantInvoice = {
-      id: invId,
+  const res = await fetch("/api/admin/billing", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "changePlan",
       restaurantId: input.restaurantId,
-      number: `SS-${input.restaurantId.slice(-4).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
       planId: input.planId,
-      amountCents: plan.monthlyPriceCents,
-      currency: "EUR",
-      status: "open",
-      periodStart: stamp,
-      periodEnd: periodEnd.toISOString(),
-      issuedAt: stamp,
-      description: `Plan ${plan.name}`,
-      createdAt: stamp,
-      updatedAt: stamp,
-    };
-    await setDoc(
-      doc(getDb(), "restaurants", input.restaurantId, "invoices", invId),
-      stripUndefined({ ...invoice }),
+    }),
+  });
+  const data = (await res.json()) as { ok?: boolean; error?: string };
+  if (!res.ok || !data.ok) {
+    throw new Error(
+      data.error ||
+        "No se pudo cambiar el plan (configura FIREBASE_SERVICE_ACCOUNT_JSON en el servidor)",
     );
   }
-
+  const ref = doc(getDb(), "restaurants", input.restaurantId, "billing", "current");
   const next = await getDoc(ref);
+  if (!next.exists()) {
+    throw new Error("Billing no encontrado tras el cambio de plan");
+  }
   return { id: "current", ...next.data() } as TenantBilling;
 }
 
@@ -132,14 +100,17 @@ export async function markInvoicePaid(input: {
   restaurantId: string;
   invoiceId: string;
 }): Promise<void> {
-  if (!isFirebaseConfigured()) return;
-  const stamp = new Date().toISOString();
-  await updateDoc(
-    doc(getDb(), "restaurants", input.restaurantId, "invoices", input.invoiceId),
-    { status: "paid", paidAt: stamp, updatedAt: stamp },
-  );
-  await updateDoc(
-    doc(getDb(), "restaurants", input.restaurantId, "billing", "current"),
-    { status: "active", updatedAt: stamp },
-  );
+  const res = await fetch("/api/admin/billing", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "markInvoicePaid",
+      restaurantId: input.restaurantId,
+      invoiceId: input.invoiceId,
+    }),
+  });
+  const data = (await res.json()) as { ok?: boolean; error?: string };
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "No se pudo marcar la factura como pagada");
+  }
 }

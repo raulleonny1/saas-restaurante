@@ -14,6 +14,7 @@ type FloorRoutes = {
   notifications: string;
   move: string;
   printers: string;
+  cierre: string;
 };
 
 const WaiterRoutes: FloorRoutes = {
@@ -26,6 +27,7 @@ const WaiterRoutes: FloorRoutes = {
   notifications: "/waiter/notificaciones",
   move: "/waiter/mover",
   printers: "/waiter/impresoras",
+  cierre: "/waiter/historial",
 };
 
 const CashierRoutes: FloorRoutes = {
@@ -38,6 +40,7 @@ const CashierRoutes: FloorRoutes = {
   notifications: "/caja/notificaciones",
   move: "/caja/mover",
   printers: "/caja/impresoras",
+  cierre: "/caja/cierre",
 };
 
 const FloorRoutesContext = createContext<FloorRoutes>(WaiterRoutes);

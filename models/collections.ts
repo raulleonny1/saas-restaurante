@@ -46,6 +46,8 @@ export const RESTAURANT_COLLECTIONS = [
   "payments",
   "dailyStats",
   "receiptPrintJobs",
+  "cashSessions",
+  "fiscalDocuments",
   // growth
   "promotions",
   "coupons",

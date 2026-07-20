@@ -66,6 +66,8 @@ export interface Restaurant extends Timestamps, SoftDelete {
   id: string;
   name: string;
   legalName?: string;
+  /** NIF/CIF emisor (Verifactu). */
+  taxId?: string;
   timezone: Timezone;
   currency: CurrencyCode;
   address?: string;

@@ -355,28 +355,48 @@ export function PosProvider({ children }: { children: ReactNode }) {
   }, [refreshQueueSize]);
 
   useEffect(() => {
-    registerOfflineFlushHandler(async () => {
-      // Mutations are re-applied by replaying through live services when online;
-      // queue entries created while offline store enough context in payload.
-      // For v1 we rely on Firestore offline cache for most writes; queue is backup.
+    registerOfflineFlushHandler(async (mutation) => {
+      const { replayPosMutation } = await import(
+        "@/modules/pos/offline/replay"
+      );
+      await replayPosMutation(mutation);
     });
   }, []);
 
   const runOrQueue = useCallback(
-    async (type: Parameters<typeof enqueueMutation>[0]["type"], fn: () => Promise<void>, payload: Record<string, unknown>) => {
+    async (
+      type: Parameters<typeof enqueueMutation>[0]["type"],
+      fn: () => Promise<void>,
+      payload: Record<string, unknown>,
+      opts?: { queueOnlyOffline?: boolean },
+    ) => {
       if (!restaurantId || !branchId) throw new Error("Sin contexto POS");
-      try {
-        if (typeof navigator !== "undefined" && !navigator.onLine) {
-          enqueueMutation({
-            type,
-            restaurantId,
-            branchId,
-            payload,
-          });
-          refreshQueueSize();
-          setSyncStatus("offline");
-          // Still attempt — Firestore persistence may accept the write.
+      const offline =
+        typeof navigator !== "undefined" && !navigator.onLine;
+
+      if (offline) {
+        enqueueMutation({
+          type,
+          restaurantId,
+          branchId,
+          payload,
+        });
+        refreshQueueSize();
+        setSyncStatus("offline");
+        // Cobros y mutaciones críticas: solo cola (no doble escritura)
+        if (opts?.queueOnlyOffline || type === "payOrder") {
+          return;
         }
+        // openTable/updateOrder: intentar Firestore persistence además
+        try {
+          await fn();
+        } catch {
+          /* ya en cola */
+        }
+        return;
+      }
+
+      try {
         await fn();
       } catch (err) {
         if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -720,7 +740,95 @@ export function PosProvider({ children }: { children: ReactNode }) {
       meta?: { chargedFrom?: "waiter" | "caja" | "pos" },
     ) => {
       const { order, restaurantId: rid, uid } = requireOrder();
-      const { order: next } = await chargeOrder({
+
+      const offline =
+        typeof navigator !== "undefined" && !navigator.onLine;
+      if (offline) {
+        if (method === "stripe" || method === "sumup" || method === "card") {
+          throw new Error(
+            "Sin conexión no se puede cobrar con tarjeta/pasarela. Usa efectivo o reconecta.",
+          );
+        }
+        enqueueMutation({
+          type: "payOrder",
+          restaurantId: rid,
+          branchId: order.branchId,
+          payload: {
+            order,
+            tables,
+            method,
+            amount,
+            tipAmount,
+            splitSeat,
+            amountTendered,
+            uid,
+            processedByName: user?.displayName || user?.email || undefined,
+            chargedFrom: meta?.chargedFrom,
+            taxPercent,
+          },
+        });
+        refreshQueueSize();
+        setSyncStatus("offline");
+        return;
+      }
+
+      let externalRef: string | undefined;
+      let pspSimulated: boolean | undefined;
+      const psp = (await import("@/modules/payments/services/psp.client"))
+        .pspForMethod(method);
+      if (psp) {
+        const result = await (
+          await import("@/modules/payments/services/psp.client")
+        ).chargeViaPsp({
+          provider: psp,
+          restaurantId: rid,
+          branchId: order.branchId,
+          orderId: order.id,
+          amountCents: Math.round(amount * 100),
+          tipCents: Math.round(tipAmount * 100),
+          currency: order.currency || "EUR",
+          description: `Mesa ${order.tableName || "—"} · ${order.id.slice(-6)}`,
+        });
+        if (!result.ok) {
+          throw new Error(result.error || "Pago rechazado por la pasarela");
+        }
+        // Producción Terminal: si hay clientSecret sin captura, el reader confirma aparte.
+        // Aquí exigimos externalRef; si solo hay clientSecret pendiente, no completar.
+        if (result.clientSecret && !result.simulated && !result.externalRef) {
+          throw new Error(
+            "Confirma el pago en el lector Stripe Terminal y reintenta",
+          );
+        }
+        externalRef = result.externalRef;
+        pspSimulated = result.simulated;
+      }
+
+      let cashSessionId: string | undefined;
+      if (method === "cash" && branchId) {
+        try {
+          const { subscribeOpenCashSession } = await import(
+            "@/modules/cashier/services/cash-session.service"
+          );
+          // Lectura puntual vía getDocs en open check — usar sesión si existe en payload
+          const { getDocs, collection, query, where } = await import(
+            "firebase/firestore"
+          );
+          const { getDb } = await import("@/lib/firebase");
+          const snap = await getDocs(
+            query(
+              collection(getDb(), "restaurants", rid, "cashSessions"),
+              where("branchId", "==", branchId),
+              where("status", "==", "open"),
+            ),
+          );
+          cashSessionId = snap.docs[0]?.id;
+          void subscribeOpenCashSession;
+        } catch {
+          /* sin sesión: cobro permitido; cierre Z avisará */
+        }
+      }
+
+      const { order: next, payment } = await chargeOrder({
         restaurantId: rid,
         order,
         tables,
@@ -733,8 +841,11 @@ export function PosProvider({ children }: { children: ReactNode }) {
         processedByName: user?.displayName || user?.email || undefined,
         chargedFrom: meta?.chargedFrom,
         taxPercent,
+        externalRef,
+        pspSimulated,
+        cashSessionId,
       });
-      // Side-effects en el cobro (idempotentes): no hace falta sync global en mesero/caja
+
       if (next.status === "paid" || next.paidAt) {
         void deductOrderFromInventory({
           restaurantId: rid,
@@ -746,6 +857,18 @@ export function PosProvider({ children }: { children: ReactNode }) {
           order: next,
           actorUid: uid,
         }).catch(() => undefined);
+        void import("@/modules/fiscal/services/verifactu.service")
+          .then(({ issueSimplifiedInvoice }) =>
+            issueSimplifiedInvoice({
+              restaurantId: rid,
+              order: next,
+              payment,
+              taxPercent,
+              issuerName: restaurantName,
+              issuerTaxId: restaurant?.taxId,
+            }),
+          )
+          .catch(() => undefined);
       }
       void recordPaymentInDailyStats({
         restaurantId: rid,
@@ -754,8 +877,20 @@ export function PosProvider({ children }: { children: ReactNode }) {
         amount,
         tipAmount,
       }).catch(() => undefined);
+
+      return;
     },
-    [requireOrder, tables, taxPercent, user?.displayName, user?.email],
+    [
+      requireOrder,
+      tables,
+      taxPercent,
+      user?.displayName,
+      user?.email,
+      branchId,
+      restaurantName,
+      restaurant?.taxId,
+      refreshQueueSize,
+    ],
   );
 
   const printReceipt = useCallback(async () => {

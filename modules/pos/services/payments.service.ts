@@ -107,6 +107,9 @@ export interface ChargeInput {
   processedByName?: string;
   chargedFrom?: PaymentChargedFrom;
   taxPercent: number;
+  externalRef?: string;
+  pspSimulated?: boolean;
+  cashSessionId?: string;
 }
 
 export async function chargeOrder(input: ChargeInput): Promise<{
@@ -126,6 +129,9 @@ export async function chargeOrder(input: ChargeInput): Promise<{
     processedByName,
     chargedFrom,
     taxPercent,
+    externalRef,
+    pspSimulated,
+    cashSessionId,
   } = input;
 
   const due = balanceDue(order);
@@ -165,6 +171,9 @@ export async function chargeOrder(input: ChargeInput): Promise<{
     ...(chargedFrom ? { chargedFrom } : {}),
     ...(tendered != null ? { amountTendered: tendered } : {}),
     ...(changeGiven != null ? { changeGiven } : {}),
+    ...(externalRef ? { externalRef } : {}),
+    ...(pspSimulated ? { pspSimulated: true } : {}),
+    ...(cashSessionId ? { cashSessionId } : {}),
     createdAt: stamp,
     updatedAt: stamp,
   };

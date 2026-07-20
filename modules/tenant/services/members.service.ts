@@ -3,7 +3,6 @@
 import { getDb, isFirebaseConfigured } from "@/lib/firebase";
 import { stripUndefined } from "@/lib/firestore-safe";
 import { createId } from "@/lib/id";
-import { buildMemberPermissionCache } from "@/lib/rbac/evaluate";
 import { createMemberDocument } from "@/models/schemas";
 import type { AppUser } from "@/types/auth";
 import type { MemberInvite } from "@/types/billing";
@@ -85,20 +84,34 @@ export async function updateMember(input: {
   const roleId = input.patch.roleId;
   const allow = input.patch.permissionAllow;
   const deny = input.patch.permissionDeny;
+
+  // Roles / ACL sensibles → Admin SDK
+  if (roleId || allow || deny) {
+    const res = await fetch("/api/admin/members", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        restaurantId: input.restaurantId,
+        memberUid: input.uid,
+        roleId,
+        permissionAllow: allow,
+        permissionDeny: deny,
+      }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string };
+    if (!res.ok || !data.ok) {
+      throw new Error(
+        data.error ||
+          "No se pudo actualizar el miembro (backend Admin requerido)",
+      );
+    }
+    return;
+  }
+
   const extra: Record<string, unknown> = {
     ...input.patch,
     updatedAt: new Date().toISOString(),
   };
-  if (roleId) {
-    extra.role = roleId;
-    const cache = buildMemberPermissionCache({
-      roleId,
-      permissionAllow: allow,
-      permissionDeny: deny,
-    });
-    extra.permissionsCached = cache.permissionsCached;
-    extra.permissionsVersion = cache.permissionsVersion;
-  }
   await updateDoc(
     doc(getDb(), "restaurants", input.restaurantId, "members", input.uid),
     stripUndefined(extra),

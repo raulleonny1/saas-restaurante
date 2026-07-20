@@ -19,6 +19,7 @@ import {
   Receipt,
   ShoppingBag,
   Store,
+  Vault,
   Volume2,
 } from "lucide-react";
 import Link from "next/link";
@@ -69,6 +70,7 @@ export function WaiterShell({
         },
         { href: routes.order, label: "Vender", icon: Store },
         { href: routes.pay, label: "Cobrar", icon: Receipt },
+        { href: routes.cierre, label: "Z", icon: Vault },
         { href: routes.history, label: "Caja", icon: History },
         { href: routes.printers, label: "Impr.", icon: Printer },
       ];

@@ -174,17 +174,16 @@ service cloud.firestore {
       }
 
       match /billing/{docId} {
+        // Lectura gestores; escritura sensible vía Admin SDK (/api/admin/billing)
         allow read: if canManage(restaurantId);
-        allow create, update: if canManage(restaurantId)
+        allow create: if canManage(restaurantId)
           && request.resource.data.restaurantId == restaurantId;
-        allow delete: if false;
+        allow update, delete: if false;
       }
 
       match /invoices/{invoiceId} {
         allow read: if canManage(restaurantId);
-        allow create, update: if canManage(restaurantId)
-          && request.resource.data.restaurantId == restaurantId;
-        allow delete: if false;
+        allow create, update, delete: if false;
       }
 
       match /websiteSettings/{docId} {
