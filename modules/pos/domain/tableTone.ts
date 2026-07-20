@@ -18,24 +18,44 @@ export type TableFloorTone =
   | "reserved"
   | "dirty";
 
+function isLiveOpenOrder(order: Order | null | undefined): order is Order {
+  return Boolean(
+    order && order.status !== "paid" && order.status !== "cancelled",
+  );
+}
+
 export function orderForTable(
   table: Table,
   openOrders: Order[],
 ): Order | null {
   // Solo el pedido activo de la mesa (evita tickets huérfanos → «Listo» fantasma)
   if (table.currentOrderId) {
-    return openOrders.find((o) => o.id === table.currentOrderId) ?? null;
+    const linked = openOrders.find((o) => o.id === table.currentOrderId);
+    if (isLiveOpenOrder(linked)) return linked;
+    // currentOrderId huérfano (pedido ya cobrado/borrado) → sin servicio
   }
   if (table.status === "available" || table.status === "dirty") {
     return null;
   }
+  const byTable = openOrders.find(
+    (o) =>
+      o.tableId === table.id &&
+      o.status !== "paid" &&
+      o.status !== "cancelled",
+  );
+  return isLiveOpenOrder(byTable) ? byTable : null;
+}
+
+/** Mesa con status ocupada pero sin pedido real (queda «fantasma»). */
+export function isStaleOccupiedTable(
+  table: Table,
+  order: Order | null,
+): boolean {
+  if (table.status === "dirty" || table.status === "reserved") return false;
+  if (isLiveOpenOrder(order)) return false;
   return (
-    openOrders.find(
-      (o) =>
-        o.tableId === table.id &&
-        o.status !== "paid" &&
-        o.status !== "cancelled",
-    ) ?? null
+    table.status === "occupied" ||
+    Boolean(table.currentOrderId)
   );
 }
 
@@ -51,22 +71,13 @@ export function resolveTableFloorTone(
   order: Order | null,
 ): TableFloorTone {
   if (table.status === "reserved") return "reserved";
+  // Sucia tras cobrar: hace falta marcar «Ya está limpia»
   if (table.status === "dirty") return "dirty";
 
-  const hasService =
-    table.status === "occupied" ||
-    Boolean(table.currentOrderId) ||
-    Boolean(order);
+  // Sin pedido abierto real → libre (ignora status ocupada huérfana)
+  if (!isLiveOpenOrder(order)) return "free";
 
-  if (!hasService) return "free";
-
-  if (!order || order.items.length === 0) return "occupied";
-
-  // Pedido ya cobrado / cerrado → no parpadear «Listo»
-  // (dirty/reserved ya se resolvieron arriba)
-  if (order.status === "paid" || order.status === "cancelled") {
-    return "free";
-  }
+  if (order.items.length === 0) return "occupied";
 
   const pending = order.items.filter(itemPendingSend);
   if (pending.length > 0) return "ordering";

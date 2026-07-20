@@ -193,6 +193,18 @@ export async function updateTableStatus(
   await batch.commit();
 }
 
+/** Tras cobrar (sucia) o mesa ocupada fantasma → vuelve a libre. */
+export async function markTableClean(input: {
+  restaurantId: string;
+  tableId: string;
+}): Promise<void> {
+  await updateTableStatus(input.restaurantId, input.tableId, {
+    status: "available",
+    currentOrderId: null,
+    mergedWith: [],
+  });
+}
+
 export async function setTablesStatus(
   restaurantId: string,
   updates: Array<{

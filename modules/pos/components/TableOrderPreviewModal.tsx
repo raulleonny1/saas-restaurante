@@ -5,9 +5,11 @@ import {
   activeOrderItems,
   formatElapsedShort,
 } from "@/modules/pos/domain/orderPreview";
+import { isStaleOccupiedTable } from "@/modules/pos/domain/tableTone";
 import { orderItemStatusLabel } from "@/modules/waiter/domain/itemStatus";
 import type { Order, Table } from "@/types/orders";
 import { Badge, Button, Modal } from "@/ui";
+import { useState } from "react";
 
 function itemWhen(item: { sentAt?: string }, order: Order): string {
   return formatElapsedShort(item.sentAt ?? order.sentAt ?? order.openedAt);
@@ -25,6 +27,7 @@ export function TableOrderPreviewModal({
   currency,
   tone = "default",
   onEnter,
+  onMarkClean,
 }: {
   open: boolean;
   onClose: () => void;
@@ -34,11 +37,30 @@ export function TableOrderPreviewModal({
   tone?: "default" | "waiter";
   /** Entrar al pedido / ticket (después de la previa). */
   onEnter: () => void;
+  /** Mesa sucia o estado fantasma → volver a libre. */
+  onMarkClean?: () => void | Promise<void>;
 }) {
+  const [cleaning, setCleaning] = useState(false);
+
   if (!table) return null;
 
   const items = activeOrderItems(order);
   const waiter = tone === "waiter";
+  const isDirty = table.status === "dirty";
+  const isStale = isStaleOccupiedTable(table, order);
+  const needsClean = Boolean(onMarkClean && (isDirty || isStale));
+  const cleanLabel = isDirty ? "Ya está limpia" : "Liberar mesa";
+
+  async function handleMarkClean() {
+    if (!onMarkClean) return;
+    setCleaning(true);
+    try {
+      await onMarkClean();
+      onClose();
+    } finally {
+      setCleaning(false);
+    }
+  }
 
   return (
     <Modal
@@ -46,9 +68,13 @@ export function TableOrderPreviewModal({
       onClose={onClose}
       title={`Mesa ${table.name}`}
       description={
-        order
-          ? `Vista previa · abierto hace ${formatElapsedShort(order.openedAt) || "—"}`
-          : "Vista previa · sin ticket abierto"
+        isDirty
+          ? "Mesa sucia · márcala limpia cuando esté lista"
+          : order
+            ? `Vista previa · abierto hace ${formatElapsedShort(order.openedAt) || "—"}`
+            : isStale
+              ? "Sin pedido activo · puedes liberarla"
+              : "Vista previa · sin ticket abierto"
       }
       size="md"
       className={
@@ -58,10 +84,19 @@ export function TableOrderPreviewModal({
       }
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose} disabled={cleaning}>
             Cerrar
           </Button>
-          <Button onClick={onEnter}>
+          {needsClean ? (
+            <Button
+              variant={isDirty ? "primary" : "secondary"}
+              onClick={() => void handleMarkClean()}
+              disabled={cleaning}
+            >
+              {cleaning ? "Guardando…" : cleanLabel}
+            </Button>
+          ) : null}
+          <Button onClick={onEnter} disabled={cleaning}>
             {order ? "Entrar al pedido" : "Abrir / pedir"}
           </Button>
         </>
@@ -73,14 +108,27 @@ export function TableOrderPreviewModal({
             {table.seats} asientos
             {table.zone ? ` · ${table.zone}` : ""}
           </span>
-          {order ? (
+          {isDirty ? (
+            <Badge tone="warning">Sucia</Badge>
+          ) : order ? (
             <Badge tone={waiter ? "success" : "accent"}>{order.status}</Badge>
           ) : (
             <Badge tone="neutral">Libre</Badge>
           )}
         </div>
 
-        {!order || !items.length ? (
+        {isDirty && !order ? (
+          <p
+            className={`rounded-[var(--radius-md)] border border-dashed px-3 py-6 text-center text-sm ${
+              waiter
+                ? "border-stone-400/40 bg-stone-950/40 text-[#a8b5a4]"
+                : "border-border text-fg-muted"
+            }`}
+          >
+            Cobro hecho. Cuando limpies la mesa, pulsa «Ya está limpia» para
+            volver a dejarla libre.
+          </p>
+        ) : !order || !items.length ? (
           <p
             className={`rounded-[var(--radius-md)] border border-dashed px-3 py-6 text-center text-sm ${
               waiter
@@ -90,7 +138,9 @@ export function TableOrderPreviewModal({
           >
             {order
               ? "Mesa abierta sin líneas todavía."
-              : "Nadie ha pedido aún en esta mesa."}
+              : isStale
+                ? "Aparecía ocupada sin pedido. Puedes liberarla o abrir un ticket nuevo."
+                : "Nadie ha pedido aún en esta mesa."}
           </p>
         ) : (
           <ul className="max-h-[40vh] space-y-2 overflow-y-auto">

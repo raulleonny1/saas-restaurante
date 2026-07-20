@@ -34,6 +34,7 @@ const LEGEND: TableFloorTone[] = [
   "ordering",
   "sent",
   "ready",
+  "dirty",
 ];
 
 const TONE_DOT: Record<TableFloorTone, string> = {
@@ -46,13 +47,11 @@ const TONE_DOT: Record<TableFloorTone, string> = {
   dirty: "bg-stone-400",
 };
 
-function tableNeedsCover(table: Table, order: Order | null): boolean {
-  if (order && order.status !== "paid" && order.status !== "cancelled") {
-    return true;
-  }
-  if (table.currentOrderId) return true;
-  if (table.status === "occupied") return true;
-  return false;
+function tableNeedsCover(_table: Table, order: Order | null): boolean {
+  // Solo servicio real: no mesas sucias ni «ocupadas» fantasma sin pedido.
+  return Boolean(
+    order && order.status !== "paid" && order.status !== "cancelled",
+  );
 }
 
 function TableCard({
@@ -124,14 +123,18 @@ function TableCard({
           ))}
         </ul>
       ) : (
-        <p className="mt-2.5 pl-1.5 text-xs text-[#5a6b57]">Sin pedidos</p>
+        <p className="mt-2.5 pl-1.5 text-xs text-[#5a6b57]">
+          {tone === "dirty" ? "Toca · marcar limpia" : "Sin pedidos"}
+        </p>
       )}
       {order ? (
         <p className="mt-2.5 pl-1.5 text-base font-semibold tabular-nums tracking-tight text-white">
           {formatCurrency(order.total, currency)}
         </p>
       ) : (
-        <p className="mt-2.5 pl-1.5 text-xs text-[#5a6b57]">Sin ticket</p>
+        <p className="mt-2.5 pl-1.5 text-xs text-[#5a6b57]">
+          {tone === "dirty" ? "Tras cobro" : "Sin ticket"}
+        </p>
       )}
     </button>
   );
@@ -152,6 +155,7 @@ function TablesContent() {
     branches,
     branchId,
     setBranchId,
+    markTableClean,
   } = usePos();
   const [manageOpen, setManageOpen] = useState(false);
   const [previewTable, setPreviewTable] = useState<Table | null>(null);
@@ -406,6 +410,13 @@ function TablesContent() {
         order={previewOrder}
         currency={currency}
         tone="waiter"
+        onMarkClean={
+          previewTable
+            ? async () => {
+                await markTableClean(previewTable.id);
+              }
+            : undefined
+        }
         onEnter={() => {
           if (!previewTable) return;
           selectTable(previewTable.id);

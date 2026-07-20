@@ -36,6 +36,7 @@ export function FloorPlan() {
     selectedTableId,
     selectTable,
     currency,
+    markTableClean,
   } = usePos();
   const [previewTable, setPreviewTable] = useState<Table | null>(null);
 
@@ -129,6 +130,13 @@ export function FloorPlan() {
         table={previewTable}
         order={previewOrder}
         currency={currency}
+        onMarkClean={
+          previewTable
+            ? async () => {
+                await markTableClean(previewTable.id);
+              }
+            : undefined
+        }
         onEnter={() => {
           if (!previewTable) return;
           selectTable(previewTable.id);

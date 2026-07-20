@@ -55,6 +55,7 @@ import {
 import {
   createTable,
   deleteTable,
+  markTableClean as markTableCleanService,
   subscribeTables,
   updateTable,
 } from "@/modules/pos/services/tables.service";
@@ -113,6 +114,8 @@ interface PosContextValue {
     zone?: string;
   }) => Promise<void>;
   removeFloorTable: (tableId: string) => Promise<void>;
+  /** Mesa sucia o ocupada fantasma → libre. */
+  markTableClean: (tableId: string) => Promise<void>;
   openSelectedTable: () => Promise<void>;
   addProduct: (input: {
     product: Product;
@@ -793,6 +796,14 @@ export function PosProvider({ children }: { children: ReactNode }) {
     [restaurantId, tables, selectedTableId],
   );
 
+  const markTableClean = useCallback(
+    async (tableId: string) => {
+      if (!restaurantId) throw new Error("Sin restaurante");
+      await markTableCleanService({ restaurantId, tableId });
+    },
+    [restaurantId],
+  );
+
   const value: PosContextValue = {
     ready,
     error,
@@ -818,6 +829,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
     createFloorTable,
     updateFloorTable,
     removeFloorTable,
+    markTableClean,
     openSelectedTable,
     addProduct,
     setItemQty,
