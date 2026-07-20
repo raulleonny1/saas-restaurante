@@ -1,7 +1,18 @@
 import type { CurrencyCode, ISODateString, Timestamps } from "./common";
 
 /** SaaS plans — same code serves unlimited tenants; plan is data, not branches. */
-export type BillingPlanId = "trial" | "starter" | "growth" | "enterprise";
+export type BillingPlanId = "trial" | "starter" | "business" | "enterprise";
+
+/** Ids antiguos en Firestore → plan actual. */
+export function normalizeBillingPlanId(
+  id: string | null | undefined,
+): BillingPlanId {
+  if (id === "growth") return "business";
+  if (id === "starter" || id === "business" || id === "enterprise" || id === "trial") {
+    return id;
+  }
+  return "trial";
+}
 
 export type BillingStatus =
   | "trialing"
@@ -20,6 +31,8 @@ export interface BillingPlanDefinition {
   seatsIncluded: number;
   branchesIncluded: number;
   features: string[];
+  /** Plan destacado en UI (⭐). */
+  recommended?: boolean;
 }
 
 export const BILLING_PLANS: Record<BillingPlanId, BillingPlanDefinition> = {
@@ -36,30 +49,37 @@ export const BILLING_PLANS: Record<BillingPlanId, BillingPlanDefinition> = {
     id: "starter",
     name: "Starter",
     description: "Un local con equipo reducido",
-    monthlyPriceCents: 4900,
+    monthlyPriceCents: 1290,
     seatsIncluded: 10,
     branchesIncluded: 1,
     features: ["POS", "Cocina", "CRM", "Web pública"],
   },
-  growth: {
-    id: "growth",
-    name: "Growth",
+  business: {
+    id: "business",
+    name: "Business",
     description: "Multi-sucursal y marketing",
-    monthlyPriceCents: 12900,
+    monthlyPriceCents: 2490,
     seatsIncluded: 40,
     branchesIncluded: 5,
     features: ["Todo Starter", "Marketing", "Reportes", "Hasta 5 sucursales"],
+    recommended: true,
   },
   enterprise: {
     id: "enterprise",
     name: "Enterprise",
     description: "Cadenas y personalización",
-    monthlyPriceCents: 29900,
+    monthlyPriceCents: 4990,
     seatsIncluded: 200,
     branchesIncluded: 50,
-    features: ["Todo Growth", "SLA", "Roles avanzados", "Sucursales ilimitadas*"],
+    features: ["Todo Business", "SLA", "Roles avanzados", "Sucursales ilimitadas*"],
   },
 };
+
+/** Formato precio mensuales ES: 12,90 € */
+export function formatPlanPrice(cents: number): string {
+  if (cents <= 0) return "Gratis";
+  return `${(cents / 100).toFixed(2).replace(".", ",")} €`;
+}
 
 /** Singleton billing state per restaurant: restaurants/{id}/billing/current */
 export interface TenantBilling extends Timestamps {

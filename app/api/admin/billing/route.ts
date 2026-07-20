@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { BILLING_PLANS, type BillingPlanId } from "@/types/billing";
+import { BILLING_PLANS, type BillingPlanId, normalizeBillingPlanId } from "@/types/billing";
 
 /**
  * Cambio de plan SaaS — solo Admin SDK (no escritura directa desde cliente).
@@ -110,8 +110,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    const planId = body.planId;
-    if (!planId || !(planId in BILLING_PLANS)) {
+    const planId = normalizeBillingPlanId(body.planId);
+    if (!body.planId || !(planId in BILLING_PLANS)) {
       return NextResponse.json({ ok: false, error: "planId inválido" }, { status: 400 });
     }
     const plan = BILLING_PLANS[planId];

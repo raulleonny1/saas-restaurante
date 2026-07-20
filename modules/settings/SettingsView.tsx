@@ -22,7 +22,11 @@ import {
 import { PrinterSetupPanel } from "@/modules/pos/components/PrinterSetupPanel";
 import { updateTenantSettings } from "@/modules/tenant/services/settings.service";
 import type { BillingPlanId, MemberInvite } from "@/types/billing";
-import { BILLING_PLANS } from "@/types/billing";
+import {
+  BILLING_PLANS,
+  formatPlanPrice,
+  normalizeBillingPlanId,
+} from "@/types/billing";
 import type { RoleId } from "@/types/rbac";
 import {
   Alert,
@@ -545,7 +549,13 @@ function BillingPanel({
   canEdit: boolean;
 }) {
   const [busy, setBusy] = useState(false);
-  const plan = billing ? BILLING_PLANS[billing.planId] : null;
+  const currentPlanId = billing
+    ? normalizeBillingPlanId(billing.planId)
+    : null;
+  const plan = currentPlanId ? BILLING_PLANS[currentPlanId] : null;
+  const paidPlans = (Object.keys(BILLING_PLANS) as BillingPlanId[]).filter(
+    (id) => id !== "trial",
+  );
 
   return (
     <div className="space-y-6">
@@ -555,7 +565,7 @@ function BillingPanel({
         <p className="mt-1 text-sm text-fg-muted">
           Estado: {billing?.status ?? "—"} ·{" "}
           {billing
-            ? `${(billing.amountCents / 100).toFixed(2)} ${billing.currency}/mes`
+            ? `${formatPlanPrice(billing.amountCents)}/mes`
             : ""}
         </p>
         <p className="mt-2 text-xs text-fg-muted">
@@ -568,10 +578,10 @@ function BillingPanel({
       </div>
 
       {canEdit ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {(Object.keys(BILLING_PLANS) as BillingPlanId[]).map((id) => {
+        <div className="grid gap-3 sm:grid-cols-3">
+          {paidPlans.map((id) => {
             const p = BILLING_PLANS[id];
-            const active = billing?.planId === id;
+            const active = currentPlanId === id;
             return (
               <button
                 key={id}
@@ -590,15 +600,23 @@ function BillingPanel({
                     }
                   })();
                 }}
-                className={`rounded-[var(--radius-lg)] border p-4 text-left ${
+                className={`relative rounded-[var(--radius-lg)] border p-4 text-left ${
                   active
                     ? "border-accent bg-accent-soft/40"
-                    : "border-border hover:border-accent/40"
+                    : p.recommended
+                      ? "border-accent/60 bg-accent-soft/20 hover:border-accent"
+                      : "border-border hover:border-accent/40"
                 }`}
               >
-                <p className="font-medium">{p.name}</p>
-                <p className="mt-1 text-sm text-fg-muted">
-                  {(p.monthlyPriceCents / 100).toFixed(0)} €/mes
+                {p.recommended ? (
+                  <span className="absolute right-3 top-3 text-xs font-semibold text-accent">
+                    ⭐ Recomendado
+                  </span>
+                ) : null}
+                <p className="font-medium pr-24">{p.name}</p>
+                <p className="mt-1 text-sm font-semibold tabular-nums text-fg">
+                  {formatPlanPrice(p.monthlyPriceCents)}
+                  <span className="font-normal text-fg-muted">/mes</span>
                 </p>
                 <p className="mt-2 text-caption">{p.description}</p>
               </button>
