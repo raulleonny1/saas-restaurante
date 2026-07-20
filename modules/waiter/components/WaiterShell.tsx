@@ -180,8 +180,11 @@ export function WaiterShell({
             </p>
             <p className="mt-1 truncate text-xs text-[#8fa08c]">
               {user.displayName}
-              {restaurant?.name && floorOnly ? ` · ${restaurant.name}` : ""}
-              {table ? (
+              {restaurant?.name && (floorOnly || isCashier)
+                ? ` · ${restaurant.name}`
+                : ""}
+              {/* Mesa solo en sala: en caja el plano es general, no una mesa fijada. */}
+              {!isCashier && table ? (
                 <span className="text-emerald-300/90">
                   {" "}
                   · Mesa {table.name}
