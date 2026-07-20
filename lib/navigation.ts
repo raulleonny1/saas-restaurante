@@ -173,9 +173,10 @@ export function navItemVisible(
 
 export function filterAppNav(
   can: (permission: PermissionId) => boolean,
-  opts?: { mobileOnly?: boolean },
+  opts?: { mobileOnly?: boolean; /** Solo menú de plataforma (alta de clientes) */ platformOnly?: boolean },
 ): NavItem[] {
   return APP_NAV.filter((item) => {
+    if (opts?.platformOnly) return item.module === "platform";
     if (opts?.mobileOnly && !item.mobile) return false;
     return navItemVisible(item, can);
   });

@@ -41,14 +41,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const platformAdmin = isPlatformSuperAdmin(user);
 
-  // Superadmin → panel de plataforma (nunca /dashboard ni “Uniendo…”)
+  // Superadmin = solo plataforma (alta de clientes). Sin POS/cocina/etc.
   useEffect(() => {
     if (!ready || loading || !user || !platformAdmin) return;
-    if (
-      pathname === "/dashboard" ||
-      pathname === "/onboarding" ||
-      pathname === "/platform"
-    ) {
+    if (!pathname.startsWith("/superadmin")) {
       router.replace("/superadmin");
     }
   }, [ready, loading, user, platformAdmin, pathname, router]);

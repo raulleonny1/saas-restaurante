@@ -3,13 +3,18 @@
 import { useAuth } from "@/context/AuthProvider";
 import { cn } from "@/lib/cn";
 import { filterAppNav } from "@/lib/navigation";
+import { isPlatformSuperAdmin } from "@/lib/roles";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 export function MobileNav() {
   const pathname = usePathname();
-  const { can } = useAuth();
-  const links = filterAppNav(can, { mobileOnly: true });
+  const { can, user } = useAuth();
+  const platformOnly = isPlatformSuperAdmin(user);
+  const links = filterAppNav(can, {
+    mobileOnly: !platformOnly,
+    platformOnly,
+  });
 
   if (!links.length) return null;
 

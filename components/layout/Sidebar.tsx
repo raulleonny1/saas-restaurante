@@ -3,14 +3,15 @@
 import { useAuth } from "@/context/AuthProvider";
 import { cn } from "@/lib/cn";
 import { filterAppNav } from "@/lib/navigation";
-import { homePathForRole } from "@/lib/roles";
+import { homePathForRole, isPlatformSuperAdmin } from "@/lib/roles";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { can, role } = useAuth();
-  const links = filterAppNav(can);
+  const { can, role, user } = useAuth();
+  const platformOnly = isPlatformSuperAdmin(user);
+  const links = filterAppNav(can, { platformOnly });
   const home = homePathForRole(role);
 
   return (
@@ -19,11 +20,13 @@ export function Sidebar() {
         <Link href={home} className="block">
           <p className="text-title">SmartServe</p>
           <p className="text-xs text-fg-muted">
-            {role === "cocinero"
-              ? "Cocina"
-              : role === "barista"
-                ? "Barra"
-                : "Restaurant OS"}
+            {platformOnly
+              ? "Plataforma"
+              : role === "cocinero"
+                ? "Cocina"
+                : role === "barista"
+                  ? "Barra"
+                  : "Restaurant OS"}
           </p>
         </Link>
       </div>
