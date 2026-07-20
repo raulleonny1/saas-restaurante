@@ -328,6 +328,7 @@ export async function advanceTicketColumn(input: {
   let branchId = order.branchId;
   let fromStatus = order.status;
   let toStatus: OrderStatus = order.status;
+  let pushBody = "";
 
   await runTransaction(getDb(), async (tx) => {
     const snap = await tx.get(ref);
@@ -348,6 +349,7 @@ export async function advanceTicketColumn(input: {
             .map((i) => `${i.quantity}× ${i.name}`)
             .join(", ")
         : undefined;
+    if (readyBody) pushBody = readyBody;
     const stillHasReady = items.some((i) => i.status === "ready");
 
     tx.update(ref, {
@@ -384,6 +386,38 @@ export async function advanceTicketColumn(input: {
     updatedAt: stamp,
   });
   await batch.commit();
+  if (toColumn === "ready") {
+    notifyWaiterPush({
+      restaurantId,
+      order,
+      body: pushBody || "Pedido listo para llevar a la mesa",
+    });
+  }
+}
+
+function notifyWaiterPush(input: {
+  restaurantId: string;
+  order: Order;
+  body: string;
+}) {
+  const uid = input.order.servedBy;
+  if (!uid || typeof window === "undefined") return;
+  void import("@/modules/notifications/services/fcm.service")
+    .then(({ requestPushNotify }) =>
+      requestPushNotify({
+        restaurantId: input.restaurantId,
+        targetUids: [uid],
+        title: input.order.tableName
+          ? `Listo · ${input.order.tableName}`
+          : "Pedido listo",
+        body: input.body,
+        data: {
+          orderId: input.order.id,
+          type: "kitchen_ready",
+        },
+      }),
+    )
+    .catch(() => undefined);
 }
 
 /**
@@ -443,4 +477,5 @@ export async function alertWaiterForOrder(input: {
   });
 
   await batch.commit();
+  notifyWaiterPush({ restaurantId, order, body });
 }

@@ -45,6 +45,8 @@ export interface Product extends Timestamps, SoftDelete {
   name: string;
   description?: string;
   sku?: string;
+  /** Código de barras EAN/UPC (escáner HID / cámara). */
+  barcode?: string;
   /** Marca / fabricante (opcional). */
   brand?: string;
   /** Precio de venta unitario (carta / sala). */
@@ -53,6 +55,13 @@ export interface Product extends Timestamps, SoftDelete {
   wholesalePrice?: number;
   /** Unidades disponibles a la venta (stock de producto). */
   stockQty?: number;
+  /**
+   * 86 / agotado operativo (no archiva la carta).
+   * Independiente de `status: inactive`.
+   */
+  soldOut?: boolean;
+  soldOutAt?: string;
+  soldOutReason?: string;
   cost?: number;
   currency: CurrencyCode;
   status: EntityStatus;

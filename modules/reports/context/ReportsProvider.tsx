@@ -42,6 +42,15 @@ import {
   subscribeShifts,
   subscribeWaste,
 } from "@/modules/reports/services/reports-data.service";
+import {
+  salesFromDailyStats,
+  subscribeDailyStats,
+  type DailyStatsDoc,
+} from "@/modules/reports/services/daily-stats.service";
+import {
+  dayKey,
+  formatDayLabel,
+} from "@/modules/reports/domain/period";
 import type { Ingredient, Product, ProductCategory } from "@/types/catalog";
 import type { Customer } from "@/types/customers";
 import type { Employee, EmployeeShift } from "@/types/employees";
@@ -108,6 +117,7 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
   const [waste, setWaste] = useState<WasteEntry[]>([]);
   const [employeesList, setEmployeesList] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<EmployeeShift[]>([]);
+  const [dailyStats, setDailyStats] = useState<DailyStatsDoc[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [preset, setPreset] = useState<ReportPeriodPreset>("30d");
@@ -146,6 +156,7 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
       subscribeWaste(restaurantId, setWaste, (e) => setError(e.message)),
       subscribeEmployees(restaurantId, setEmployeesList, (e) => setError(e.message)),
       subscribeShifts(restaurantId, setShifts, (e) => setError(e.message)),
+      subscribeDailyStats(restaurantId, setDailyStats, (e) => setError(e.message)),
     ];
 
     return () => unsubs.forEach((u) => u());
@@ -156,10 +167,28 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
     [preset, customFrom, customTo],
   );
 
-  const sales = useMemo(
-    () => buildSalesReport(orders, range),
-    [orders, range],
-  );
+  const sales = useMemo(() => {
+    const fillDays: { key: string; label: string }[] = [];
+    const cursor = new Date(range.from);
+    while (cursor <= range.to) {
+      const key = dayKey(cursor.toISOString());
+      fillDays.push({ key, label: formatDayLabel(key) });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    const fromDay = dayKey(range.from.toISOString());
+    const toDay = dayKey(range.to.toISOString());
+    const inRangeStats = dailyStats.filter(
+      (d) => d.day >= fromDay && d.day <= toDay,
+    );
+    // Rangos largos (≥14 días): preferir agregado; si no hay docs → live
+    const spanDays =
+      (range.to.getTime() - range.from.getTime()) / (24 * 60 * 60 * 1000);
+    if (spanDays >= 13 && inRangeStats.length) {
+      const fromAgg = salesFromDailyStats(inRangeStats, fillDays);
+      if (fromAgg) return fromAgg;
+    }
+    return buildSalesReport(orders, range);
+  }, [orders, range, dailyStats]);
   const profit = useMemo(
     () =>
       buildProfitReport(orders, productsList, ingredients, waste, range),

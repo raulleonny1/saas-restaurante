@@ -11,6 +11,14 @@ export type OrderStatus =
 
 export type OrderChannel = "pos" | "qr" | "delivery" | "takeaway" | "online";
 
+export type DeliveryStatus =
+  | "preparing"
+  | "ready"
+  | "assigned"
+  | "en_route"
+  | "delivered"
+  | "cancelled";
+
 export type TableStatus = "available" | "occupied" | "reserved" | "dirty";
 
 export type PaymentMethod = "cash" | "card" | "stripe" | "sumup" | "other";
@@ -116,6 +124,15 @@ export interface Order extends Timestamps, SoftDelete {
   /** Cocina pulsa «Avisar mesero» → el mesero ve aviso flotante + sonido. */
   waiterAlertAt?: ISODateString;
   waiterAlertBody?: string;
+  /** Delivery / takeaway (Fase 5). */
+  deliveryStatus?: DeliveryStatus;
+  deliveryAddress?: string;
+  deliveryPhone?: string;
+  deliveryAssignedTo?: string | null;
+  deliveryAssignedName?: string | null;
+  deliveryAssignedAt?: ISODateString;
+  deliveryPickedUpAt?: ISODateString;
+  deliveryDeliveredAt?: ISODateString;
 }
 
 export interface Payment extends Timestamps {

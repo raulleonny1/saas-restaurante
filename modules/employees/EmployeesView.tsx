@@ -5,6 +5,7 @@ import { EmployeeDetail } from "@/modules/employees/components/EmployeeDetail";
 import { EmployeeFormModal } from "@/modules/employees/components/EmployeeFormModal";
 import { EmployeeList } from "@/modules/employees/components/EmployeeList";
 import { ShiftFormModal } from "@/modules/employees/components/ShiftFormModal";
+import { WeeklyShiftsPanel } from "@/modules/employees/components/WeeklyShiftsPanel";
 import {
   EmployeesProvider,
   useEmployees,
@@ -166,6 +167,10 @@ function EmployeesWorkspace() {
         <Alert tone="danger" title="Error Firestore">
           {error}
         </Alert>
+      ) : null}
+
+      {!inHistory ? (
+        <WeeklyShiftsPanel onAddShift={() => setShiftOpen(true)} />
       ) : null}
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(260px,320px)_1fr]">

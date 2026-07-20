@@ -86,7 +86,14 @@ export function CustomerOrdersPage() {
             className="flex items-center justify-between gap-3 border-b border-white/10 py-3"
           >
             <div className="min-w-0">
-              <p className="truncate font-medium">{p.name}</p>
+              <p className={`truncate font-medium ${p.soldOut ? "line-through opacity-60" : ""}`}>
+                {p.name}
+                {p.soldOut ? (
+                  <span className="ml-2 text-[10px] font-semibold uppercase text-amber-400/90 no-underline">
+                    Agotado
+                  </span>
+                ) : null}
+              </p>
               <p className="text-xs text-[#8fa08c]">
                 {money(p.price, restaurant?.currency)}
               </p>
@@ -102,10 +109,14 @@ export function CustomerOrdersPage() {
               </button>
               <button
                 type="button"
-                onClick={() => addToCart(p)}
-                className="rounded-md bg-emerald-800 px-3 py-1.5 text-xs"
+                disabled={Boolean(p.soldOut)}
+                onClick={() => {
+                  if (p.soldOut) return;
+                  addToCart(p);
+                }}
+                className="rounded-md bg-emerald-800 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Añadir
+                {p.soldOut ? "Agotado" : "Añadir"}
               </button>
             </div>
           </li>

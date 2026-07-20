@@ -18,6 +18,7 @@ import {
   orderBy,
   query,
   Unsubscribe,
+  updateDoc,
   writeBatch,
 } from "firebase/firestore";
 
@@ -192,6 +193,9 @@ export async function upsertProductBasic(input: {
   brand?: string;
   wholesalePrice?: number;
   stockQty?: number;
+  soldOut?: boolean;
+  sku?: string;
+  barcode?: string;
   recipe?: RecipeIngredient[];
   kitchenStation?: Product["kitchenStation"];
 }): Promise<Product> {
@@ -205,12 +209,22 @@ export async function upsertProductBasic(input: {
     input.stockQty !== undefined
       ? input.stockQty
       : input.product?.stockQty;
+  const soldOut =
+    input.soldOut !== undefined
+      ? input.soldOut
+      : Boolean(input.product?.soldOut);
+  const sku =
+    (input.sku ?? input.product?.sku)?.trim() || undefined;
+  const barcode =
+    (input.barcode ?? input.product?.barcode)?.trim() || undefined;
   const row = stripUndefined({
     id,
     restaurantId: input.restaurantId,
     categoryId: input.categoryId,
     name: input.name.trim(),
     brand,
+    sku,
+    barcode,
     price: input.price,
     wholesalePrice:
       wholesale != null && !Number.isNaN(Number(wholesale))
@@ -220,6 +234,13 @@ export async function upsertProductBasic(input: {
       stockQty != null && !Number.isNaN(Number(stockQty))
         ? Number(stockQty)
         : undefined,
+    soldOut: soldOut || undefined,
+    soldOutAt: soldOut
+      ? input.product?.soldOutAt ?? stamp
+      : undefined,
+    soldOutReason: soldOut
+      ? input.product?.soldOutReason
+      : undefined,
     currency: input.currency,
     status: "active" as const,
     branchIds: input.product?.branchIds ?? [],
@@ -238,4 +259,36 @@ export async function upsertProductBasic(input: {
   );
   await batch.commit();
   return row;
+}
+
+/** 86 / agotado: marca o reactiva sin archivar el producto. */
+export async function setProductSoldOut(input: {
+  restaurantId: string;
+  productId: string;
+  soldOut: boolean;
+  reason?: string;
+}): Promise<void> {
+  const stamp = nowIso();
+  const ref = doc(
+    getDb(),
+    "restaurants",
+    input.restaurantId,
+    "products",
+    input.productId,
+  );
+  if (input.soldOut) {
+    await updateDoc(ref, {
+      soldOut: true,
+      soldOutAt: stamp,
+      soldOutReason: input.reason?.trim() || "manual",
+      updatedAt: stamp,
+    });
+  } else {
+    await updateDoc(ref, {
+      soldOut: false,
+      soldOutAt: null,
+      soldOutReason: null,
+      updatedAt: stamp,
+    });
+  }
 }

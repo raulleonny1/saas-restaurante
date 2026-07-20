@@ -89,6 +89,14 @@ export function WaiterNotificationsProvider({
     return subscribeStaffNotifications(restaurantId, user.uid, setRemote);
   }, [user, restaurantId]);
 
+  /** Registrar token FCM (PWA mesero/caja) si hay VAPID. */
+  useEffect(() => {
+    if (!user?.uid || !alertsEnabled) return;
+    void import("@/modules/notifications/services/fcm.service").then(
+      ({ registerWebPushToken }) => registerWebPushToken(user.uid),
+    );
+  }, [user?.uid, alertsEnabled]);
+
   /** Solo mesas con líneas reales (evita avisos de mesas vacías/fantasma). */
   const activeTableIds = useMemo(
     () =>

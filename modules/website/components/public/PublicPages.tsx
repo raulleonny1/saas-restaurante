@@ -140,7 +140,18 @@ export function HomeExtras() {
                     className="flex flex-col gap-1 py-3.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
                   >
                     <div className="min-w-0">
-                      <p className="font-medium text-[#e8efe6]">{p.name}</p>
+                      <p
+                        className={`font-medium ${
+                          p.soldOut ? "text-[#8fa08c] line-through" : "text-[#e8efe6]"
+                        }`}
+                      >
+                        {p.name}
+                        {p.soldOut ? (
+                          <span className="ml-2 text-[11px] font-semibold uppercase tracking-wide text-amber-400/90 no-underline">
+                            Agotado
+                          </span>
+                        ) : null}
+                      </p>
                       {p.description ? (
                         <p className="mt-0.5 text-sm leading-snug text-[#a8b5a4]">
                           {p.description}
@@ -153,7 +164,9 @@ export function HomeExtras() {
                       ) : null}
                     </div>
                     <span className="shrink-0 text-base font-semibold tabular-nums text-[var(--site-accent)]">
-                      {formatCurrency(p.price, restaurant?.currency)}
+                      {p.soldOut
+                        ? "—"
+                        : formatCurrency(p.price, restaurant?.currency)}
                     </span>
                   </li>
                 ))}
@@ -263,7 +276,14 @@ export function MenuPage() {
                 className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div>
-                  <p className="font-medium">{p.name}</p>
+                  <p className={`font-medium ${p.soldOut ? "line-through opacity-70" : ""}`}>
+                    {p.name}
+                    {p.soldOut ? (
+                      <span className="ml-2 text-[11px] font-semibold uppercase text-amber-400/90 no-underline">
+                        Agotado
+                      </span>
+                    ) : null}
+                  </p>
                   {p.description ? (
                     <p className="mt-1 text-sm text-[#a8b5a4]">
                       {p.description}
@@ -277,11 +297,13 @@ export function MenuPage() {
                   {sectionEnabled("orders") ? (
                     <button
                       type="button"
+                      disabled={Boolean(p.soldOut)}
                       onClick={() => {
+                        if (p.soldOut) return;
                         addToCart(p);
                         toast("Añadido al pedido", "success");
                       }}
-                      className="rounded-md border border-white/20 px-3 py-1 text-xs"
+                      className="rounded-md border border-white/20 px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Añadir
                     </button>

@@ -272,6 +272,7 @@ export function ProductsRecipesPanel({
     saveCategory,
     removeProduct,
     saveRecipe,
+    setProductSoldOut,
   } = useInventory();
 
   const canManageProducts = can("catalog.products.manage");
@@ -299,6 +300,8 @@ export function ProductsRecipesPanel({
   const [price, setPrice] = useState("");
   const [wholesalePrice, setWholesalePrice] = useState("");
   const [stockQty, setStockQty] = useState("");
+  const [sku, setSku] = useState("");
+  const [barcode, setBarcode] = useState("");
   const [kitchenStation, setKitchenStation] = useState<
     Product["kitchenStation"] | ""
   >(defaultStation);
@@ -316,6 +319,8 @@ export function ProductsRecipesPanel({
     setPrice("");
     setWholesalePrice("");
     setStockQty("");
+    setSku("");
+    setBarcode("");
     setKitchenStation(defaultStation);
     setEditingProduct(null);
   }
@@ -330,6 +335,8 @@ export function ProductsRecipesPanel({
       p.wholesalePrice != null ? String(p.wholesalePrice) : "",
     );
     setStockQty(p.stockQty != null ? String(p.stockQty) : "");
+    setSku(p.sku ?? "");
+    setBarcode(p.barcode ?? "");
     const station = resolveProductStation(p, categories);
     if (mode === "bar") {
       setKitchenStation("bar");
@@ -414,6 +421,8 @@ export function ProductsRecipesPanel({
                   : Number(wholesalePrice) || 0,
               stockQty:
                 stockQty === "" ? undefined : Number(stockQty) || 0,
+              sku: sku.trim() || undefined,
+              barcode: barcode.trim() || undefined,
               kitchenStation: forcedStation,
             })
               .then(() => {
@@ -480,6 +489,18 @@ export function ProductsRecipesPanel({
             value={stockQty}
             onChange={(e) => setStockQty(e.target.value)}
             placeholder="Unidades"
+          />
+          <Input
+            label="SKU"
+            value={sku}
+            onChange={(e) => setSku(e.target.value)}
+            placeholder="Código interno"
+          />
+          <Input
+            label="Código de barras"
+            value={barcode}
+            onChange={(e) => setBarcode(e.target.value)}
+            placeholder="EAN / UPC"
           />
           {mode === "full" ? (
             <Select
@@ -556,6 +577,11 @@ export function ProductsRecipesPanel({
                 className="w-full text-left"
               >
                 <span className="font-medium">{p.name}</span>
+                {p.soldOut ? (
+                  <Badge tone="warning" className="ml-2">
+                    Agotado
+                  </Badge>
+                ) : null}
                 {p.brand ? (
                   <span className="text-fg-muted"> · {p.brand}</span>
                 ) : null}
@@ -570,8 +596,28 @@ export function ProductsRecipesPanel({
                     : ""}
                 </span>
               </button>
-              {canDelete ? (
-                <div className="mt-2">
+              <div className="mt-2 flex flex-wrap gap-2">
+                {canManageProducts ? (
+                  <Button
+                    size="sm"
+                    variant={p.soldOut ? "secondary" : "ghost"}
+                    onClick={() => {
+                      void setProductSoldOut(p.id, !p.soldOut)
+                        .then(() =>
+                          toast(
+                            p.soldOut
+                              ? "Producto disponible de nuevo"
+                              : "Marcado como agotado",
+                            "success",
+                          ),
+                        )
+                        .catch((err) => toast(err.message, "error"));
+                    }}
+                  >
+                    {p.soldOut ? "Reactivar" : "Agotado"}
+                  </Button>
+                ) : null}
+                {canDelete ? (
                   <Button
                     size="sm"
                     variant="danger"
@@ -593,8 +639,8 @@ export function ProductsRecipesPanel({
                   >
                     Quitar
                   </Button>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
             </li>
           ))}
           {!scopedProducts.length ? (

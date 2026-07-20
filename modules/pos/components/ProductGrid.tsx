@@ -2,13 +2,17 @@
 
 import { formatCurrency } from "@/lib/format";
 import {
+  getProductAvailability,
+  soldOutLabel,
+} from "@/modules/inventory/domain/availability";
+import {
   categoryTone,
   categoryToneStyle,
 } from "@/modules/pos/domain/categoryTone";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import type { Product } from "@/types/catalog";
 import { SearchInput } from "@/ui";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ProductCustomizeModal } from "./ProductCustomizeModal";
 
 export function ProductGrid({
@@ -19,11 +23,14 @@ export function ProductGrid({
   disabled?: boolean;
   tone?: "default" | "waiter";
 }) {
-  const { products, categories, addProduct, currency } = usePos();
+  const { products, categories, addProduct, currency, inventoryLevels } =
+    usePos();
   const [categoryId, setCategoryId] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [customizing, setCustomizing] = useState<Product | null>(null);
   const waiter = tone === "waiter";
+  const scanBuf = useRef("");
+  const scanTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const categoryNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -39,6 +46,7 @@ export function ProductGrid({
       return (
         p.name.toLowerCase().includes(q) ||
         p.sku?.toLowerCase().includes(q) ||
+        p.barcode?.toLowerCase().includes(q) ||
         p.tags?.some((t) => t.toLowerCase().includes(q))
       );
     });
@@ -46,6 +54,12 @@ export function ProductGrid({
 
   const onPick = async (product: Product) => {
     if (disabled) return;
+    const avail = getProductAvailability(product, inventoryLevels);
+    if (!avail.available) {
+      const { toast } = await import("@/ui");
+      toast(soldOutLabel(avail.reason), "info");
+      return;
+    }
     const needsCustomize =
       (product.variants?.length ?? 0) > 0 ||
       (product.modifierGroups?.length ?? 0) > 0;
@@ -61,6 +75,48 @@ export function ProductGrid({
     }
   };
 
+  /** Escáner HID: lee código de barras y busca por sku/barcode. */
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === "Enter") {
+        const code = scanBuf.current.trim();
+        scanBuf.current = "";
+        if (code.length < 3) return;
+        const match = products.find(
+          (p) =>
+            p.sku === code ||
+            p.barcode === code ||
+            p.sku?.toLowerCase() === code.toLowerCase() ||
+            p.barcode?.toLowerCase() === code.toLowerCase(),
+        );
+        if (match) void onPick(match);
+        return;
+      }
+      if (e.key.length === 1) {
+        scanBuf.current += e.key;
+        if (scanTimer.current) clearTimeout(scanTimer.current);
+        scanTimer.current = setTimeout(() => {
+          scanBuf.current = "";
+        }, 80);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      if (scanTimer.current) clearTimeout(scanTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onPick uses latest products via closure refresh
+  }, [products, inventoryLevels, disabled]);
+
   return (
     <div className="flex min-h-0 flex-col gap-3">
       <div
@@ -71,7 +127,7 @@ export function ProductGrid({
         }
       >
         <SearchInput
-          placeholder="Buscar productos…"
+          placeholder="Buscar productos o escanear…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onClear={() => setQuery("")}
@@ -111,15 +167,24 @@ export function ProductGrid({
               categoryName: catName,
             });
             const toneColors = categoryTone(p.categoryId, catName);
+            const avail = getProductAvailability(p, inventoryLevels);
+            const unavailable = !avail.available;
             return (
               <button
                 key={p.id}
                 type="button"
-                disabled={disabled}
+                disabled={disabled || unavailable}
                 onClick={() => void onPick(p)}
                 style={style}
-                className="flex min-h-[92px] touch-manipulation flex-col justify-between rounded-xl border-2 px-3 py-3 text-left shadow-sm transition-[transform,filter] active:scale-[0.97] active:brightness-110 disabled:opacity-40"
+                className={`relative flex min-h-[92px] touch-manipulation flex-col justify-between rounded-xl border-2 px-3 py-3 text-left shadow-sm transition-[transform,filter] active:scale-[0.97] active:brightness-110 disabled:opacity-40 ${
+                  unavailable ? "grayscale-[0.4]" : ""
+                }`}
               >
+                {unavailable ? (
+                  <span className="absolute right-2 top-2 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                    {soldOutLabel(avail.reason)}
+                  </span>
+                ) : null}
                 <div className="min-w-0">
                   <p className="line-clamp-2 text-sm font-semibold leading-snug">
                     {p.name}

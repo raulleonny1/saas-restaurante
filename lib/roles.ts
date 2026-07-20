@@ -106,9 +106,10 @@ export function homePathForRole(role: RoleId | string | null | undefined): strin
   if (isCashierOnlyRole(role as RoleId)) return "/caja";
   if (role === "cocinero") return "/kitchen";
   if (role === "barista") return "/bar";
+  if (role === "repartidor") return "/delivery";
   // Administrador de sala (gerente/supervisor) → su panel, no el KPI del dueño
   if (role === "gerente" || role === "supervisor") return "/admin";
-  // propietario / super_admin / repartidor → panel general
+  // propietario / super_admin → panel general
   return "/dashboard";
 }
 

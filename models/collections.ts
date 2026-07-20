@@ -44,16 +44,20 @@ export const RESTAURANT_COLLECTIONS = [
   "orders",
   "orderEvents",
   "payments",
+  "dailyStats",
+  "receiptPrintJobs",
   // growth
   "promotions",
   "coupons",
   "campaigns",
+  "campaignRecipients",
   "reservations",
   // platform
   "historyEvents",
   "auditLogs",
   "aiSessions",
   "aiInsights",
+  "appNotifications",
 ] as const;
 
 /** Subcollections */

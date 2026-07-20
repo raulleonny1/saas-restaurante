@@ -7,13 +7,15 @@ export type BranchPrefScope =
   | "pos"
   | "kitchen"
   | "inventory"
-  | "reservations";
+  | "reservations"
+  | "delivery";
 
 const LEGACY_BRANCH_KEYS: Record<BranchPrefScope, string> = {
   pos: "smartserve_pos_branch",
   kitchen: "smartserve_kitchen_branch",
   inventory: "smartserve_inventory_branch",
   reservations: "smartserve_reservations_branch",
+  delivery: "smartserve_delivery_branch",
 };
 
 export function branchPrefKey(

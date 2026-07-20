@@ -132,6 +132,10 @@ service cloud.firestore {
       allow create: if isSelf(uid);
       allow update: if isSelf(uid);
       allow delete: if false;
+
+      match /fcmTokens/{tokenId} {
+        allow read, write: if isSelf(uid);
+      }
     }
 
     match /restaurants/{restaurantId} {

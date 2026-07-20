@@ -16,6 +16,7 @@ import {
   subscribeIngredients,
   subscribeProducts,
   saveProductRecipe,
+  setProductSoldOut as setProductSoldOutService,
   upsertCategory,
   upsertIngredient,
   upsertProductBasic,
@@ -117,9 +118,13 @@ interface InventoryContextValue {
     brand?: string;
     wholesalePrice?: number;
     stockQty?: number;
+    soldOut?: boolean;
+    sku?: string;
+    barcode?: string;
     kitchenStation?: Product["kitchenStation"];
     recipe?: RecipeIngredient[];
   }) => Promise<void>;
+  setProductSoldOut: (productId: string, soldOut: boolean) => Promise<void>;
   saveCategory: (input: {
     category?: ProductCategory | null;
     name: string;
@@ -351,9 +356,20 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         brand: input.brand,
         wholesalePrice: input.wholesalePrice,
         stockQty: input.stockQty,
+        soldOut: input.soldOut,
+        sku: input.sku,
+        barcode: input.barcode,
         kitchenStation: input.kitchenStation,
         currency,
         recipe: input.recipe,
+      });
+    },
+    setProductSoldOut: async (productId, soldOut) => {
+      const { restaurantId: rid } = requireCtx();
+      await setProductSoldOutService({
+        restaurantId: rid,
+        productId,
+        soldOut,
       });
     },
     saveCategory: async (input) => {

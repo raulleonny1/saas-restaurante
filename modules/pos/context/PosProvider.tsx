@@ -53,11 +53,13 @@ import {
 } from "@/modules/pos/domain/tableTone";
 import { applyPaidOrderToCrm } from "@/modules/customers/services/orders-crm.service";
 import { deductOrderFromInventory } from "@/modules/inventory/services/sale-deduction.service";
+import { subscribeLevels } from "@/modules/inventory/services/stock.service";
 import {
   chargeOrder,
   refundPayment,
   subscribePaymentsForOrder,
 } from "@/modules/pos/services/payments.service";
+import { recordPaymentInDailyStats } from "@/modules/reports/services/daily-stats.service";
 import {
   createTable,
   deleteTable,
@@ -66,6 +68,7 @@ import {
   updateTable,
 } from "@/modules/pos/services/tables.service";
 import type { Product, ProductCategory } from "@/types/catalog";
+import type { InventoryLevel } from "@/types/inventory";
 import type {
   Order,
   OrderItem,
@@ -98,6 +101,8 @@ interface PosContextValue {
   tables: Table[];
   categories: ProductCategory[];
   products: Product[];
+  /** Niveles de stock (86 por receta). */
+  inventoryLevels: InventoryLevel[];
   openOrders: Order[];
   historyOrders: Order[];
   selectedTableId: string | null;
@@ -179,6 +184,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
   const [tables, setTables] = useState<Table[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [inventoryLevels, setInventoryLevels] = useState<InventoryLevel[]>([]);
   const [openOrders, setOpenOrders] = useState<Order[]>([]);
   const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
@@ -271,6 +277,9 @@ export function PosProvider({ children }: { children: ReactNode }) {
         setError(e.message),
       ),
       subscribeProducts(restaurantId, branchId, setProducts, (e) =>
+        setError(e.message),
+      ),
+      subscribeLevels(restaurantId, branchId, setInventoryLevels, (e) =>
         setError(e.message),
       ),
       subscribeOpenOrders(restaurantId, branchId, setOpenOrders, (e) =>
@@ -440,6 +449,17 @@ export function PosProvider({ children }: { children: ReactNode }) {
       if (!restaurantId || !user) {
         throw new Error("Sin sesión");
       }
+      const { getProductAvailability, soldOutLabel } = await import(
+        "@/modules/inventory/domain/availability"
+      );
+      const avail = getProductAvailability(
+        input.product,
+        inventoryLevels,
+        { qty: input.quantity ?? 1 },
+      );
+      if (!avail.available) {
+        throw new Error(soldOutLabel(avail.reason));
+      }
       let order = activeOrder;
       // Primer producto: abre la mesa al vuelo (no dejar «ocupada» vacía antes).
       if (!order) {
@@ -521,6 +541,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
       tipDefault,
       runOrQueue,
       categories,
+      inventoryLevels,
     ],
   );
 
@@ -726,6 +747,13 @@ export function PosProvider({ children }: { children: ReactNode }) {
           actorUid: uid,
         }).catch(() => undefined);
       }
+      void recordPaymentInDailyStats({
+        restaurantId: rid,
+        order: next,
+        method,
+        amount,
+        tipAmount,
+      }).catch(() => undefined);
     },
     [requireOrder, tables, taxPercent, user?.displayName, user?.email],
   );
@@ -901,6 +929,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
     tables,
     categories,
     products,
+    inventoryLevels,
     openOrders,
     historyOrders,
     selectedTableId,
