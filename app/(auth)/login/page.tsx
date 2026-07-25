@@ -8,7 +8,7 @@ import {
   isKitchenStaffRole,
   isPlatformSuperAdmin,
 } from "@/lib/roles";
-import { signInOrActivate } from "@/services/auth.service";
+import { signInWithPin } from "@/services/auth.service";
 import type { RoleId } from "@/types/rbac";
 import { Button, Input, toast } from "@/ui";
 import Link from "next/link";
@@ -20,13 +20,16 @@ function safeNext(raw: string | null): string | null {
   return raw;
 }
 
-/** Camarero/cajero nunca van al panel admin, aunque venga ?next=/dashboard */
 function resolvePostLogin(
   role: RoleId | string,
   next: string | null,
   isSuperAdmin?: boolean,
 ): string {
-  if (role === "super_admin" || isSuperAdmin || isPlatformSuperAdmin({ role: role as RoleId, isSuperAdmin })) {
+  if (
+    role === "super_admin" ||
+    isSuperAdmin ||
+    isPlatformSuperAdmin({ role: role as RoleId, isSuperAdmin })
+  ) {
     return "/superadmin";
   }
   if (isFloorAppRole(role as RoleId)) return homePathForRole(role);
@@ -38,7 +41,6 @@ function resolvePostLogin(
     }
     return next?.startsWith("/c/") ? next : "/";
   }
-  // No mandar gerente/supervisor al dashboard/onboarding del dueño
   if (
     (role === "gerente" || role === "supervisor") &&
     (next === "/dashboard" || next === "/onboarding")
@@ -52,25 +54,28 @@ function resolvePostLogin(
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(searchParams.get("email")?.trim() || "");
+  const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
   const firebaseReady = isFirebaseConfigured();
   const next = safeNext(searchParams.get("next"));
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!/^\d{6}$/.test(pin)) {
+      toast("El PIN debe ser exactamente 6 dígitos", "error");
+      return;
+    }
     setLoading(true);
     try {
-      const user = await signInOrActivate({ email, password });
+      const user = await signInWithPin({ email, pin });
 
-      // Empleado mal activado: Auth ok pero sigue como cliente sin restaurante
       if (
         user.role === "cliente" &&
         (!user.restaurantIds || user.restaurantIds.length === 0)
       ) {
         toast(
-          "Cuenta creada, pero aún sin acceso al local. Como dueño: abre Empleados (crea el acceso) y vuelve a entrar aquí.",
+          "Sin acceso al local. Activa tu PIN en Crear acceso o pide el alta al dueño.",
           "error",
         );
         return;
@@ -79,7 +84,15 @@ function LoginForm() {
       toast("Sesión iniciada", "success");
       router.replace(resolvePostLogin(user.role, next, user.isSuperAdmin));
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Error al entrar", "error");
+      const msg = err instanceof Error ? err.message : "Error al entrar";
+      if (/incorrecta|invalid-credential|wrong-password|user-not-found/i.test(msg)) {
+        toast(
+          "PIN incorrecto o cuenta no activada. Si es la primera vez, ve a Activar acceso.",
+          "error",
+        );
+      } else {
+        toast(msg, "error");
+      }
     } finally {
       setLoading(false);
     }
@@ -88,7 +101,7 @@ function LoginForm() {
   return (
     <AuthShell
       title="Iniciar sesión"
-      subtitle="Empleados: usa el email del alta. Si es la primera vez, elige aquí tu contraseña."
+      subtitle="Dueños y empleados: correo del alta + PIN de 6 dígitos."
     >
       {!firebaseReady ? (
         <div className="mb-4 rounded-[14px] border border-warning bg-[color-mix(in_oklab,var(--warning)_12%,transparent)] px-4 py-3 text-sm">
@@ -107,39 +120,39 @@ function LoginForm() {
           required
         />
         <Input
-          label="Contraseña"
+          label="PIN (6 dígitos)"
           type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          inputMode="numeric"
           autoComplete="current-password"
-          minLength={6}
+          pattern="\d{6}"
+          maxLength={6}
+          value={pin}
+          onChange={(e) =>
+            setPin(e.target.value.replace(/\D/g, "").slice(0, 6))
+          }
           required
-          hint="Primera vez: escribe la clave que quieras usar. Ya tienes cuenta: la tuya."
+          hint="Si aún no tienes PIN, actívalo primero con tu correo."
         />
-        <div className="flex justify-end">
-          <Link
-            href="/forgot-password"
-            className="text-sm text-accent underline-offset-2 hover:underline"
-          >
-            ¿Olvidaste tu contraseña?
-          </Link>
-        </div>
-        <Button type="submit" className="w-full" disabled={loading || !firebaseReady}>
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={loading || !firebaseReady || pin.length !== 6}
+        >
           {loading ? "Entrando…" : "Entrar"}
         </Button>
       </form>
 
       <p className="mt-6 text-sm text-fg-muted">
-        ¿Dueño o cliente nuevo?{" "}
+        ¿Primera vez?{" "}
         <Link
           href={
             next
-              ? `/register?role=cliente&next=${encodeURIComponent(next)}`
+              ? `/register?next=${encodeURIComponent(next)}`
               : "/register"
           }
           className="text-accent underline-offset-2 hover:underline"
         >
-          Crear cuenta
+          Activar acceso con tu correo
         </Link>
       </p>
     </AuthShell>

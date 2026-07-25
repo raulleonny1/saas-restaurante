@@ -118,21 +118,12 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  if (planId === "trial") {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Elige un plan de pago: starter, business o enterprise",
-      },
-      { status: 400 },
-    );
-  }
-
   const admin = getFirebaseAdmin()!;
   const auth = admin.auth();
   const db = admin.firestore();
   const stamp = nowIso();
   const plan = BILLING_PLANS[planId];
+  const isTrial = planId === "trial";
 
   let uid: string;
   let createdAuthUser = false;
@@ -222,16 +213,22 @@ export async function POST(req: Request) {
   };
 
   const periodEnd = new Date();
-  periodEnd.setMonth(periodEnd.getMonth() + 1);
+  if (isTrial) {
+    periodEnd.setDate(periodEnd.getDate() + 14);
+  } else {
+    periodEnd.setMonth(periodEnd.getMonth() + 1);
+  }
   const billing = {
     id: "current",
     restaurantId,
     planId,
-    status: "active",
+    requestedPlanId: planId,
+    status: isTrial ? "trialing" : "active",
     seatsIncluded: plan.seatsIncluded,
     branchesIncluded: plan.branchesIncluded,
     amountCents: plan.monthlyPriceCents,
     currency: "EUR",
+    ...(isTrial ? { trialEndsAt: periodEnd.toISOString() } : {}),
     currentPeriodStart: stamp,
     currentPeriodEnd: periodEnd.toISOString(),
     billingEmail: email,
@@ -285,29 +282,31 @@ export async function POST(req: Request) {
     updatedAt: stamp,
   });
 
-  const invId = createId("invc");
-  batch.set(
-    db
-      .collection("restaurants")
-      .doc(restaurantId)
-      .collection("invoices")
-      .doc(invId),
-    {
-      id: invId,
-      restaurantId,
-      number: `SS-${restaurantId.slice(-4).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
-      planId,
-      amountCents: plan.monthlyPriceCents,
-      currency: "EUR",
-      status: "open",
-      periodStart: stamp,
-      periodEnd: periodEnd.toISOString(),
-      issuedAt: stamp,
-      description: `Alta plataforma · Plan ${plan.name}`,
-      createdAt: stamp,
-      updatedAt: stamp,
-    },
-  );
+  if (!isTrial) {
+    const invId = createId("invc");
+    batch.set(
+      db
+        .collection("restaurants")
+        .doc(restaurantId)
+        .collection("invoices")
+        .doc(invId),
+      {
+        id: invId,
+        restaurantId,
+        number: `SS-${restaurantId.slice(-4).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
+        planId,
+        amountCents: plan.monthlyPriceCents,
+        currency: "EUR",
+        status: "open",
+        periodStart: stamp,
+        periodEnd: periodEnd.toISOString(),
+        issuedAt: stamp,
+        description: `Alta plataforma · Plan ${plan.name}`,
+        createdAt: stamp,
+        updatedAt: stamp,
+      },
+    );
+  }
 
   batch.set(db.collection("platformTenants").doc(restaurantId), {
     id: restaurantId,
@@ -318,7 +317,7 @@ export async function POST(req: Request) {
     planId,
     requestedPlanId: planId,
     amountCents: plan.monthlyPriceCents,
-    status: "active",
+    status: isTrial ? "trialing" : "active",
     source: "superadmin",
     createdAt: stamp,
     updatedAt: stamp,

@@ -1,89 +1,114 @@
 ﻿"use client";
 
 import { isFirebaseConfigured } from "@/lib/firebase";
-import { ROLES_WITH_VENUE, homePathForRole, isUserRole } from "@/lib/roles";
-import { AuthShell, RoleSelect } from "@/modules/auth";
-import { signUp } from "@/services/auth.service";
 import {
-  BILLING_PLANS,
-  formatPlanPrice,
-  type BillingPlanId,
-} from "@/types/billing";
+  homePathForRole,
+  isFloorAppRole,
+  isKitchenStaffRole,
+  isPlatformSuperAdmin,
+} from "@/lib/roles";
+import { AuthShell } from "@/modules/auth";
+import {
+  activateStaffPin,
+  lookupStaffByEmail,
+  type StaffLookupInfo,
+} from "@/services/auth.service";
 import type { RoleId } from "@/types/rbac";
-import { Button, Input, Select, toast } from "@/ui";
+import { Alert, Button, Input, toast } from "@/ui";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useMemo, useState } from "react";
-
-const PLANES_REGISTRO: BillingPlanId[] = [
-  "trial",
-  "starter",
-  "business",
-  "enterprise",
-];
+import { FormEvent, Suspense, useState } from "react";
 
 function safeNext(raw: string | null): string | null {
   if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
   return raw;
 }
 
+function resolvePostLogin(
+  role: RoleId | string,
+  next: string | null,
+  isSuperAdmin?: boolean,
+): string {
+  if (
+    role === "super_admin" ||
+    isSuperAdmin ||
+    isPlatformSuperAdmin({ role: role as RoleId, isSuperAdmin })
+  ) {
+    return "/superadmin";
+  }
+  if (isFloorAppRole(role as RoleId)) return homePathForRole(role);
+  if (isKitchenStaffRole(role as RoleId)) return homePathForRole(role);
+  if (role === "gerente" || role === "supervisor") return homePathForRole(role);
+  if (next) return next;
+  return homePathForRole(role);
+}
+
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = safeNext(searchParams.get("next"));
-  const roleParam = searchParams.get("role");
-  const initialRole: RoleId =
-    roleParam && isUserRole(roleParam) ? roleParam : "propietario";
+  const emailPrefill = searchParams.get("email")?.trim() || "";
 
-  const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState<RoleId>(initialRole);
-  const [restaurantName, setRestaurantName] = useState("");
-  const [planId, setPlanId] = useState<BillingPlanId>("trial");
+  const [step, setStep] = useState<"email" | "pin">(
+    emailPrefill ? "email" : "email",
+  );
+  const [email, setEmail] = useState(emailPrefill);
+  const [info, setInfo] = useState<StaffLookupInfo | null>(null);
+  const [pin, setPin] = useState("");
+  const [pin2, setPin2] = useState("");
   const [loading, setLoading] = useState(false);
   const firebaseReady = isFirebaseConfigured();
-  const needsVenue = ROLES_WITH_VENUE.includes(role);
-  const isCliente = role === "cliente";
 
-  const registerHref = useMemo(
-    () => (next ? `/login?next=${encodeURIComponent(next)}` : "/login"),
-    [next],
-  );
-
-  async function onSubmit(e: FormEvent) {
+  async function onLookup(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setInfo(null);
     try {
-      const user = await signUp({
-        email,
-        password,
-        displayName: displayName.trim() || "Usuario",
-        role,
-        restaurantName: needsVenue ? restaurantName : undefined,
-        planId: needsVenue ? planId : undefined,
-      });
-      toast(
-        needsVenue && planId !== "trial"
-          ? "Cuenta creada. El superadmin activará el plan que elegiste al confirmar el pago."
-          : "Cuenta creada",
-        "success",
-      );
-      if (next) {
-        router.replace(next);
-      } else if (isCliente) {
-        const slug =
-          typeof window !== "undefined"
-            ? localStorage.getItem("customerSlug")
-            : null;
-        router.replace(slug ? `/c/${slug}` : "/");
-      } else {
-        router.replace(homePathForRole(user.role));
+      const data = await lookupStaffByEmail(email);
+      if (!data.found) {
+        toast(
+          data.message ||
+            "Este correo no está dado de alta. Pide al dueño o superadmin que te registre.",
+          "error",
+        );
+        return;
       }
+      setInfo(data);
+      if (data.hasAuthAccount) {
+        toast("Ya tienes PIN. Ve a Iniciar sesión.", "success");
+        router.push(
+          `/login?email=${encodeURIComponent(data.email)}${
+            next ? `&next=${encodeURIComponent(next)}` : ""
+          }`,
+        );
+        return;
+      }
+      setStep("pin");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error al registrar";
-      console.error("[register]", err);
-      toast(msg, "error");
+      toast(err instanceof Error ? err.message : "Error al consultar", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onActivate(e: FormEvent) {
+    e.preventDefault();
+    if (!info) return;
+    if (pin !== pin2) {
+      toast("Los PIN no coinciden", "error");
+      return;
+    }
+    if (!/^\d{6}$/.test(pin)) {
+      toast("El PIN debe ser exactamente 6 dígitos", "error");
+      return;
+    }
+    setLoading(true);
+    try {
+      const user = await activateStaffPin({ email: info.email, pin });
+      toast("PIN creado. Sesión iniciada", "success");
+      router.replace(resolvePostLogin(user.role, next, user.isSuperAdmin));
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Error al activar", "error");
     } finally {
       setLoading(false);
     }
@@ -91,98 +116,132 @@ function RegisterForm() {
 
   return (
     <AuthShell
-      title="Crear cuenta"
-      subtitle={
-        isCliente
-          ? "Registro de cliente para pedidos, reservas y puntos."
-          : "Dueño: crea tu restaurante. Si el dueño te dio de alta como gerente o Camarero, usa Iniciar sesión (no registres un local nuevo)."
-      }
+      title="Activar acceso"
+      subtitle="Solo dueños y empleados ya dados de alta. Introduce tu correo, confirma tus datos y crea un PIN de 6 dígitos."
     >
       {!firebaseReady ? (
         <div className="mb-4 rounded-[14px] border border-warning bg-[color-mix(in_oklab,var(--warning)_12%,transparent)] px-4 py-3 text-sm">
-          Configura <code>NEXT_PUBLIC_FIREBASE_*</code> en <code>.env.local</code>{" "}
-          para registrar usuarios.
+          Configura <code>NEXT_PUBLIC_FIREBASE_*</code> y{" "}
+          <code>FIREBASE_SERVICE_ACCOUNT_JSON</code> para activar cuentas.
         </div>
+      ) : null}
+
+      {step === "email" ? (
+        <form onSubmit={onLookup} className="space-y-4">
+          <Input
+            label="Correo (el del alta)"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            placeholder="tu@empresa.com"
+            required
+          />
+          <p className="text-xs text-fg-muted">
+            Clientes del restaurante (comensales) no se registran aquí. Este
+            acceso es para el equipo del local.
+          </p>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={loading || !firebaseReady}
+          >
+            {loading ? "Buscando…" : "Continuar"}
+          </Button>
+        </form>
       ) : (
-        <div className="mb-4 rounded-[14px] border border-border bg-bg-muted/40 px-4 py-3 text-xs text-fg-muted">
-          Si falla Firestore: en Firebase Console → Firestore → Reglas, pega el
-          contenido de <code>firestore.rules</code> y pulsa Publicar. También
-          activa Authentication → Email/Password.
-        </div>
+        <form onSubmit={onActivate} className="space-y-4">
+          {info ? (
+            <Alert tone="success" title="Alta encontrada">
+              <dl className="mt-2 space-y-1 text-sm">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-fg-muted">Nombre</dt>
+                  <dd className="font-medium">{info.displayName}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-fg-muted">Correo</dt>
+                  <dd className="font-medium">{info.email}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-fg-muted">Rol</dt>
+                  <dd className="font-medium">{info.roleLabel}</dd>
+                </div>
+                {info.restaurantName ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-fg-muted">Local</dt>
+                    <dd className="font-medium text-right">
+                      {info.restaurantName}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            </Alert>
+          ) : null}
+
+          <Input
+            label="PIN de 6 dígitos"
+            type="password"
+            inputMode="numeric"
+            autoComplete="new-password"
+            pattern="\d{6}"
+            maxLength={6}
+            value={pin}
+            onChange={(e) =>
+              setPin(e.target.value.replace(/\D/g, "").slice(0, 6))
+            }
+            required
+            hint="Solo números. Lo usarás para iniciar sesión."
+          />
+          <Input
+            label="Repite el PIN"
+            type="password"
+            inputMode="numeric"
+            autoComplete="new-password"
+            pattern="\d{6}"
+            maxLength={6}
+            value={pin2}
+            onChange={(e) =>
+              setPin2(e.target.value.replace(/\D/g, "").slice(0, 6))
+            }
+            required
+          />
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1"
+              disabled={loading}
+              onClick={() => {
+                setStep("email");
+                setPin("");
+                setPin2("");
+              }}
+            >
+              Cambiar correo
+            </Button>
+            <Button
+              type="submit"
+              className="flex-1"
+              disabled={loading || !firebaseReady || pin.length !== 6}
+            >
+              {loading ? "Guardando…" : "Crear PIN y entrar"}
+            </Button>
+          </div>
+        </form>
       )}
 
-      <form onSubmit={onSubmit} className="space-y-4">
-        <Input
-          label="Nombre"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          autoComplete="name"
-          required
-        />
-        <Input
-          label="Email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
-          required
-        />
-        <Input
-          label="Contraseña"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          minLength={6}
-          autoComplete="new-password"
-          required
-        />
-
-        <RoleSelect value={role} onChange={setRole} />
-
-        {needsVenue ? (
-          <>
-            <Input
-              label="Nombre del restaurante"
-              value={restaurantName}
-              onChange={(e) => setRestaurantName(e.target.value)}
-              placeholder="Café Norte"
-              required
-            />
-            <Select
-              label="Plan que quieres"
-              value={planId}
-              onChange={(e) => setPlanId(e.target.value as BillingPlanId)}
-            >
-              {PLANES_REGISTRO.map((id) => (
-                <option key={id} value={id}>
-                  {BILLING_PLANS[id].name} —{" "}
-                  {id === "trial"
-                    ? "gratis (14 días)"
-                    : `${formatPlanPrice(BILLING_PLANS[id].monthlyPriceCents)}/mes`}
-                  {BILLING_PLANS[id].recommended ? " â˜…" : ""}
-                </option>
-              ))}
-            </Select>
-            <p className="text-xs text-fg-muted">
-              {planId === "trial"
-                ? "Empiezas gratis. Luego puedes pasar a un plan de pago."
-                : "Quedas en prueba hasta que se confirme el pago y el superadmin active este plan."}
-            </p>
-          </>
-        ) : null}
-
-        <Button type="submit" className="w-full" disabled={loading || !firebaseReady}>
-          {loading ? "Creando…" : "Crear cuenta"}
-        </Button>
-      </form>
-
       <p className="mt-6 text-sm text-fg-muted">
-        ¿Ya tienes cuenta?{" "}
+        ¿Ya tienes PIN?{" "}
         <Link
-          href={registerHref}
+          href={
+            next
+              ? `/login?next=${encodeURIComponent(next)}`
+              : "/login"
+          }
           className="text-accent underline-offset-2 hover:underline"
         >
-          Inicia sesión
+          Iniciar sesión
         </Link>
       </p>
     </AuthShell>
@@ -193,7 +252,7 @@ export default function RegisterPage() {
   return (
     <Suspense
       fallback={
-        <AuthShell title="Crear cuenta" subtitle="Cargando…">
+        <AuthShell title="Activar acceso" subtitle="Cargando…">
           <p className="text-sm text-fg-muted">Un momento…</p>
         </AuthShell>
       }

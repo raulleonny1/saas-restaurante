@@ -39,11 +39,17 @@ export const BILLING_PLANS: Record<BillingPlanId, BillingPlanDefinition> = {
   trial: {
     id: "trial",
     name: "Gratis",
-    description: "Prueba gratis 14 días",
+    description: "Prueba 14 días para probar el local",
     monthlyPriceCents: 0,
     seatsIncluded: 5,
     branchesIncluded: 1,
-    features: ["POS", "Cocina", "1 sucursal", "Soporte básico"],
+    features: [
+      "POS y sala camareros",
+      "Cocina y barra",
+      "Caja básica",
+      "Carta",
+      "1 sucursal · 5 empleados",
+    ],
   },
   starter: {
     id: "starter",
@@ -52,7 +58,14 @@ export const BILLING_PLANS: Record<BillingPlanId, BillingPlanDefinition> = {
     monthlyPriceCents: 1290,
     seatsIncluded: 10,
     branchesIncluded: 1,
-    features: ["POS", "Cocina", "CRM", "Web pública"],
+    features: [
+      "Todo lo de Gratis",
+      "Clientes (CRM)",
+      "Reservas",
+      "Sitio web público",
+      "Empleados y roles",
+      "1 sucursal · 10 empleados",
+    ],
   },
   business: {
     id: "business",
@@ -61,7 +74,13 @@ export const BILLING_PLANS: Record<BillingPlanId, BillingPlanDefinition> = {
     monthlyPriceCents: 2490,
     seatsIncluded: 40,
     branchesIncluded: 5,
-    features: ["Todo Starter", "Marketing", "Reportes", "Hasta 5 sucursales"],
+    features: [
+      "Todo Starter",
+      "Marketing",
+      "Reportes",
+      "Dashboard avanzado",
+      "Hasta 5 sucursales · 40 empleados",
+    ],
     recommended: true,
   },
   enterprise: {
@@ -71,7 +90,13 @@ export const BILLING_PLANS: Record<BillingPlanId, BillingPlanDefinition> = {
     monthlyPriceCents: 4990,
     seatsIncluded: 200,
     branchesIncluded: 50,
-    features: ["Todo Business", "SLA", "Roles avanzados", "Sucursales ilimitadas*"],
+    features: [
+      "Todo Business",
+      "IA asistente",
+      "Roles avanzados",
+      "SLA y soporte prioritario",
+      "Hasta 50 sucursales · 200 empleados",
+    ],
   },
 };
 

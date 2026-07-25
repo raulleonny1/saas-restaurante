@@ -17,13 +17,13 @@ import {
 import { Alert, Button, Input, Select, toast } from "@/ui";
 import { useCallback, useEffect, useState } from "react";
 
-const PLANES_PAGO: BillingPlanId[] = ["starter", "business", "enterprise"];
-const PLANES_TODOS: BillingPlanId[] = [
+const PLANES_ALTA: BillingPlanId[] = [
   "trial",
   "starter",
   "business",
   "enterprise",
 ];
+const PLANES_TODOS: BillingPlanId[] = PLANES_ALTA;
 
 /**
  * Panel SUPERADMIN: ver registros, activar plan elegido, o dar de alta manual.
@@ -43,7 +43,7 @@ export function PlatformDashboard() {
   const [email, setEmail] = useState("");
   const [nombreDueño, setNombreDueño] = useState("");
   const [local, setLocal] = useState("");
-  const [plan, setPlan] = useState<BillingPlanId>("business");
+  const [plan, setPlan] = useState<BillingPlanId>("trial");
   const [resultado, setResultado] = useState<string | null>(null);
   const [passTemp, setPassTemp] = useState<string | null>(null);
 
@@ -118,8 +118,8 @@ export function PlatformDashboard() {
           <p className="text-sm text-fg-muted">Cargando…</p>
         ) : !clientes.length ? (
           <p className="text-sm text-fg-muted">
-            Aún no hay clientes. Cuando un dueño se registre en /register
-            aparecerá aquí con el plan que eligió.
+            Aún no hay clientes. Da de alta un dueño abajo o espera a que se
+            activen desde /register con su correo + PIN.
           </p>
         ) : (
           <ul className="divide-y divide-border rounded-2xl border border-border">
@@ -241,7 +241,7 @@ export function PlatformDashboard() {
                   ownerEmail: email,
                   ownerName: nombreDueño,
                   restaurantName: local,
-                  planId: plan as "starter" | "business" | "enterprise",
+                  planId: plan,
                   invitedByUid: user.uid,
                 });
                 setResultado(r.message);
@@ -285,10 +285,13 @@ export function PlatformDashboard() {
             value={plan}
             onChange={(e) => setPlan(e.target.value as BillingPlanId)}
           >
-            {PLANES_PAGO.map((id) => (
+            {PLANES_ALTA.map((id) => (
               <option key={id} value={id}>
-                {BILLING_PLANS[id].name} —{" "}
-                {formatPlanPrice(BILLING_PLANS[id].monthlyPriceCents)}/mes
+                {BILLING_PLANS[id].name}
+                {" — "}
+                {id === "trial"
+                  ? "Gratis (14 días)"
+                  : `${formatPlanPrice(BILLING_PLANS[id].monthlyPriceCents)}/mes`}
                 {BILLING_PLANS[id].recommended ? " ★" : ""}
               </option>
             ))}
@@ -301,12 +304,17 @@ export function PlatformDashboard() {
         {resultado ? (
           <Alert tone="success" title="Cliente dado de alta">
             <p className="mt-1 text-sm">{resultado}</p>
+            <p className="mt-2 text-sm">
+              Dile que entre en <b>/register</b>, ponga este correo y cree su{" "}
+              <b>PIN de 6 dígitos</b>. Luego inicia sesión en /login con ese PIN.
+            </p>
             {passTemp ? (
-              <p className="mt-2 text-sm">
-                Contraseña temporal:{" "}
-                <code className="rounded bg-black/20 px-1.5 py-0.5 text-xs">
+              <p className="mt-2 text-xs text-fg-muted">
+                (Opcional Admin) Clave temporal Auth:{" "}
+                <code className="rounded bg-black/20 px-1.5 py-0.5">
                   {passTemp}
                 </code>
+                . Mejor que active el PIN en /register.
               </p>
             ) : null}
           </Alert>

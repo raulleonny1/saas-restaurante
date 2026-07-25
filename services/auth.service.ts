@@ -480,6 +480,91 @@ export async function signUp(input: SignUpCredentials): Promise<AppUser> {
  * Primera vez (empleado dado de alta por el dueño) → crea la cuenta con esa
  * contraseña y acepta la invitación. No hace falta /register.
  */
+export type StaffLookupInfo = {
+  found: boolean;
+  email: string;
+  displayName?: string;
+  roleId?: string;
+  roleLabel?: string;
+  restaurantId?: string;
+  restaurantName?: string;
+  hasAuthAccount?: boolean;
+  message?: string;
+};
+
+/** Consulta si el correo está dado de alta (dueño/empleado). */
+export async function lookupStaffByEmail(
+  emailRaw: string,
+): Promise<StaffLookupInfo> {
+  const email = emailRaw.trim().toLowerCase();
+  const res = await fetch("/api/auth/staff-lookup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const data = (await res.json()) as StaffLookupInfo & {
+    ok?: boolean;
+    error?: string;
+  };
+  if (!res.ok || data.ok === false) {
+    throw new Error(data.error || "No se pudo consultar el correo");
+  }
+  return {
+    found: Boolean(data.found),
+    email: data.email || email,
+    displayName: data.displayName,
+    roleId: data.roleId,
+    roleLabel: data.roleLabel,
+    restaurantId: data.restaurantId,
+    restaurantName: data.restaurantName,
+    hasAuthAccount: data.hasAuthAccount,
+    message: data.message,
+  };
+}
+
+/**
+ * Crea/actualiza el PIN (6 dígitos) en Firebase Auth para un alta previa,
+ * luego inicia sesión.
+ */
+export async function activateStaffPin(input: {
+  email: string;
+  pin: string;
+}): Promise<AppUser> {
+  const email = input.email.trim().toLowerCase();
+  const pin = input.pin.trim();
+  if (!/^\d{6}$/.test(pin)) {
+    throw new Error("El PIN debe ser exactamente 6 dígitos");
+  }
+
+  const res = await fetch("/api/auth/activate-pin", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, pin }),
+  });
+  const data = (await res.json()) as {
+    ok?: boolean;
+    error?: string;
+    message?: string;
+  };
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "No se pudo activar el PIN");
+  }
+
+  return signInWithPin({ email, pin });
+}
+
+/** Login con correo + PIN de 6 dígitos. */
+export async function signInWithPin(input: {
+  email: string;
+  pin: string;
+}): Promise<AppUser> {
+  const pin = input.pin.trim();
+  if (!/^\d{6}$/.test(pin)) {
+    throw new Error("El PIN debe ser exactamente 6 dígitos");
+  }
+  return signInOrActivate({ email: input.email, password: pin });
+}
+
 export async function signInOrActivate(
   input: SignInCredentials,
 ): Promise<AppUser> {

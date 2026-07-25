@@ -162,7 +162,7 @@ export async function altaCliente(input: {
   ownerEmail: string;
   ownerName: string;
   restaurantName: string;
-  planId: "starter" | "business" | "enterprise";
+  planId: BillingPlanId;
   invitedByUid: string;
 }): Promise<{
   restaurantId: string;
@@ -237,20 +237,23 @@ export async function altaCliente(input: {
   });
   restaurant.settings.defaultBranchId = branch.id;
 
-  const plan = BILLING_PLANS[input.planId];
+  const planId = normalizeBillingPlanId(input.planId);
+  const plan = BILLING_PLANS[planId];
+  const isTrial = planId === "trial";
   const stamp = new Date().toISOString();
   const periodEnd = new Date();
-  periodEnd.setMonth(periodEnd.getMonth() + 1);
+  if (isTrial) periodEnd.setDate(periodEnd.getDate() + 14);
+  else periodEnd.setMonth(periodEnd.getMonth() + 1);
   const billing = {
     ...createTenantBillingDocument(restaurant.id, email, {
-      requestedPlanId: input.planId,
+      requestedPlanId: planId,
     }),
-    planId: input.planId,
-    status: "active" as const,
+    planId,
+    status: isTrial ? ("trialing" as const) : ("active" as const),
     seatsIncluded: plan.seatsIncluded,
     branchesIncluded: plan.branchesIncluded,
     amountCents: plan.monthlyPriceCents,
-    trialEndsAt: undefined,
+    trialEndsAt: isTrial ? periodEnd.toISOString() : undefined,
     currentPeriodStart: stamp,
     currentPeriodEnd: periodEnd.toISOString(),
     updatedAt: stamp,
@@ -274,10 +277,10 @@ export async function altaCliente(input: {
       id: restaurant.id,
       name,
       ownerEmail: email,
-      planId: input.planId,
-      requestedPlanId: input.planId,
+      planId,
+      requestedPlanId: planId,
       amountCents: plan.monthlyPriceCents,
-      status: "active",
+      status: isTrial ? "trialing" : "active",
       source: "superadmin",
       createdAt: stamp,
       updatedAt: stamp,

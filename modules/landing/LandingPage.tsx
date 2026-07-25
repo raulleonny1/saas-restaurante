@@ -1,5 +1,17 @@
-﻿import Image from "next/image";
+﻿import {
+  BILLING_PLANS,
+  formatPlanPrice,
+  type BillingPlanId,
+} from "@/types/billing";
+import Image from "next/image";
 import Link from "next/link";
+
+const PLAN_ORDER: BillingPlanId[] = [
+  "trial",
+  "starter",
+  "business",
+  "enterprise",
+];
 
 const FEATURES = [
   {
@@ -66,16 +78,22 @@ export function LandingPage() {
           </p>
           <div className="landing-reveal landing-reveal-delay-3 mt-8 flex flex-wrap gap-3">
             <Link
-              href="/register"
+              href="/register?plan=trial"
               className="inline-flex h-12 items-center justify-center rounded-[12px] bg-accent px-6 text-base font-medium text-accent-fg transition hover:opacity-90"
             >
-              Crear cuenta gratis
+              Activar acceso
+            </Link>
+            <Link
+              href="/#precios"
+              className="inline-flex h-12 items-center justify-center rounded-[12px] border border-white/20 bg-white/8 px-6 text-base font-medium text-white transition hover:bg-white/14"
+            >
+              Ver precios
             </Link>
             <Link
               href="/login"
-              className="inline-flex h-12 items-center justify-center rounded-[12px] border border-white/20 bg-white/8 px-6 text-base font-medium text-white transition hover:bg-white/14"
+              className="inline-flex h-12 items-center justify-center rounded-[12px] px-6 text-base font-medium text-white/80 underline-offset-4 transition hover:text-white hover:underline"
             >
-              Acceder a la app
+              Entrar con PIN
             </Link>
           </div>
         </div>
@@ -142,7 +160,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* â”€â”€ Qué incluye â”€â”€ */}
+      {/* Qué incluye */}
       <section id="funciones" className="mx-auto max-w-6xl px-6 py-20 md:py-28">
         <h2 className="max-w-xl font-display text-[clamp(1.85rem,4vw,2.75rem)] leading-tight tracking-tight">
           Todo lo que necesitas para operar
@@ -163,8 +181,72 @@ export function LandingPage() {
         </ul>
       </section>
 
-      {/* â”€â”€ CTA final â”€â”€ */}
-      <section className="relative overflow-hidden border-t border-border">
+      {/* Precios */}
+      <section id="precios" className="border-y border-border bg-bg-muted/40">
+        <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
+          <h2 className="max-w-xl font-display text-[clamp(1.85rem,4vw,2.75rem)] leading-tight tracking-tight">
+            Precios claros
+          </h2>
+          <p className="mt-4 max-w-lg text-fg-muted md:text-lg">
+            Empieza gratis o elige el plan que encaje con tu local. Activas lo
+            contratado desde la plataforma.
+          </p>
+          <ul className="mt-12 grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+            {PLAN_ORDER.map((id) => {
+              const p = BILLING_PLANS[id];
+              const price =
+                id === "trial"
+                  ? "0 €"
+                  : `${formatPlanPrice(p.monthlyPriceCents)}/mes`;
+              return (
+                <li
+                  key={id}
+                  className={`flex flex-col border-t-2 pt-5 ${
+                    p.recommended
+                      ? "border-accent"
+                      : "border-border"
+                  }`}
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="font-display text-2xl tracking-tight">
+                      {p.name}
+                    </h3>
+                    {p.recommended ? (
+                      <span className="text-xs font-medium text-accent">
+                        Recomendado
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-2 font-display text-3xl tracking-tight">
+                    {price}
+                  </p>
+                  <p className="mt-1 text-sm text-fg-muted">{p.description}</p>
+                  <ul className="mt-5 flex-1 space-y-2 text-sm text-fg-muted">
+                    {p.features.map((f) => (
+                      <li key={f} className="border-l-2 border-accent/30 pl-3">
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link
+                    href="/register"
+                    className={`mt-6 inline-flex h-11 items-center justify-center rounded-[12px] px-4 text-sm font-medium transition ${
+                      p.recommended
+                        ? "bg-accent text-accent-fg hover:opacity-90"
+                        : "border border-border bg-bg-elevated hover:bg-bg-muted"
+                    }`}
+                  >
+                    Activar acceso
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </section>
+
+      {/* CTA final */}
+      <section className="relative overflow-hidden">
         <div
           className="pointer-events-none absolute inset-0 opacity-40"
           style={{
@@ -178,8 +260,7 @@ export function LandingPage() {
               Empieza hoy
             </p>
             <p className="mt-3 max-w-md text-fg-muted md:text-lg">
-              Crea tu cuenta, elige plan gratis o de pago, y deja que tu equipo
-              trabaje desde el primer día.
+              Crea tu cuenta con el plan Gratis o el que hayas contratado.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -187,7 +268,7 @@ export function LandingPage() {
               href="/register"
               className="inline-flex h-12 items-center justify-center rounded-[12px] bg-accent px-6 text-base font-medium text-accent-fg transition hover:opacity-90"
             >
-              Registrarme
+              Activar mi acceso
             </Link>
             <Link
               href="/login"
@@ -204,10 +285,13 @@ export function LandingPage() {
           <p className="font-display text-fg">SmartServe</p>
           <p>Software para restaurantes, bares y cafeterías.</p>
           <div className="flex gap-4">
+            <Link href="/#precios" className="hover:text-fg">
+              Precios
+            </Link>
             <Link href="/login" className="hover:text-fg">
               Acceder
             </Link>
-            <Link href="/register" className="hover:text-fg">
+            <Link href="/register?plan=trial" className="hover:text-fg">
               Registro
             </Link>
           </div>

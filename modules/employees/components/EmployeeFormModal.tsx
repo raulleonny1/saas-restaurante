@@ -278,7 +278,8 @@ export function EmployeeFormModal({
       {!employee ? (
         <p className="mt-4 text-xs text-fg-muted">
           El empleado no se registra aparte: entra en <strong>/login</strong> con
-          este email y elige su contraseña la primera vez. Camarero → /waiter ·
+          este email. Luego en /register crea su PIN de 6 dígitos. Camarero →
+          /waiter ·
           Cajero → /caja.
         </p>
       ) : null}
