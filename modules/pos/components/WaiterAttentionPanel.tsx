@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import { formatCurrency } from "@/lib/format";
+import { isWaiterOnlyRole } from "@/lib/roles";
 import { useEmployees } from "@/modules/employees/context/EmployeesProvider";
 import { orderForTable } from "@/modules/pos/domain/tableTone";
 import { usePos } from "@/modules/pos/context/PosProvider";
@@ -54,7 +55,7 @@ export function WaiterAttentionPanel() {
         (e) =>
           !e.deletedAt &&
           e.status === "active" &&
-          (e.roleId === "mesero" || e.roleId === "cajero"),
+          (isWaiterOnlyRole(e.roleId) || e.roleId === "cajero"),
       ),
     [employees],
   );
@@ -110,7 +111,7 @@ export function WaiterAttentionPanel() {
               variant="ghost"
               onClick={() => setSelectedId(null)}
             >
-              <ArrowLeft className="h-3.5 w-3.5" /> Meseros
+              <ArrowLeft className="h-3.5 w-3.5" /> Camareros
             </Button>
             <h2 className="mt-1 text-lg font-medium">{waiter.name}</h2>
             <p className="text-caption text-fg-muted">
@@ -127,7 +128,7 @@ export function WaiterAttentionPanel() {
 
         {!orders.length ? (
           <p className="rounded-[var(--radius-md)] border border-dashed border-border py-10 text-center text-sm text-fg-muted">
-            Este mesero no tiene pedidos abiertos ahora.
+            Este Camarero no tiene pedidos abiertos ahora.
           </p>
         ) : (
           <ul className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
@@ -221,16 +222,16 @@ export function WaiterAttentionPanel() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       <div>
-        <h2 className="text-sm font-medium text-fg-muted">Meseros en sala</h2>
+        <h2 className="text-sm font-medium text-fg-muted">Camareros en sala</h2>
         <p className="mt-0.5 text-caption text-fg-muted">
-          Pulsa un mesero para ver qué atiende, qué han pedido los clientes y
+          Pulsa un Camarero para ver qué atiende, qué han pedido los clientes y
           hace cuánto.
         </p>
       </div>
 
       {!rows.length ? (
         <p className="rounded-[var(--radius-md)] border border-dashed border-border py-10 text-center text-sm text-fg-muted">
-          No hay meseros activos. Dales de alta en Admin sala / Empleados.
+          No hay Camareros activos. Dales de alta en Admin sala / Empleados.
         </p>
       ) : (
         <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto">

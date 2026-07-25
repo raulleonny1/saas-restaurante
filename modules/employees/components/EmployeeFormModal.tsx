@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useTenant } from "@/context/TenantProvider";
-import { ROLE_LABELS, STAFF_ROLES } from "@/lib/roles";
+import { normalizeRoleId, ROLE_LABELS, STAFF_ROLES } from "@/lib/roles";
 import { useEmployees } from "@/modules/employees/context/EmployeesProvider";
 import type {
   Employee,
@@ -29,7 +29,7 @@ const DOC_TYPES: { id: EmployeeIdDocumentType; label: string }[] = [
 /** Roles de piso: deben tener sucursal(es). Gerente/supervisor sin marcar = todas. */
 const BRANCH_REQUIRED_ROLES: RoleId[] = [
   "cajero",
-  "mesero",
+  "camarero",
   "cocinero",
   "barista",
   "repartidor",
@@ -52,7 +52,7 @@ export function EmployeeFormModal({
   const [documentType, setDocumentType] =
     useState<EmployeeIdDocumentType | "">("");
   const [documentNumber, setDocumentNumber] = useState("");
-  const [roleId, setRoleId] = useState<RoleId>("mesero");
+  const [roleId, setRoleId] = useState<RoleId>("camarero");
   const [employmentType, setEmploymentType] =
     useState<EmploymentType>("full_time");
   const [branchIds, setBranchIds] = useState<string[]>([]);
@@ -69,7 +69,7 @@ export function EmployeeFormModal({
     setPhone(employee?.phone ?? "");
     setDocumentType(employee?.documentType ?? "");
     setDocumentNumber(employee?.documentNumber ?? "");
-    setRoleId(employee?.roleId ?? "mesero");
+    setRoleId(normalizeRoleId(employee?.roleId) ?? "camarero");
     setEmploymentType(employee?.employmentType ?? "full_time");
     setBranchIds(
       employee?.branchIds?.length
@@ -278,7 +278,7 @@ export function EmployeeFormModal({
       {!employee ? (
         <p className="mt-4 text-xs text-fg-muted">
           El empleado no se registra aparte: entra en <strong>/login</strong> con
-          este email y elige su contraseña la primera vez. Mesero → /waiter ·
+          este email y elige su contraseña la primera vez. Camarero → /waiter ·
           Cajero → /caja.
         </p>
       ) : null}

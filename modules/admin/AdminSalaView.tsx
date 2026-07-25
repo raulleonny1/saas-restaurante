@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { useTenant } from "@/context/TenantProvider";
-import { isSalaAdminRole } from "@/lib/roles";
+import { isSalaAdminRole, isWaiterOnlyRole } from "@/lib/roles";
 import { EmployeeFichasModal } from "@/modules/employees/components/EmployeeFichasModal";
 import { EmployeeFormModal } from "@/modules/employees/components/EmployeeFormModal";
 import {
@@ -90,7 +90,7 @@ function AdminSalaWorkspace() {
       employees.filter(
         (e) =>
           !e.deletedAt &&
-          (e.roleId === "mesero" || e.roleId === "cajero") &&
+          (isWaiterOnlyRole(e.roleId) || e.roleId === "cajero") &&
           e.status === "active",
       ),
     [employees],
@@ -134,7 +134,7 @@ function AdminSalaWorkspace() {
     <div className="space-y-6 pb-16">
       <PageHeader
         title="Administración de sala"
-        description="Mesas, meseros y carta. Productos y categorías se gestionan en Carta / Inventario."
+        description="Mesas, Camareros y carta. Productos y categorías se gestionan en Carta / Inventario."
         actions={
           <div className="flex flex-wrap gap-2">
             {branches.length > 1 ? (
@@ -151,7 +151,7 @@ function AdminSalaWorkspace() {
               </select>
             ) : null}
             <Badge tone="accent">{activeTables.length} mesas activas</Badge>
-            <Badge tone="neutral">{waiters.length} meseros</Badge>
+            <Badge tone="neutral">{waiters.length} Camareros</Badge>
             {can("catalog.products.manage") || can("catalog.read") ? (
               <Link href="/inventory?tab=products">
                 <Button size="sm" variant="secondary">
@@ -181,7 +181,7 @@ function AdminSalaWorkspace() {
           <h2 className="text-sm font-medium">Carta del restaurante</h2>
           <p className="mt-1 text-sm text-fg-muted">
             Crea categorías y productos: marca, cantidad (stock), precio
-            unitario y precio por mayor. Meseros y cocina ven la carta; cocina
+            unitario y precio por mayor. Camareros y cocina ven la carta; cocina
             puede añadir platos pero no quitarlos.
           </p>
           <Link href="/inventory?tab=products" className="mt-3 inline-block">
@@ -290,10 +290,10 @@ function AdminSalaWorkspace() {
           ) : null}
         </section>
 
-        {/* Meseros */}
+        {/* Camareros */}
         <section className="rounded-[var(--radius-xl)] border border-border bg-bg-elevated p-4 sm:p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-medium">Meseros / cajeros</h2>
+            <h2 className="text-sm font-medium">Camareros / cajeros</h2>
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -304,7 +304,7 @@ function AdminSalaWorkspace() {
               </Button>
               {can("employees.manage") ? (
                 <Button size="sm" onClick={() => setWaiterFormOpen(true)}>
-                  <Plus className="h-3.5 w-3.5" /> Nuevo mesero
+                  <Plus className="h-3.5 w-3.5" /> Nuevo Camarero
                 </Button>
               ) : null}
             </div>
@@ -339,7 +339,7 @@ function AdminSalaWorkspace() {
             })}
             {!waiters.length ? (
               <li className="py-6 text-center text-sm text-fg-muted">
-                No hay meseros. Crea uno o ve a Empleados.
+                No hay Camareros. Crea uno o ve a Empleados.
               </li>
             ) : null}
           </ul>
@@ -351,7 +351,7 @@ function AdminSalaWorkspace() {
         <h2 className="text-sm font-medium">Asignar mesas al camarero</h2>
         {!selectedWaiter ? (
           <p className="mt-3 text-sm text-fg-muted">
-            Selecciona un mesero a la derecha para marcar las mesas que debe
+            Selecciona un Camarero a la derecha para marcar las mesas que debe
             atender.
           </p>
         ) : (
@@ -428,7 +428,7 @@ function AdminSalaWorkspace() {
                     setBusy(true);
                     void archive(selectedWaiter.id)
                       .then(() => {
-                        toast("Mesero archivado", "success");
+                        toast("Camarero archivado", "success");
                         setSelectedWaiterId(null);
                       })
                       .catch((e) =>
@@ -440,7 +440,7 @@ function AdminSalaWorkspace() {
                       .finally(() => setBusy(false));
                   }}
                 >
-                  Eliminar mesero
+                  Eliminar Camarero
                 </Button>
               ) : null}
             </div>

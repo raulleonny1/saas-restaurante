@@ -1,4 +1,4 @@
-# SmartServe AI — UX Wireframes (experiencia completa)
+﻿# SmartServe AI — UX Wireframes (experiencia completa)
 
 > Solo diseño. Sin implementación.  
 > Línea visual: premium, espacial, calmada — inspiración Stripe · Notion · Apple · Square · Toast POS.  
@@ -123,7 +123,7 @@ Banner global fino (trial / past_due). Toasts abajo-derecha.
 ```text
 +-- Pedido #A192 ----------------------+
 | Estado: En cola -> Preparando -> Listo|
-| Mesa 4 · Mesero: Maria               |
+| Mesa 4 · camarero: Maria               |
 | Items…                               |
 | Timeline de eventos                  |
 | [Imprimir] [Reembolsar*] [Cancelar*] |

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import { EmployeeDetail } from "@/modules/employees/components/EmployeeDetail";
@@ -21,7 +21,7 @@ export function EmployeeFichasModal({
 }: {
   open: boolean;
   onClose: () => void;
-  /** Si viene de Admin sala con un mesero seleccionado. */
+  /** Si viene de Admin sala con un Camarero seleccionado. */
   initialEmployeeId?: string | null;
 }) {
   const { can } = useAuth();

@@ -1,4 +1,4 @@
-# SmartServe AI — Arquitectura completa de Firestore
+﻿# SmartServe AI — Arquitectura completa de Firestore
 
 > Solo modelo de datos. Multi-tenant, multi-sucursal, pensado para miles de restaurantes.  
 > Versión del modelo: **2.0.0**
@@ -17,50 +17,50 @@
 | IDs | Autogenerados Firestore o prefijados (`ord_`, `pay_`); nunca PII como ID |
 
 ```text
-users/{uid}                                    ← identidad global
-roles/{roleId}                                 ← catálogo global de roles (opcional)
-permissions/{permissionId}                     ← catálogo global de permisos
+users/{uid}                                    â† identidad global
+roles/{roleId}                                 â† catálogo global de roles (opcional)
+permissions/{permissionId}                     â† catálogo global de permisos
 
-restaurants/{restaurantId}                     ← TENANT
-  ├── branches/{branchId}
-  ├── members/{uid}
-  ├── roles/{roleId}                           ← override / custom roles del tenant
-  ├── roleBindings/{bindingId}
-  ├── settings/{settingsId}                    ← doc único "app" o varios keys
-  ├── tables/{tableId}
-  ├── categories/{categoryId}
-  ├── products/{productId}
-  ├── ingredients/{ingredientId}
-  ├── inventoryLevels/{levelId}
-  ├── inventoryMovements/{movementId}
-  ├── suppliers/{supplierId}
-  ├── purchases/{purchaseId}
-  ├── waste/{wasteId}
-  ├── customers/{customerId}
-  ├── loyaltyAccounts/{accountId}
-  ├── loyaltyTransactions/{txId}
-  ├── reservations/{reservationId}
-  ├── promotions/{promotionId}
-  ├── coupons/{couponId}
-  ├── campaigns/{campaignId}
-  ├── campaignRecipients/{recipientId}
-  ├── orders/{orderId}
-  ├── orderEvents/{eventId}
-  ├── payments/{paymentId}
-  ├── invoices/{invoiceId}                     ← fiscales del restaurante a clientes
-  ├── employees/{employeeId}
-  ├── employeeShifts/{shiftId}
-  ├── notifications/{notificationId}
-  ├── notificationPreferences/{uid}
-  ├── historyEvents/{eventId}
-  ├── auditLogs/{logId}
-  ├── aiSessions/{sessionId}
-  │     └── messages/{messageId}
-  ├── aiInsights/{insightId}
-  ├── aiUsage/{periodId}
-  ├── subscription                             ← campo o subdoc billing/subscription
-  ├── billingInvoices/{invoiceId}              ← facturas SaaS (Stripe)
-  └── configHistory/{entryId}
+restaurants/{restaurantId}                     â† TENANT
+  â”œâ”€â”€ branches/{branchId}
+  â”œâ”€â”€ members/{uid}
+  â”œâ”€â”€ roles/{roleId}                           â† override / custom roles del tenant
+  â”œâ”€â”€ roleBindings/{bindingId}
+  â”œâ”€â”€ settings/{settingsId}                    â† doc único "app" o varios keys
+  â”œâ”€â”€ tables/{tableId}
+  â”œâ”€â”€ categories/{categoryId}
+  â”œâ”€â”€ products/{productId}
+  â”œâ”€â”€ ingredients/{ingredientId}
+  â”œâ”€â”€ inventoryLevels/{levelId}
+  â”œâ”€â”€ inventoryMovements/{movementId}
+  â”œâ”€â”€ suppliers/{supplierId}
+  â”œâ”€â”€ purchases/{purchaseId}
+  â”œâ”€â”€ waste/{wasteId}
+  â”œâ”€â”€ customers/{customerId}
+  â”œâ”€â”€ loyaltyAccounts/{accountId}
+  â”œâ”€â”€ loyaltyTransactions/{txId}
+  â”œâ”€â”€ reservations/{reservationId}
+  â”œâ”€â”€ promotions/{promotionId}
+  â”œâ”€â”€ coupons/{couponId}
+  â”œâ”€â”€ campaigns/{campaignId}
+  â”œâ”€â”€ campaignRecipients/{recipientId}
+  â”œâ”€â”€ orders/{orderId}
+  â”œâ”€â”€ orderEvents/{eventId}
+  â”œâ”€â”€ payments/{paymentId}
+  â”œâ”€â”€ invoices/{invoiceId}                     â† fiscales del restaurante a clientes
+  â”œâ”€â”€ employees/{employeeId}
+  â”œâ”€â”€ employeeShifts/{shiftId}
+  â”œâ”€â”€ notifications/{notificationId}
+  â”œâ”€â”€ notificationPreferences/{uid}
+  â”œâ”€â”€ historyEvents/{eventId}
+  â”œâ”€â”€ auditLogs/{logId}
+  â”œâ”€â”€ aiSessions/{sessionId}
+  â”‚     â””â”€â”€ messages/{messageId}
+  â”œâ”€â”€ aiInsights/{insightId}
+  â”œâ”€â”€ aiUsage/{periodId}
+  â”œâ”€â”€ subscription                             â† campo o subdoc billing/subscription
+  â”œâ”€â”€ billingInvoices/{invoiceId}              â† facturas SaaS (Stripe)
+  â””â”€â”€ configHistory/{entryId}
 ```
 
 ---
@@ -112,7 +112,7 @@ restaurants/{restaurantId}                     ← TENANT
 **Estructura**
 ```ts
 {
-  id: string                        // administrador | gerente | cajero | mesero | cocinero | cliente
+  id: string                        // administrador | gerente | cajero | Camarero | cocinero | cliente
   name: string
   description: string
   permissionIds: string[]           // refs a permissions
@@ -317,7 +317,7 @@ Usar documentos por dominio (evita contención en un solo mega-doc):
 | `pos` | propinas, impuestos, impresión |
 | `kitchen` | sonido, autosleep columnas |
 | `payments` | stripe/sumup keys refs (secrets en Secret Manager, aquí solo flags) |
-| `loyalty` | puntos por €, caducidad |
+| `loyalty` | puntos por â‚¬, caducidad |
 | `notifications` | canales default |
 | `ai` | modelo, límites, prompts sistema |
 | `billing` | datos fiscales espejo |
@@ -663,7 +663,7 @@ ID recomendado: `{branchId}_{ingredientId}` (idempotente).
 - invoices: `number` UNIQUE por restaurant (CF)
 - billingInvoices: `periodStart` DESC
 
-**Escalabilidad:** payments ≈ orders; no listeners globales. Billing invoices: pocos/mes/tenant.
+**Escalabilidad:** payments â‰ˆ orders; no listeners globales. Billing invoices: pocos/mes/tenant.
 
 ---
 
@@ -1016,19 +1016,19 @@ Timeline CRM (visitas, notas, promos).
 ## 20. Mapa de relaciones (resumen)
 
 ```text
-users ─────────────┬──────── members ──── restaurants
-                   │              │
-                   └──────── employees
-                                  │
-restaurants ── branches ── tables ── orders ── payments ── invoices
-                │              │         │
-                │              └──────── orderEvents
-                ├── inventoryLevels ── ingredients ←── products.recipe
-                ├── reservations ── customers ── loyaltyAccounts ── loyaltyTransactions
-                ├── promotions / coupons / campaigns ── campaignRecipients
-                ├── notifications
-                ├── historyEvents / auditLogs
-                └── aiSessions / aiInsights / aiUsage
+users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€ members â”€â”€â”€â”€ restaurants
+                   â”‚              â”‚
+                   â””â”€â”€â”€â”€â”€â”€â”€â”€ employees
+                                  â”‚
+restaurants â”€â”€ branches â”€â”€ tables â”€â”€ orders â”€â”€ payments â”€â”€ invoices
+                â”‚              â”‚         â”‚
+                â”‚              â””â”€â”€â”€â”€â”€â”€â”€â”€ orderEvents
+                â”œâ”€â”€ inventoryLevels â”€â”€ ingredients â†â”€â”€ products.recipe
+                â”œâ”€â”€ reservations â”€â”€ customers â”€â”€ loyaltyAccounts â”€â”€ loyaltyTransactions
+                â”œâ”€â”€ promotions / coupons / campaigns â”€â”€ campaignRecipients
+                â”œâ”€â”€ notifications
+                â”œâ”€â”€ historyEvents / auditLogs
+                â””â”€â”€ aiSessions / aiInsights / aiUsage
 ```
 
 ---

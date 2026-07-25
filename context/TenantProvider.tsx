@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { can as canPermission } from "@/lib/rbac";
 import { resolveEffectivePermissions } from "@/lib/rbac/evaluate";
@@ -136,7 +136,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       return resolveEffectivePermissions({ roleId: "super_admin" });
     }
     if (!member || !member.active || !role) return [];
-    // Cache desactualizado (p. ej. mesero sin payments.charge) → recalcular
+    // Cache desactualizado (p. ej. Camarero sin payments.charge) → recalcular
     const cacheFresh =
       member.permissionsCached?.length &&
       member.permissionsVersion === PERMISSION_CATALOG_VERSION;

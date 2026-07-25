@@ -1,4 +1,4 @@
-import type { CurrencyCode, ISODateString, SoftDelete, Timestamps } from "./common";
+﻿import type { CurrencyCode, ISODateString, SoftDelete, Timestamps } from "./common";
 
 export type OrderStatus =
   | "open"
@@ -25,7 +25,7 @@ export type PaymentMethod = "cash" | "card" | "stripe" | "sumup" | "other";
 
 export type PaymentStatus = "pending" | "completed" | "failed" | "refunded";
 
-/** Origen del cobro: sala (mesero), caja o POS admin. */
+/** Origen del cobro: sala (Camarero), caja o POS admin. */
 export type PaymentChargedFrom = "waiter" | "caja" | "pos";
 
 export interface Table extends Timestamps, SoftDelete {
@@ -116,12 +116,12 @@ export interface Order extends Timestamps, SoftDelete {
   refundedAt?: ISODateString;
   createdBy: string;
   servedBy?: string;
-  /** Nombre del mesero (para comanda impresa / cocina). */
+  /** Nombre del Camarero (para comanda impresa / cocina). */
   servedByName?: string;
   notes?: string;
   printCount?: number;
   lastPrintedAt?: ISODateString;
-  /** Cocina pulsa «Avisar mesero» → el mesero ve aviso flotante + sonido. */
+  /** Cocina pulsa «Avisar Camarero» → el Camarero ve aviso flotante + sonido. */
   waiterAlertAt?: ISODateString;
   waiterAlertBody?: string;
   /** Delivery / takeaway (Fase 5). */
@@ -148,9 +148,9 @@ export interface Payment extends Timestamps {
   /** ID en pasarela (Stripe PI / SumUp checkout). */
   externalRef?: string;
   processedBy: string;
-  /** Nombre visible de quien cobró (mesero/cajero). */
+  /** Nombre visible de quien cobró (Camarero/cajero). */
   processedByName?: string;
-  /** Dónde se cobró: sala, caja o POS. El archivo de mesero incluye todos. */
+  /** Dónde se cobró: sala, caja o POS. El archivo de Camarero incluye todos. */
   chargedFrom?: PaymentChargedFrom;
   paidAt?: ISODateString;
   /** Seat index when paying a split check. */
@@ -161,7 +161,7 @@ export interface Payment extends Timestamps {
   refundAmount?: number;
   /** Efectivo que entregó el cliente (para calcular cambio). */
   amountTendered?: number;
-  /** Cambio devuelto = max(0, amountTendered − amount). */
+  /** Cambio devuelto = max(0, amountTendered âˆ’ amount). */
   changeGiven?: number;
   /** true si no había claves PSP y se registró en modo demo. */
   pspSimulated?: boolean;

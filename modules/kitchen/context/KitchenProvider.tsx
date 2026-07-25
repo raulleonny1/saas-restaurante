@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
@@ -82,7 +82,7 @@ interface KitchenContextValue {
     itemIds: string[],
     to: KitchenColumnId,
   ) => Promise<void>;
-  /** Avisa al mesero (flotante + sonido) por esa mesa/pedido. */
+  /** Avisa al Camarero (flotante + sonido) por esa mesa/pedido. */
   alertWaiter: (orderId: string, itemIds: string[]) => Promise<void>;
   /** Hay salida térmica activa (impresora / ambos). */
   canThermalPrint: boolean;

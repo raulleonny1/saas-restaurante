@@ -1,4 +1,4 @@
-import { SYSTEM_ROLES } from "@/lib/rbac/defaults";
+﻿import { SYSTEM_ROLES } from "@/lib/rbac/defaults";
 import type { AppUser } from "@/types/auth";
 import type { RoleId } from "@/types/rbac";
 
@@ -26,6 +26,13 @@ export const ROLE_RANK: Record<RoleId, number> = Object.fromEntries(
   SYSTEM_ROLES.map((r) => [r.id, r.rank]),
 ) as Record<RoleId, number>;
 
+/** Etiqueta visible (incluye id legacy "mesero"). */
+export function roleLabel(roleId: string | null | undefined): string {
+  const id = normalizeRoleId(roleId);
+  if (!id) return roleId || "—";
+  return ROLE_LABELS[id] ?? id;
+}
+
 /** Roles that own/create a restaurant on sign-up. */
 export const ROLES_WITH_VENUE: RoleId[] = SYSTEM_ROLES.filter((r) => r.createsVenue).map(
   (r) => r.id,
@@ -41,8 +48,17 @@ export const STAFF_ROLES: RoleId[] = SYSTEM_ROLES.filter(
   (r) => r.scope === "tenant" && r.id !== "cliente",
 ).map((r) => r.id);
 
+/** Normaliza ids antiguos (mesero → camarero). */
+export function normalizeRoleId(value: unknown): RoleId | null {
+  if (value === "mesero") return "camarero";
+  if (typeof value === "string" && value in ROLE_LABELS) {
+    return value as RoleId;
+  }
+  return null;
+}
+
 export function isUserRole(value: unknown): value is RoleId {
-  return typeof value === "string" && value in ROLE_LABELS;
+  return normalizeRoleId(value) != null;
 }
 
 export function hasRole(
@@ -70,12 +86,15 @@ export function canManageRestaurant(role: RoleId | undefined): boolean {
 }
 
 /**
- * Mesero: solo app /waiter (no dashboard admin del dueño).
+ * Camarero: solo app /waiter (no dashboard admin del dueño).
+ * Acepta también el id legacy "mesero" en datos antiguos.
  */
-export const WAITER_ONLY_ROLES: RoleId[] = ["mesero"];
+export const WAITER_ONLY_ROLES: RoleId[] = ["camarero"];
 
-export function isWaiterOnlyRole(role: RoleId | null | undefined): boolean {
-  return !!role && WAITER_ONLY_ROLES.includes(role);
+export function isWaiterOnlyRole(
+  role: RoleId | string | null | undefined,
+): boolean {
+  return role === "camarero" || role === "mesero";
 }
 
 /**
@@ -87,7 +106,7 @@ export function isCashierOnlyRole(role: RoleId | null | undefined): boolean {
   return !!role && CASHIER_ONLY_ROLES.includes(role);
 }
 
-/** Apps de piso (mesero / cajero): fuera del shell admin. */
+/** Apps de piso (Camarero / cajero): fuera del shell admin. */
 export function isFloorAppRole(role: RoleId | null | undefined): boolean {
   return isWaiterOnlyRole(role) || isCashierOnlyRole(role);
 }
@@ -99,7 +118,7 @@ export function isKitchenStaffRole(role: RoleId | null | undefined): boolean {
   return !!role && KITCHEN_STAFF_ROLES.includes(role);
 }
 
-/** Dueño / gerente / supervisor: gestionan sala (mesas + meseros + asignación). */
+/** Dueño / gerente / supervisor: gestionan sala (mesas + Camareros + asignación). */
 export function isSalaAdminRole(role: RoleId | null | undefined): boolean {
   return hasRole(role ?? undefined, [
     "propietario",

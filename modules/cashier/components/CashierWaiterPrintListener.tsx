@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { getEffectivePrintSettings } from "@/lib/printer-device-prefs";
@@ -42,7 +42,7 @@ function loadPaymentsForOrder(
 }
 
 /**
- * Con /caja abierta: imprime tickets de cobros del mesero (cola receiptPrintJobs).
+ * Con /caja abierta: imprime tickets de cobros del Camarero (cola receiptPrintJobs).
  */
 export function CashierWaiterPrintListener() {
   const { restaurantId, restaurant } = useRestaurant();

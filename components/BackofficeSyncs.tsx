@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 /**
  * Syncs pesados solo en backoffice (dueño/gerente…).
- * Mesero/caja/cocina/barra no los montan: el cobro ya dispara inventario/CRM
+ * Camarero/caja/cocina/barra no los montan: el cobro ya dispara inventario/CRM
  * en PosProvider.pay (idempotente).
  */
 

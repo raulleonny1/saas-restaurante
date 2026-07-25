@@ -1,4 +1,4 @@
-# SmartServe AI — API interna
+﻿# SmartServe AI — API interna
 
 > **Solo diseño.** Sin implementación.  
 > Base path: `/api/internal/v1/ai`  
@@ -646,7 +646,7 @@ Cancela si `queued` o cooperative-cancel si `running`.
 
 ## 13. Feature store (admin)
 
-Solo interno / `ai.manage`. No es API de producto para meseros.
+Solo interno / `ai.manage`. No es API de producto para Camareros.
 
 ### `GET /api/internal/v1/ai/features/snapshots`
 
@@ -764,7 +764,7 @@ SmartServe **emite** webhooks a URLs configuradas en integraciones del restauran
 | `ai.proposal.created` | Nueva proposal draft |
 | `ai.proposal.decided` | accepted / rejected |
 | `ai.job.finished` | Job terminal |
-| `ai.quota.warning` | ≥ 80% cupo |
+| `ai.quota.warning` | â‰¥ 80% cupo |
 | `ai.quota.exceeded` | Cupo agotado |
 
 **Delivery:** POST JSON firmado, retries exponenciales (1m, 5m, 30m), header `X-SmartServe-Event`, `X-SmartServe-Signature`.
@@ -889,48 +889,48 @@ Ya cubierto en §15.1 si `types` incluye `presence`.
 
 | Recurso | GET | POST | PUT | DELETE |
 |---------|-----|------|-----|--------|
-| `/health` | ● | | | |
-| `/capabilities` | ● | | | |
-| `/settings` | ● | | ● | |
-| `/usage` | ● | | | |
-| `/usage/history` | ● | | | |
-| `/sessions` | ● | ● | | |
-| `/sessions/{id}` | ● | | ● | ● |
-| `/sessions/{id}/messages` | ● | ● | | |
-| `/sessions/{id}/messages/{mid}` | | | | ● |
-| `/sessions/{id}/messages:stream` | | ● | | |
-| `/sessions/{id}/presence` | | | ● | |
-| `/insights` | ● | ●¹ | | |
-| `/insights/{id}` | ● | | ● | ● |
-| `/insights/{id}/act` | | ● | | |
-| `/recommendations` | ● | | | |
-| `/recommendations:refresh` | | ● | | |
-| `/recommendations/{id}` | | | ● | |
-| `/forecasts` | ● | | | |
-| `/forecasts/latest` | ● | | | |
-| `/forecasts/{id}` | ● | | | |
-| `/forecasts:run` | | ● | | |
-| `/customers/segments` | ● | | | |
-| `/customers/profiles` | ● | | | |
-| `/customers/profiles/{id}` | ● | | | |
-| `/customers:analyze` | | ● | | |
-| `/proposals` | ● | | | |
-| `/proposals/{id}` | ● | | ● | |
-| `/proposals:generate` | | ● | | |
-| `/proposals/{id}/accept` | | ● | | |
-| `/proposals/{id}/reject` | | ● | | |
-| `/jobs` | ● | ● | | |
-| `/jobs/{id}` | ● | | | ● |
-| `/features/snapshots` | ● | | | |
-| `/features/snapshots/{id}` | ● | | | |
-| `/features:project` | | ● | | |
-| `/webhooks/providers/*` | | ● | | |
-| `/webhooks/domain/events` | | ● | | |
-| `/webhooks/billing/entitlements` | | ● | | |
-| `/webhooks/endpoints` | ● | ● | | |
-| `/webhooks/endpoints/{id}` | | | ● | ● |
-| `/webhooks/endpoints/{id}/test` | | ● | | |
-| `/realtime/stream` | ● | | | |
+| `/health` | â— | | | |
+| `/capabilities` | â— | | | |
+| `/settings` | â— | | â— | |
+| `/usage` | â— | | | |
+| `/usage/history` | â— | | | |
+| `/sessions` | â— | â— | | |
+| `/sessions/{id}` | â— | | â— | â— |
+| `/sessions/{id}/messages` | â— | â— | | |
+| `/sessions/{id}/messages/{mid}` | | | | â— |
+| `/sessions/{id}/messages:stream` | | â— | | |
+| `/sessions/{id}/presence` | | | â— | |
+| `/insights` | â— | â—¹ | | |
+| `/insights/{id}` | â— | | â— | â— |
+| `/insights/{id}/act` | | â— | | |
+| `/recommendations` | â— | | | |
+| `/recommendations:refresh` | | â— | | |
+| `/recommendations/{id}` | | | â— | |
+| `/forecasts` | â— | | | |
+| `/forecasts/latest` | â— | | | |
+| `/forecasts/{id}` | â— | | | |
+| `/forecasts:run` | | â— | | |
+| `/customers/segments` | â— | | | |
+| `/customers/profiles` | â— | | | |
+| `/customers/profiles/{id}` | â— | | | |
+| `/customers:analyze` | | â— | | |
+| `/proposals` | â— | | | |
+| `/proposals/{id}` | â— | | â— | |
+| `/proposals:generate` | | â— | | |
+| `/proposals/{id}/accept` | | â— | | |
+| `/proposals/{id}/reject` | | â— | | |
+| `/jobs` | â— | â— | | |
+| `/jobs/{id}` | â— | | | â— |
+| `/features/snapshots` | â— | | | |
+| `/features/snapshots/{id}` | â— | | | |
+| `/features:project` | | â— | | |
+| `/webhooks/providers/*` | | â— | | |
+| `/webhooks/domain/events` | | â— | | |
+| `/webhooks/billing/entitlements` | | â— | | |
+| `/webhooks/endpoints` | â— | â— | | |
+| `/webhooks/endpoints/{id}` | | | â— | â— |
+| `/webhooks/endpoints/{id}/test` | | â— | | |
+| `/realtime/stream` | â— | | | |
 
 ¹ POST insights: solo service-to-service.
 

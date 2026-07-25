@@ -1,6 +1,6 @@
-/**
+﻿/**
  * Preferencias de sesión aisladas por usuario (+ restaurante).
- * Evita que en un mismo dispositivo un cajero/mesero herede la sucursal de otro.
+ * Evita que en un mismo dispositivo un cajero/Camarero herede la sucursal de otro.
  */
 
 export type BranchPrefScope =

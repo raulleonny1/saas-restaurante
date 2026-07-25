@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
@@ -14,7 +14,7 @@ import { Delete, Receipt } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-/** Solo caja imprime tickets / abre cajón. El mesero solo cobra. */
+/** Solo caja imprime tickets / abre cajón. El Camarero solo cobra. */
 function useIsCashierFloor() {
   const routes = useFloorRoutes();
   return routes.base === "/caja";
@@ -112,7 +112,7 @@ export function WaiterPayPage() {
         <p className="font-medium">Sin permiso de cobro</p>
         <p className="mt-2 text-[#a8b5a4]">
           Tu cuenta aún no tiene cobro. Cierra sesión y vuelve a entrar, o pide
-          al dueño que actualice el rol mesero.
+          al dueño que actualice el rol Camarero.
         </p>
         <Link href={routes.order} className="mt-4 inline-block text-emerald-400">
           Volver al pedido
@@ -130,7 +130,7 @@ export function WaiterPayPage() {
           </h1>
           <p className="mt-1 text-sm text-[#a8b5a4]">
             {isCashier
-              ? "Elige un ticket abierto. Si cobra el mesero en sala, el ticket sale aquí en la impresora de ventas (deja esta pantalla abierta)."
+              ? "Elige un ticket abierto. Si cobra el Camarero en sala, el ticket sale aquí en la impresora de ventas (deja esta pantalla abierta)."
               : "Elige una mesa con ticket abierto para cobrar."}
           </p>
         </div>
@@ -548,7 +548,7 @@ function CashNumpad({
   onClear: () => void;
   onBackspace: () => void;
 }) {
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"] as const;
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "âŒ«"] as const;
   return (
     <div className="rounded-2xl border border-white/15 bg-[#121a14] p-3">
       <div className="grid grid-cols-3 gap-2">
@@ -557,12 +557,12 @@ function CashNumpad({
             key={k}
             type="button"
             onClick={() => {
-              if (k === "⌫") onBackspace();
+              if (k === "âŒ«") onBackspace();
               else onDigit(k);
             }}
             className="flex h-14 touch-manipulation items-center justify-center rounded-xl border border-white/15 bg-[#1a241c] text-xl font-semibold text-[#e7efe4] transition-transform active:scale-[0.96] active:bg-emerald-900/50 lg:h-16"
           >
-            {k === "⌫" ? <Delete className="h-5 w-5" /> : k}
+            {k === "âŒ«" ? <Delete className="h-5 w-5" /> : k}
           </button>
         ))}
         <button

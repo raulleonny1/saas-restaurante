@@ -1,4 +1,4 @@
-import type { PermissionId, RoleId, RolePermissionMap } from "@/types/rbac";
+﻿import type { PermissionId, RoleId, RolePermissionMap } from "@/types/rbac";
 import type { SystemRoleDefinition } from "@/types/rbac";
 import { PERMISSION_IDS, PLATFORM_PERMISSION_IDS } from "./catalog";
 
@@ -49,8 +49,8 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     createsVenue: false,
   },
   {
-    id: "mesero",
-    name: "Mesero",
+    id: "camarero",
+    name: "Camarero",
     description: "Mesas y pedidos en sala",
     rank: 40,
     scope: "tenant",
@@ -262,7 +262,7 @@ export const SYSTEM_ROLE_DEFAULTS: Record<RoleId, RolePermissionMap> = {
     "notifications.read",
   ]),
 
-  mesero: enable(none(), [
+  camarero: enable(none(), [
     "restaurant.read",
     "branches.read",
     "catalog.read",

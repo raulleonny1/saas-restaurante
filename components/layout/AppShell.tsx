@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
@@ -49,7 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, [ready, loading, user, platformAdmin, pathname, router]);
 
-  // Mesero / cajero: no entran al panel del dueño
+  // Camarero / cajero: no entran al panel del dueño
   useEffect(() => {
     if (!ready || loading || !user || platformAdmin) return;
     if (isFloorAppRole(role)) {
@@ -193,7 +193,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <h1 className="font-display text-3xl tracking-tight">Sin acceso al local</h1>
           <p className="text-sm text-fg-muted">
             El dueño debe darte de alta en Empleados con el rol correcto (gerente,
-            supervisor, mesero…). Luego vuelve a iniciar sesión con ese email.
+            supervisor, Camarero…). Luego vuelve a iniciar sesión con ese email.
             No crees un restaurante nuevo.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-2">

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { getDb } from "@/lib/firebase";
 import {
@@ -421,7 +421,7 @@ function notifyWaiterPush(input: {
 }
 
 /**
- * Cocina avisa al mesero: marca líneas como listas + dispara aviso flotante/sonido.
+ * Cocina avisa al camarero: marca líneas como listas + dispara aviso flotante/sonido.
  * Se puede repetir (re-alerta) aunque ya estén en «Listo».
  */
 export async function alertWaiterForOrder(input: {

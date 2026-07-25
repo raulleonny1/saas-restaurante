@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { getDb } from "@/lib/firebase";
 import { stripUndefined } from "@/lib/firestore-safe";
@@ -218,7 +218,7 @@ export async function chargeOrder(input: ChargeInput): Promise<{
     }
   }
 
-  // Mesero cobra → cola de impresión en el PC de caja (sin diálogo en el móvil).
+  // Camarero cobra → cola de impresión en el PC de caja (sin diálogo en el móvil).
   if (chargedFrom === "waiter") {
     const job = buildWaiterReceiptPrintJob({
       restaurantId,

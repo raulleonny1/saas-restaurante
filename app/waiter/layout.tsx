@@ -1,10 +1,10 @@
-import { WaiterApp } from "@/modules/waiter";
+﻿import { WaiterApp } from "@/modules/waiter";
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: "Mi sala · SmartServe",
-  description: "Dashboard del mesero: mesas, pedidos y cobro.",
+  description: "Dashboard del camarero: mesas, pedidos y cobro.",
   manifest: "/manifest-waiter.webmanifest",
   appleWebApp: {
     capable: true,

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { formatCurrency } from "@/lib/format";
@@ -73,7 +73,7 @@ function orderPhase(order: Order): {
     return { label: "Listo · retirar", className: "text-cyan-300" };
   }
   if (items.some((i) => i.status === "open" || !i.sentAt)) {
-    return { label: "Mesero tomando", className: "text-amber-300" };
+    return { label: "Camarero tomando", className: "text-amber-300" };
   }
   if (items.every((i) => i.status === "delivered")) {
     return { label: "Servido · por cobrar", className: "text-emerald-300" };
@@ -128,7 +128,7 @@ function countByStation(items: OrderItem[]) {
 
 type LiveFilter =
   | "all"
-  | "mesero"
+  | "camarero"
   | "cocina"
   | "barra"
   | "listo"
@@ -136,7 +136,7 @@ type LiveFilter =
 
 const FILTER_LABEL: Record<LiveFilter, string> = {
   all: "Todas las mesas",
-  mesero: "Mesero tomando",
+  camarero: "Camarero tomando",
   cocina: "En cocina",
   barra: "En barra",
   listo: "Listo · retirar",
@@ -151,7 +151,7 @@ function matchesLiveFilter(
   switch (filter) {
     case "all":
       return true;
-    case "mesero":
+    case "camarero":
       return counts.mesa > 0;
     case "cocina":
       return counts.cocina > 0;
@@ -246,19 +246,19 @@ export function CashierHomePage() {
   }, [openOrders]);
 
   const liveSummary = useMemo(() => {
-    let mesero = 0;
+    let camarero = 0;
     let cocina = 0;
     let barra = 0;
     let listo = 0;
     let porCobrar = 0;
     for (const row of liveOrders) {
-      mesero += row.counts.mesa;
+      camarero += row.counts.mesa;
       cocina += row.counts.cocina;
       barra += row.counts.barra;
       listo += row.counts.listo;
       if (row.due > 0.009) porCobrar += 1;
     }
-    return { mesero, cocina, barra, listo, porCobrar, mesas: liveOrders.length };
+    return { camarero, cocina, barra, listo, porCobrar, mesas: liveOrders.length };
   }, [liveOrders]);
 
   const filteredOrders = useMemo(
@@ -298,7 +298,7 @@ export function CashierHomePage() {
           </div>
           <p className="mt-1 text-sm text-[#a8b5a4]">
             Pedidos en sala y cobros · déjala abierta para imprimir tickets del
-            mesero
+            Camarero
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Link
@@ -429,14 +429,14 @@ export function CashierHomePage() {
         </button>
         <button
           type="button"
-          onClick={() => toggleFilter("mesero")}
+          onClick={() => toggleFilter("camarero")}
           className={`rounded-full border px-2 py-1 ${
-            filter === "mesero"
+            filter === "camarero"
               ? "border-amber-400/70 bg-amber-950/40 text-amber-100"
               : "border-amber-500/30 bg-amber-950/20 text-amber-200"
           }`}
         >
-          Mesero {liveSummary.mesero}
+          Camarero {liveSummary.camarero}
         </button>
         <button
           type="button"
@@ -508,7 +508,7 @@ export function CashierHomePage() {
 
       {liveOrders.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-white/15 px-4 py-10 text-center text-sm text-[#8fa08c]">
-          No hay pedidos abiertos. Cuando un mesero abra mesa, aparecerá aquí al
+          No hay pedidos abiertos. Cuando un Camarero abra mesa, aparecerá aquí al
           instante.
         </div>
       ) : filteredOrders.length === 0 ? (
@@ -580,7 +580,7 @@ export function CashierHomePage() {
                         </span>
                         <span className="shrink-0 text-[10px] opacity-90">
                           {station === "Mesa"
-                            ? "Mesero"
+                            ? "Camarero"
                             : station}
                           {" · "}
                           {orderItemStatusLabel(item.status)}

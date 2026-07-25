@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
@@ -89,7 +89,7 @@ export function WaiterNotificationsProvider({
     return subscribeStaffNotifications(restaurantId, user.uid, setRemote);
   }, [user, restaurantId]);
 
-  /** Registrar token FCM (PWA mesero/caja) si hay VAPID. */
+  /** Registrar token FCM (PWA Camarero/caja) si hay VAPID. */
   useEffect(() => {
     if (!user?.uid || !alertsEnabled) return;
     void import("@/modules/notifications/services/fcm.service").then(

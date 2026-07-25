@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { AuthShell } from "@/modules/auth";
 import { isFirebaseConfigured } from "@/lib/firebase";
@@ -20,7 +20,7 @@ function safeNext(raw: string | null): string | null {
   return raw;
 }
 
-/** Mesero/cajero nunca van al panel admin, aunque venga ?next=/dashboard */
+/** Camarero/cajero nunca van al panel admin, aunque venga ?next=/dashboard */
 function resolvePostLogin(
   role: RoleId | string,
   next: string | null,

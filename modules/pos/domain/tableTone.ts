@@ -1,4 +1,4 @@
-import type { Order, Table } from "@/types/orders";
+﻿import type { Order, Table } from "@/types/orders";
 
 /**
  * Colores de mesa en plano (waiter + POS admin):
@@ -124,7 +124,7 @@ export const TABLE_TONE_ADMIN: Record<TableFloorTone, string> = {
   dirty: "border-stone-400/50 bg-stone-400/15",
 };
 
-/** Estilos plano mesero (fondo oscuro). */
+/** Estilos plano Camarero (fondo oscuro). */
 export const TABLE_TONE_WAITER: Record<TableFloorTone, string> = {
   free: "border-white/15 bg-white/5",
   occupied: "border-red-500/60 bg-red-950/55",

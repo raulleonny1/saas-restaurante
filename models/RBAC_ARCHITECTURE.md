@@ -1,4 +1,4 @@
-# SmartServe AI — Sistema RBAC profesional
+﻿# SmartServe AI — Sistema RBAC profesional
 
 > Role-Based Access Control con permisos individuales activables/desactivables.  
 > Escala: miles de restaurantes, roles custom por tenant, overrides por miembro.  
@@ -45,7 +45,7 @@ flowchart TB
 | `gerente` | Gerente | Tenant | 80 | Operación completa salvo billing sensible |
 | `supervisor` | Supervisor | Tenant | 70 | Turno, equipo de sala, excepciones |
 | `cajero` | Cajero | Tenant | 50 | Cobros, caja, facturas de consumo |
-| `mesero` | Mesero | Tenant | 40 | Mesas y pedidos en sala |
+| `Camarero` | Camarero | Tenant | 40 | Mesas y pedidos en sala |
 | `cocinero` | Cocinero | Tenant | 35 | KDS cocina |
 | `barista` | Barista | Tenant | 35 | KDS barra / bebidas |
 | `repartidor` | Repartidor | Tenant | 30 | Pedidos delivery / estados de entrega |
@@ -199,29 +199,29 @@ RolePermissionMap = Record<PermissionId, boolean>
 
 | Permiso (ej.) | SA | Prop | Ger | Sup | Caj | Mes | Coc | Bar | Rep | Cli |
 |---------------|:--:|:----:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| platform.* | ● | | | | | | | | | |
-| billing.manage | ● | ● | | | | | | | | |
-| roles.manage | ● | ● | | | | | | | | |
-| branches.create | ● | ● | ● | | | | | | | |
-| members.invite | ● | ● | ● | ● | | | | | | |
-| catalog.*.manage | ● | ● | ● | | | | | | | |
-| inventory.adjust | ● | ● | ● | ● | | | | | | |
-| pos.access | ● | ● | ● | ● | ● | ● | | | | |
-| pos.discount | ● | ● | ● | ● | ● | | | | | |
-| payments.charge | ● | ● | ● | ● | ● | | | | | |
-| orders.refund | ● | ● | ● | ● | | | | | | |
-| kitchen.access | ● | ● | ● | ● | | | ● | | | |
-| bar.access | ● | ● | ● | ● | | | | ● | | |
-| delivery.access | ● | ● | ● | ● | | | | | ● | |
-| reservations.manage | ● | ● | ● | ● | | ● | | | | ●* |
-| marketing.*.manage | ● | ● | ● | | | | | | | |
-| ai.assistant | ● | ● | ● | ● | | | | | | |
-| customers.manage | ● | ● | ● | ● | ● | ● | | | | |
-| audit.read | ● | ● | ● | | | | | | | |
-| restaurant.read | ● | ● | ● | ● | ● | ● | ● | ● | ● | ●† |
+| platform.* | â— | | | | | | | | | |
+| billing.manage | â— | â— | | | | | | | | |
+| roles.manage | â— | â— | | | | | | | | |
+| branches.create | â— | â— | â— | | | | | | | |
+| members.invite | â— | â— | â— | â— | | | | | | |
+| catalog.*.manage | â— | â— | â— | | | | | | | |
+| inventory.adjust | â— | â— | â— | â— | | | | | | |
+| pos.access | â— | â— | â— | â— | â— | â— | | | | |
+| pos.discount | â— | â— | â— | â— | â— | | | | | |
+| payments.charge | â— | â— | â— | â— | â— | | | | | |
+| orders.refund | â— | â— | â— | â— | | | | | | |
+| kitchen.access | â— | â— | â— | â— | | | â— | | | |
+| bar.access | â— | â— | â— | â— | | | | â— | | |
+| delivery.access | â— | â— | â— | â— | | | | | â— | |
+| reservations.manage | â— | â— | â— | â— | | â— | | | | â—* |
+| marketing.*.manage | â— | â— | â— | | | | | | | |
+| ai.assistant | â— | â— | â— | â— | | | | | | |
+| customers.manage | â— | â— | â— | â— | â— | â— | | | | |
+| audit.read | â— | â— | â— | | | | | | | |
+| restaurant.read | â— | â— | â— | â— | â— | â— | â— | â— | â— | â—â€  |
 
 \* Cliente: solo sus propias reservas (`reservations.manage_own` separado).  
-† Cliente: lectura limitada de menú/restaurante público.
+â€  Cliente: lectura limitada de menú/restaurante público.
 
 La matriz completa booleana está en `lib/rbac/defaults.ts`.
 
@@ -236,10 +236,10 @@ function resolveEffective(roleId, tenantRoleOverlay?, member?): Set<PermissionId
        for each (perm, enabled) in overlay.permissions:
          base[perm] = enabled              // toggle individual
   3. enabled = { perm | base[perm] === true }
-  4. enabled = enabled ∪ member.permissionAllow
-  5. enabled = enabled ∖ member.permissionDeny   // DENY WINS
+  4. enabled = enabled âˆª member.permissionAllow
+  5. enabled = enabled âˆ– member.permissionDeny   // DENY WINS
   6. if roleId !== super_admin:
-       enabled = enabled ∖ PLATFORM_ONLY_PERMISSIONS
+       enabled = enabled âˆ– PLATFORM_ONLY_PERMISSIONS
   7. return enabled
 ```
 

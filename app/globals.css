@@ -1,8 +1,8 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ─── Design tokens: SmartServe Premium ─── */
+/* â”€â”€â”€ Design tokens: SmartServe Premium â”€â”€â”€ */
 
 :root {
   /* Color */
@@ -290,14 +290,29 @@ body {
 }
 
 /* ─── Marketing landing ─── */
+.landing-hero {
+  background:
+    radial-gradient(
+      900px 480px at 15% 0%,
+      color-mix(in oklab, #0f6e56 45%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      700px 400px at 90% 20%,
+      color-mix(in oklab, #1a3d32 50%, transparent),
+      transparent 50%
+    ),
+    linear-gradient(165deg, #0c1814 0%, #07110e 45%, #050a09 100%);
+}
+
 .landing-hero-img {
-  animation: landing- ken 18s var(--ease-out) both;
-  transform-origin: 55% 40%;
+  animation: landing-ken 16s var(--ease-out) both;
+  transform-origin: center top;
 }
 
 @keyframes landing-ken {
   from {
-    transform: scale(1.06);
+    transform: scale(1.05);
   }
   to {
     transform: scale(1);
@@ -338,3 +353,4 @@ body {
     width: 80mm;
   }
 }
+

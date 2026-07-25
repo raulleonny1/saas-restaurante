@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+﻿import type { LucideIcon } from "lucide-react";
 import {
   Banknote,
   BarChart3,
@@ -67,7 +67,7 @@ export const APP_NAV: NavItem[] = [
   },
   {
     href: "/waiter",
-    label: "Sala meseros",
+    label: "Sala camareros",
     icon: Smartphone,
     module: "waiter",
     anyOf: ["pos.access"],

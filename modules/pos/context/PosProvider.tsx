@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
@@ -143,9 +143,9 @@ interface PosContextValue {
   removeItem: (itemId: string) => Promise<void>;
   setDiscount: (percent: number, amount?: number) => Promise<void>;
   setTip: (percent: number, amount?: number) => Promise<void>;
-  /** Envía a cocina/barra (el ticket térmico sale en /kitchen|/bar, no en el mesero). */
+  /** Envía a cocina/barra (el ticket térmico sale en /kitchen|/bar, no en el camarero). */
   sendKitchen: () => Promise<{ printed: boolean }>;
-  /** Mesero: lleva a mesa → marca ítems listos como servidos. */
+  /** Camarero: lleva a mesa → marca ítems listos como servidos. */
   markItemsServed: (itemIds: string[]) => Promise<void>;
   moveToTable: (targetTableId: string) => Promise<void>;
   mergeWithTables: (tableIds: string[]) => Promise<void>;
@@ -647,7 +647,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
       user?.displayName || user?.email || undefined,
     );
     // La comanda se imprime en el PC/tablet de cocina o barra (/kitchen|/bar),
-    // no en el mesero (así va a la impresora de cocina).
+    // no en el Camarero (así va a la impresora de cocina).
     return { printed: false };
   }, [requireOrder, taxPercent, products, categories, user]);
 

@@ -1,4 +1,4 @@
-import type { EntityStatus, ISODateString, SoftDelete, Timestamps } from "./common";
+﻿import type { EntityStatus, ISODateString, SoftDelete, Timestamps } from "./common";
 import type { RoleId } from "./rbac";
 
 export type EmploymentType = "full_time" | "part_time" | "contractor" | "temp";
@@ -14,7 +14,7 @@ export interface Employee extends Timestamps, SoftDelete {
   /** Last Auth invite sent for this email (pending until they register/login). */
   inviteSentAt?: ISODateString;
   branchIds: string[];
-  /** Mesas que el mesero debe atender (asignadas por el administrador). */
+  /** Mesas que el Camarero debe atender (asignadas por el administrador). */
   assignedTableIds?: string[];
   name: string;
   email: string;

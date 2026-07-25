@@ -1,4 +1,4 @@
-import type { BillingPlanId } from "./billing";
+﻿import type { BillingPlanId } from "./billing";
 import type { ISODateString } from "./common";
 import type { PermissionId, RoleId } from "./rbac";
 
@@ -13,7 +13,7 @@ export const USER_ROLES: RoleId[] = [
   "gerente",
   "supervisor",
   "cajero",
-  "mesero",
+  "camarero",
   "cocinero",
   "barista",
   "repartidor",

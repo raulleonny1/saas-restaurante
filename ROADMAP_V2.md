@@ -1,4 +1,4 @@
-# SmartServe AI — ROADMAP V2
+﻿# SmartServe AI — ROADMAP V2
 
 **Documento:** Informe CTO + plan de desarrollo comercial  
 **Producto:** SaaS multi-tenant para cafeterías, bares y restaurantes  
@@ -193,7 +193,7 @@ Una sola app Next carga Firebase + charts + PDF + XLSX. Camareros y clientes no 
 
 ### 4.5 Offline incompleto
 
-Confiar en persistence de Firestore + cola stub no basta para un TPV en sótanos con Wi‑Fi inestable. Faltan:
+Confiar en persistence de Firestore + cola stub no basta para un TPV en sótanos con Wiâ€‘Fi inestable. Faltan:
 
 - Cola durable con replay idempotente  
 - Política de cobros offline (nunca marcar pagado sin adquirente)  
@@ -218,7 +218,7 @@ Hoy asume un proyecto Firebase único. Clientes enterprise pedirán residencia d
 | **P0** | Billing/plan writable por `canManage` sin pago | Fraude de suscripción / churn falso |
 | **P0** | `/api/ai/chat` sin autenticación ni cuota | Abuso económico de API keys |
 | **P0** | Self-update de `users` puede elevar privilegios si hay campos sensibles | Escalada a super_admin / hijack de tenants |
-| **P1** | Catch-all rules: cualquier miembro escribe casi todo | Mesero altera inventario, facturación interna, etc. |
+| **P1** | Catch-all rules: cualquier miembro escribe casi todo | Camarero altera inventario, facturación interna, etc. |
 | **P1** | Pedidos `web_guest` creados sin auth | Spam de cocina / DoS operativo |
 | **P1** | Auth solo en cliente | Scraping de rutas “protegidas”; no es seguridad real |
 | **P1** | Local-auth en producción si faltan env vars | Credenciales triviales |
@@ -327,13 +327,13 @@ Escala de prioridad:
 | T04 | Entitlements por plan (gate módulos/límites) | **P0** | M | T03 | Plan trial no desbloquea Enterprise |
 | T05 | Desactivar local-auth en prod | **P0** | S | — | Sin passwords en localStorage |
 | T06 | Filtrar navegación por permisos | **P1** | S | RBAC | UX coherente por rol |
-| T07 | Rules finas por rol/permiso en writes sensibles | **P1** | L | T01 | Mesero ≠ inventario |
+| T07 | Rules finas por rol/permiso en writes sensibles | **P1** | L | T01 | Camarero â‰  inventario |
 | T08 | Dashboard real (quitar mocks) | **P1** | M | Stats query | KPIs live |
 | T09 | Módulo Empleados + vínculo members | **P1** | L | T07 | HR usable |
 | T10 | Unificar bootstrap tenant + billing trial server-side | **P1** | M | T03 | Signup fiable |
 | T11 | Email transaccional (invites, welcome) | **P1** | M | Resend | Invites llegan |
 | T12 | CI: lint, typecheck, smoke e2e login/POS | **P1** | M | — | PRs verdes |
-| T13 | Sentry + alertas coste Firebase | **P1** | S | — | MTTR ↓ |
+| T13 | Sentry + alertas coste Firebase | **P1** | S | — | MTTR â†“ |
 | T14 | Deploy indexes + Storage rules | **P1** | S | — | Sin errores missing index |
 | T15 | Legal pages + consentimientos marketing | **P1** | S | — | Checklist venta B2B |
 | T16 | Platform admin (tenants, suspend) | **P1** | L | T01 | Soporte operable |
@@ -343,13 +343,13 @@ Escala de prioridad:
 | T20 | Marketing providers reales | **P2** | L | T15 | Campañas entregadas |
 | T21 | Push FCM camareros/cliente | **P2** | M | — | “Plato listo” real |
 | T22 | PSP POS (SumUp o Stripe Terminal) | **P2** | XL | Hardware partner | Cobro real en mesa |
-| T23 | Import CSV carta/clientes | **P2** | M | — | Time-to-value ↓ |
+| T23 | Import CSV carta/clientes | **P2** | M | — | Time-to-value â†“ |
 | T24 | i18n / multi-currency hardening | **P3** | M | — | Expansión |
 | T25 | Fiscal e-invoicing | **P3** | XL | Legal | Cumplimiento ES |
 | T26 | Split apps waiter/customer | **P3** | L | Bundle metrics | Performance móvil |
 | T27 | Org multi-restaurant (franquicias) | **P3** | XL | T16 | Enterprise |
 
-**Leyenda esfuerzo:** S ≤ 3 días · M 1–2 semanas · L 2–4 semanas · XL > 1 mes (1–2 ingenieros).
+**Leyenda esfuerzo:** S â‰¤ 3 días · M 1–2 semanas · L 2–4 semanas · XL > 1 mes (1–2 ingenieros).
 
 ---
 
@@ -456,7 +456,7 @@ Se puede anunciar cobro público cuando **todos** sean verdaderos:
 7. [ ] Al menos un entorno staging con datos seed  
 8. [ ] Runbook de incidente y backup verificado  
 9. [ ] Messaging de pagos/marketing/offline es honesto  
-10. [ ] 3 design partners usando el producto en servicio real ≥ 2 semanas  
+10. [ ] 3 design partners usando el producto en servicio real â‰¥ 2 semanas  
 
 ---
 
@@ -509,7 +509,7 @@ No aceptable en v2.0:
 2. **One tenant ID on every query; never collection-group without index + ACL.**  
 3. **Feature flags > mentiras de UI.**  
 4. **Measure Firestore reads like AWS bill.**  
-5. **Demo data ≠ production architecture.**  
+5. **Demo data â‰  production architecture.**  
 6. **Ship the boring layers (CI, authz, billing) before the next shiny module.**  
 
 ---

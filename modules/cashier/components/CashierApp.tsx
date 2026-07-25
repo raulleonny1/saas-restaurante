@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import {
@@ -22,7 +22,7 @@ function AccessGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user || !role) return;
-    // Mesero no usa /caja
+    // Camarero no usa /caja
     if (isWaiterOnlyRole(role)) {
       router.replace(homePathForRole(role));
     }

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   getDevicePrinterPrefs,
@@ -223,7 +223,7 @@ export function PrinterSetupPanel({
           className={`mt-1 text-sm ${floor ? "text-[#a8b5a4]" : "text-fg-muted"}`}
         >
           Ventas = ticket al cobrar. Cocina = comanda en /kitchen o /bar (no
-          en el mesero). Elige impresoras distintas. El cajón portamonedas
+          en el Camarero). Elige impresoras distintas. El cajón portamonedas
           tradicional se abre por el cable RJ11 de la impresora de ventas.
         </p>
       </div>

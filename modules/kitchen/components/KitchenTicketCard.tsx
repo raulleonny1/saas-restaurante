@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { cn } from "@/lib/cn";
 import { useKitchen } from "@/modules/kitchen/context/KitchenProvider";
@@ -60,7 +60,7 @@ export function KitchenTicketCard({
       setPingBusy(true);
       await alertWaiter(ticket.order.id, itemIds);
       toast(
-        `Mesero avisado · ${ticket.order.tableName ?? "mesa"}`,
+        `Camarero avisado · ${ticket.order.tableName ?? "mesa"}`,
         "success",
       );
     } catch (e) {
@@ -175,7 +175,7 @@ export function KitchenTicketCard({
             <BellRing className="h-3.5 w-3.5" />
             {pingBusy
               ? "Avisando…"
-              : `Avisar mesero · ${ticket.order.tableName ?? "mesa"}`}
+              : `Avisar Camarero · ${ticket.order.tableName ?? "mesa"}`}
           </Button>
         ) : null}
 

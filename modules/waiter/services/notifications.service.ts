@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { getDb } from "@/lib/firebase";
 import type { AppNotification } from "@/types/notifications";
@@ -71,7 +71,7 @@ export function kitchenReadyAlerts(
     .filter((o) => {
       if (o.status === "paid" || o.status === "cancelled") return false;
       if (!o.items.some((i) => i.status === "ready")) return false;
-      // Sin mesa / mesa no en el plano del mesero → no avisar
+      // Sin mesa / mesa no en el plano del Camarero → no avisar
       if (!o.tableId) return false;
       if (tableSet && !tableSet.has(o.tableId)) return false;
       return true;

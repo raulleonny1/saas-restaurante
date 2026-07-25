@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useTenant } from "@/context/TenantProvider";
-import { ROLE_LABELS, STAFF_ROLES } from "@/lib/roles";
+import { normalizeRoleId, ROLE_LABELS, STAFF_ROLES } from "@/lib/roles";
 import { useEmployees } from "@/modules/employees/context/EmployeesProvider";
 import type { EmployeeShift } from "@/types/employees";
 import type { RoleId } from "@/types/rbac";
@@ -51,7 +51,7 @@ export function ShiftFormModal({
   const [startTime, setStartTime] = useState("");
   const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [roleId, setRoleId] = useState<RoleId>("mesero");
+  const [roleId, setRoleId] = useState<RoleId>("camarero");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -75,7 +75,9 @@ export function ShiftFormModal({
     setStartTime(start.time || "09:00");
     setEndDate(end.date || start.date || day);
     setEndTime(end.time || "17:00");
-    setRoleId(shift?.roleId ?? emp?.roleId ?? "mesero");
+    setRoleId(
+      normalizeRoleId(shift?.roleId ?? emp?.roleId) ?? "camarero",
+    );
     setNotes(shift?.notes ?? "");
   }, [open, shift, defaultEmployeeId, employees, branches]);
 

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { getDb } from "@/lib/firebase";
 import { stripUndefined } from "@/lib/firestore-safe";
@@ -39,7 +39,7 @@ export function subscribeEmployees(
   );
 }
 
-/** Asignación de mesas del empleado vinculado al Auth actual (app mesero). */
+/** Asignación de mesas del empleado vinculado al Auth actual (app Camarero). */
 export function subscribeMyEmployeeAssignment(
   restaurantId: string,
   uid: string,
@@ -244,7 +244,7 @@ export async function linkEmployeeUid(input: {
   );
 }
 
-/** Asigna mesas que el mesero debe atender (panel administrador). */
+/** Asigna mesas que el Camarero debe atender (panel administrador). */
 export async function setEmployeeAssignedTables(input: {
   restaurantId: string;
   employeeId: string;

@@ -1,4 +1,4 @@
-import { isDrinkStation } from "@/modules/kitchen/domain/stations";
+﻿import { isDrinkStation } from "@/modules/kitchen/domain/stations";
 import {
   escapeHtml,
   openPrintHtml,
@@ -18,7 +18,7 @@ function renderItem(item: OrderItem): string {
       .join("") ?? "";
   const notes =
     item.kitchenNotes || item.notes
-      ? `<div class="note">※ ${escapeHtml(item.kitchenNotes || item.notes || "")}</div>`
+      ? `<div class="note">› ${escapeHtml(item.kitchenNotes || item.notes || "")}</div>`
       : "";
   return `<div class="line">
     <div class="qty">${item.quantity}×</div>
@@ -59,7 +59,7 @@ export type PrintKitchenOptions = {
   paperWidthMm?: ThermalPaperWidth;
   printerSystemName?: string;
   printerLabel?: string;
-  /** Nombre del mesero si no viene en order.servedByName */
+  /** Nombre del Camarero si no viene en order.servedByName */
   waiterName?: string;
 };
 
@@ -107,7 +107,7 @@ export function printKitchenTicket(
 
   const when = orderWhen(order, active);
   const { fecha, hora } = formatPedidoDateTime(when);
-  const mesero =
+  const camarero =
     opts.waiterName?.trim() ||
     order.servedByName?.trim() ||
     "";
@@ -120,7 +120,7 @@ export function printKitchenTicket(
         text-transform:uppercase;letter-spacing:.05em}
       .meta{text-align:center;font-size:${narrow ? 10 : 12}px;margin-bottom:3px}
       .big{font-size:${narrow ? 16 : 20}px;font-weight:700;text-align:center;margin:8px 0 4px}
-      .mesero{text-align:center;font-size:${narrow ? 12 : 14}px;font-weight:700;margin:4px 0}
+      .camarero{text-align:center;font-size:${narrow ? 12 : 14}px;font-weight:700;margin:4px 0}
       .when{text-align:center;font-size:${narrow ? 11 : 13}px;font-weight:700;margin:2px 0 6px}
       .sec{font-weight:700;border-top:1px dashed #000;border-bottom:1px dashed #000;
         padding:4px 0;margin:8px 0 4px;text-align:center;letter-spacing:.08em;
@@ -140,9 +140,8 @@ export function printKitchenTicket(
     <div class="meta">COMANDA</div>
     <div class="big">Mesa ${escapeHtml(order.tableName || "—")}</div>
     ${
-      mesero
-        ? `<div class="mesero">Mesero: ${escapeHtml(mesero)}</div>`
-        : `<div class="meta">Mesero: —</div>`
+      camarero ? `<div class="camarero">Camarero: ${escapeHtml(camarero)}</div>`
+        : `<div class="meta">Camarero: —</div>`
     }
     <div class="when">${escapeHtml(fecha)} · ${escapeHtml(hora)}</div>
     <div class="meta">#${escapeHtml(order.id.slice(0, 10))} · ${escapeHtml(order.channel)}</div>
@@ -180,7 +179,7 @@ export function printKitchenTestPage(opts: PrintKitchenOptions = {}): void {
     <hr class="rule"/>
     <div class="ok">PRUEBA COCINA</div>
     <div class="sub">Mesa T1</div>
-    <div class="sub"><strong>Mesero: Demo</strong></div>
+    <div class="sub"><strong>Camarero: Demo</strong></div>
     <div class="sub">${escapeHtml(fecha)} · ${escapeHtml(hora)}</div>
     <div class="sec" style="text-align:center;font-weight:700;margin:10px 0;border-top:1px dashed #000;border-bottom:1px dashed #000;padding:4px 0">COCINA</div>
     <div class="line"><div class="qty">1×</div><div>Plato de prueba</div></div>

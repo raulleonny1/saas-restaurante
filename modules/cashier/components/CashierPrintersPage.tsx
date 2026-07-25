@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { getEffectivePrintSettings } from "@/lib/printer-device-prefs";
@@ -28,14 +28,14 @@ export function CashierPrintersPage() {
           href={routes.home}
           className="text-xs text-emerald-400 hover:underline"
         >
-          ← En vivo
+          â† En vivo
         </Link>
         <h1 className="mt-2 font-[family-name:var(--font-display)] text-2xl text-[#e7efe4]">
           Impresoras
         </h1>
         <p className="mt-1 text-sm text-[#a8b5a4]">
           Configura la de <strong className="text-[#e7efe4]">ventas</strong> en
-          este PC. Con En vivo o Cobrar abiertos, los cobros del mesero se
+          este PC. Con En vivo o Cobrar abiertos, los cobros del Camarero se
           imprimen aquí automáticamente.
         </p>
       </div>

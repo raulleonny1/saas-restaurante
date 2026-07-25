@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import { isSalaAdminRole } from "@/lib/roles";
@@ -82,7 +82,7 @@ function PosWorkspace() {
         title="POS"
         description={
           salaAdmin
-            ? "Supervisa meseros, atención en mesas, pedidos y tiempos. Plano y cobro en tiempo real."
+            ? "Supervisa Camareros, atención en mesas, pedidos y tiempos. Plano y cobro en tiempo real."
             : "Plano, ticket y cobro en tiempo real con Firestore."
         }
         actions={
@@ -162,7 +162,7 @@ function PosWorkspace() {
           size="sm"
           onClick={() => setMobileTab("floor")}
         >
-          {salaAdmin && floorMode === "waiters" ? "Meseros" : "Plano"}
+          {salaAdmin && floorMode === "waiters" ? "Camareros" : "Plano"}
         </Button>
         <Button
           variant={mobileTab === "ticket" ? "primary" : "secondary"}
@@ -191,7 +191,7 @@ function PosWorkspace() {
                 variant={floorMode === "waiters" ? "primary" : "secondary"}
                 onClick={() => setFloorMode("waiters")}
               >
-                <Users className="h-3.5 w-3.5" /> Meseros
+                <Users className="h-3.5 w-3.5" /> Camareros
               </Button>
               <Button
                 size="sm"

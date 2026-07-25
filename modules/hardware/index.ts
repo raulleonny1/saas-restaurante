@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Hardware bridges — escalas y apps nativas (Fase 8).
  * Stub estable: el SaaS web no depende de Capex/stores.
  * Implementaciones reales viven en un proyecto companion (TWA / Capacitor / bridge USB).
@@ -57,7 +57,7 @@ export const NATIVE_APP_ROADMAP: {
 }[] = [
   {
     target: "twa",
-    purpose: "PWA empaquetada (mesero/caja) para Play Store",
+    purpose: "PWA empaquetada (Camarero/caja) para Play Store",
     blockedBy: "Core web estable + assets store",
   },
   {

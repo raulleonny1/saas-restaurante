@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
@@ -52,7 +52,7 @@ export function WaiterShell({
   const isAdmin = canManageRestaurant(role ?? undefined);
   const [audioReady, setAudioReady] = useState(false);
 
-  /** Caja en monitor TPV: ancho completo. Mesero: ancho en pedido/cobro. */
+  /** Caja en monitor TPV: ancho completo. camarero: ancho en pedido/cobro. */
   const wideTpv =
     isCashier ||
     pathname.startsWith(routes.order) ||
@@ -105,7 +105,7 @@ export function WaiterShell({
         <p className="max-w-xs text-sm text-[#a8b5a4]">
           {isCashier
             ? "Inicia sesión con tu cuenta de cajero."
-            : "Entra con tu cuenta de mesero para ver tus mesas."}
+            : "Entra con tu cuenta de Camarero para ver tus mesas."}
         </p>
         <Link
           href={`/login?next=${routes.home}`}
@@ -167,7 +167,7 @@ export function WaiterShell({
           <div className="min-w-0">
             {!isCashier ? (
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-400/80">
-                Sala · mesero
+                Sala · Camarero
               </p>
             ) : null}
             <p

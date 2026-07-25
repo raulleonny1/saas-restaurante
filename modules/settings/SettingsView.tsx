@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
@@ -369,7 +369,7 @@ function UsersPanel({
   actorUid: string;
 }) {
   const [email, setEmail] = useState("");
-  const [roleId, setRoleId] = useState<RoleId>("mesero");
+  const [roleId, setRoleId] = useState<RoleId>("camarero");
   const [invites, setInvites] = useState<MemberInvite[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -610,7 +610,7 @@ function BillingPanel({
               >
                 {p.recommended ? (
                   <span className="absolute right-3 top-3 text-xs font-semibold text-accent">
-                    ⭐ Recomendado
+                    â­ Recomendado
                   </span>
                 ) : null}
                 <p className="font-medium pr-24">{p.name}</p>

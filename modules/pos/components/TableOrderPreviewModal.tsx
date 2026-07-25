@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { formatCurrency } from "@/lib/format";
 import {
@@ -17,7 +17,7 @@ function itemWhen(item: { sentAt?: string }, order: Order): string {
 
 /**
  * Vista previa de la mesa sin entrar aún al ticket/pedido.
- * Usada por mesero (/waiter) y gerente (POS / sala).
+ * Usada por Camarero (/waiter) y gerente (POS / sala).
  */
 export function TableOrderPreviewModal({
   open,

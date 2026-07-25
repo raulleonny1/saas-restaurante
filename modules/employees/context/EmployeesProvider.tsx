@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
@@ -89,7 +89,7 @@ interface EmployeesContextValue {
   archive: (employeeId: string) => Promise<void>;
   /** Restaurar desde historial al listado activo. */
   restore: (employeeId: string) => Promise<void>;
-  /** Mesas que atenderá este mesero. */
+  /** Mesas que atenderá este Camarero. */
   assignTables: (employeeId: string, tableIds: string[]) => Promise<void>;
   setStatus: (
     employeeId: string,
@@ -192,7 +192,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
   }, [restaurantId]);
 
   /**
-   * Backfill: índice + memberInvites. Sin invite el mesero entra como "cliente"
+   * Backfill: índice + memberInvites. Sin invite el Camarero entra como "cliente"
    * y el login lo manda al home.
    */
   const indexSyncRef = useRef(new Set<string>());
@@ -323,7 +323,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
       }
 
       // Empleado ya con cuenta: sincronizar rol/sucursales en membership
-      // (varios cajeros/meseros del mismo local = cuentas Auth distintas)
+      // (varios cajeros/Camareros del mismo local = cuentas Auth distintas)
       const memberUid = linked?.uid ?? row.uid;
       if (memberUid) {
         try {

@@ -1,10 +1,10 @@
-import Image from "next/image";
+﻿import Image from "next/image";
 import Link from "next/link";
 
 const FEATURES = [
   {
     title: "POS y sala",
-    text: "Pedidos, mesas y tickets en tiempo real. Meseros y caja sincronizados.",
+    text: "Pedidos, mesas y tickets en tiempo real. Camareros y caja sincronizados.",
   },
   {
     title: "Cocina y barra",
@@ -31,47 +31,36 @@ const FEATURES = [
 export function LandingPage() {
   return (
     <div className="landing bg-bg text-fg">
-      {/* ── Hero: una sola composición ── */}
-      <header className="relative min-h-[100svh] overflow-hidden">
-        <Image
-          src="/marketing/hero-pos.png"
-          alt="SmartServe POS en un restaurante"
-          fill
-          priority
-          sizes="100vw"
-          className="landing-hero-img object-cover object-center"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0a1210]/95% via-[#0a1210]/55% to-[#0a1210]/25%" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0a1210]/70% via-transparent to-transparent" />
+      {/* â”€â”€ Hero: marca arriba (legible) + producto a pantalla completa abajo â”€â”€ */}
+      <header className="landing-hero relative flex min-h-[100svh] flex-col overflow-hidden">
+        <nav className="relative z-20 flex items-center justify-between px-6 pt-6 md:px-10 md:pt-8">
+          <span className="font-display text-lg tracking-tight text-white/90 md:text-xl">
+            SmartServe
+          </span>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/login"
+              className="rounded-[12px] px-3 py-2 text-sm text-white/85 transition hover:bg-white/10 hover:text-white"
+            >
+              Entrar
+            </Link>
+            <Link
+              href="/register"
+              className="rounded-[12px] bg-accent px-3.5 py-2 text-sm font-medium text-accent-fg transition hover:opacity-90"
+            >
+              Empezar
+            </Link>
+          </div>
+        </nav>
 
-        <div className="relative z-10 mx-auto flex min-h-[100svh] max-w-6xl flex-col justify-end px-6 pb-14 pt-8 md:pb-20 md:pt-12">
-          <nav className="absolute left-6 right-6 top-6 flex items-center justify-between md:left-8 md:right-8 md:top-8">
-            <span className="font-display text-lg tracking-tight text-white/90 md:text-xl">
-              SmartServe
-            </span>
-            <div className="flex items-center gap-2">
-              <Link
-                href="/login"
-                className="rounded-[12px] px-3 py-2 text-sm text-white/85 transition hover:bg-white/10 hover:text-white"
-              >
-                Entrar
-              </Link>
-              <Link
-                href="/register"
-                className="rounded-[12px] bg-accent px-3.5 py-2 text-sm font-medium text-accent-fg transition hover:opacity-90"
-              >
-                Empezar
-              </Link>
-            </div>
-          </nav>
-
-          <p className="landing-reveal font-display text-[clamp(3.25rem,12vw,7.5rem)] leading-[0.92] tracking-tight text-white">
+        <div className="relative z-20 mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-6 pb-6 pt-10 md:px-10 md:pb-8 md:pt-14">
+          <p className="landing-reveal font-display text-[clamp(3.5rem,11vw,7rem)] leading-[0.92] tracking-tight text-white">
             SmartServe
           </p>
-          <h1 className="landing-reveal landing-reveal-delay-1 mt-5 max-w-xl font-display text-[clamp(1.35rem,3.2vw,2rem)] font-normal leading-snug tracking-tight text-white/92">
+          <h1 className="landing-reveal landing-reveal-delay-1 mt-4 max-w-xl font-display text-[clamp(1.35rem,3vw,1.85rem)] font-normal leading-snug tracking-tight text-white/90">
             El sistema operativo de tu restaurante
           </h1>
-          <p className="landing-reveal landing-reveal-delay-2 mt-3 max-w-md text-base text-white/70 md:text-lg">
+          <p className="landing-reveal landing-reveal-delay-2 mt-3 max-w-md text-base text-white/65 md:text-lg">
             POS, cocina, caja, reservas y web en una sola plataforma pensada
             para bares y restaurantes.
           </p>
@@ -84,15 +73,28 @@ export function LandingPage() {
             </Link>
             <Link
               href="/login"
-              className="inline-flex h-12 items-center justify-center rounded-[12px] border border-white/25 bg-white/10 px-6 text-base font-medium text-white backdrop-blur-sm transition hover:bg-white/16"
+              className="inline-flex h-12 items-center justify-center rounded-[12px] border border-white/20 bg-white/8 px-6 text-base font-medium text-white transition hover:bg-white/14"
             >
               Acceder a la app
             </Link>
           </div>
         </div>
+
+        {/* Producto: franja inferior a ancho completo, sin texto encima */}
+        <div className="landing-hero-product relative z-10 mt-auto h-[42svh] min-h-[240px] w-full md:h-[48svh]">
+          <Image
+            src="/marketing/hero-pos.png"
+            alt="SmartServe POS en un restaurante"
+            fill
+            priority
+            sizes="100vw"
+            className="landing-hero-img object-cover object-[center_35%]"
+          />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#07110e] to-transparent" />
+        </div>
       </header>
 
-      {/* ── Capacidad principal + visual cocina ── */}
+      {/* â”€â”€ Capacidad principal + visual cocina â”€â”€ */}
       <section className="relative overflow-hidden">
         <div className="mx-auto grid max-w-6xl gap-10 px-6 py-20 md:grid-cols-2 md:items-center md:gap-14 md:py-28">
           <div>
@@ -116,13 +118,13 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ── Capacidad sala móvil ── */}
+      {/* â”€â”€ Capacidad sala móvil â”€â”€ */}
       <section className="border-y border-border bg-bg-muted/50">
         <div className="mx-auto grid max-w-6xl gap-10 px-6 py-20 md:grid-cols-2 md:items-center md:gap-14 md:py-28">
           <div className="landing-visual relative mx-auto aspect-[3/4] w-full max-w-sm overflow-hidden rounded-[20px] md:order-1">
             <Image
               src="/marketing/waiter.png"
-              alt="App de meseros SmartServe"
+              alt="App de camareros SmartServe"
               fill
               sizes="(max-width: 768px) 100vw, 380px"
               className="object-cover"
@@ -130,7 +132,7 @@ export function LandingPage() {
           </div>
           <div className="md:order-2">
             <h2 className="font-display text-[clamp(1.85rem,4vw,2.75rem)] leading-tight tracking-tight">
-              Sala en el bolsillo del mesero
+              Sala en el bolsillo del camarero
             </h2>
             <p className="mt-4 max-w-md text-fg-muted md:text-lg">
               Toma pedidos en mesa, mueve comandas y cobra sin volver al TPV.
@@ -140,13 +142,13 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ── Qué incluye ── */}
+      {/* â”€â”€ Qué incluye â”€â”€ */}
       <section id="funciones" className="mx-auto max-w-6xl px-6 py-20 md:py-28">
         <h2 className="max-w-xl font-display text-[clamp(1.85rem,4vw,2.75rem)] leading-tight tracking-tight">
           Todo lo que necesitas para operar
         </h2>
         <p className="mt-4 max-w-lg text-fg-muted md:text-lg">
-          Un solo login para dueño, gerente, meseros, cocina y caja. Cada rol ve
+          Un solo login para dueño, gerente, camareros, cocina y caja. Cada rol ve
           solo lo suyo.
         </p>
         <ul className="mt-12 grid gap-x-10 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
@@ -161,7 +163,7 @@ export function LandingPage() {
         </ul>
       </section>
 
-      {/* ── CTA final ── */}
+      {/* â”€â”€ CTA final â”€â”€ */}
       <section className="relative overflow-hidden border-t border-border">
         <div
           className="pointer-events-none absolute inset-0 opacity-40"

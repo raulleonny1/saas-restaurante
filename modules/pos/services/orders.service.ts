@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { getDb } from "@/lib/firebase";
 import { stripUndefined } from "@/lib/firestore-safe";
@@ -172,7 +172,7 @@ export interface OpenTableInput {
   branchId: string;
   table: Table;
   uid: string;
-  /** Nombre visible del mesero al abrir la mesa. */
+  /** Nombre visible del Camarero al abrir la mesa. */
   waiterName?: string;
   currency: CurrencyCode;
   taxPercent: number;

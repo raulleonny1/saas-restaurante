@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import {
@@ -52,7 +52,7 @@ function AccessGate({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  // Dueño/gerente pueden entrar; mesero es el público principal
+  // Dueño/gerente pueden entrar; Camarero es el público principal
   if (
     role &&
     !isWaiterOnlyRole(role) &&
@@ -63,8 +63,8 @@ function AccessGate({ children }: { children: ReactNode }) {
   ) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-[#0e1410] p-6">
-        <Alert tone="warning" title="App de meseros">
-          Esta pantalla es para meseros. Tu inicio es {homePathForRole(role)}.
+        <Alert tone="warning" title="App de Camareros">
+          Esta pantalla es para Camareros. Tu inicio es {homePathForRole(role)}.
         </Alert>
       </div>
     );

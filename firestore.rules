@@ -1,4 +1,4 @@
-rules_version = '2';
+﻿rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() {
@@ -117,7 +117,7 @@ service cloud.firestore {
       allow delete: if canManage(resource.data.restaurantId);
     }
 
-    // Staff activation by email (owner alta → mesero crea clave en /login)
+    // Staff activation by email (owner alta → Camarero crea clave en /login)
     match /employeeEmailIndex/{emailKey} {
       // Lectura amplia para signed-in: el id es el email; sin list no se enumeran.
       allow get: if isSignedIn();
@@ -201,7 +201,7 @@ service cloud.firestore {
           isSelf(uid)
           && resource.data.uid == request.auth.uid
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
-            in ['propietario', 'gerente', 'supervisor', 'cajero', 'mesero', 'cocinero', 'barista', 'repartidor', 'super_admin']
+            in ['propietario', 'gerente', 'supervisor', 'cajero', 'camarero', 'mesero', 'cocinero', 'barista', 'repartidor', 'super_admin']
           && request.resource.data.roleId
             == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
           && request.resource.data.role

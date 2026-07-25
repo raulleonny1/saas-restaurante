@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { formatCurrency } from "@/lib/format";
 import {
@@ -17,7 +17,7 @@ import { ProductCustomizeModal } from "./ProductCustomizeModal";
 
 export function ProductGrid({
   disabled,
-  /** Sala meseros: contraste alto sobre fondo oscuro. */
+  /** Sala Camareros: contraste alto sobre fondo oscuro. */
   tone = "default",
 }: {
   disabled?: boolean;

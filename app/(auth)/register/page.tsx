@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { ROLES_WITH_VENUE, homePathForRole, isUserRole } from "@/lib/roles";
@@ -95,7 +95,7 @@ function RegisterForm() {
       subtitle={
         isCliente
           ? "Registro de cliente para pedidos, reservas y puntos."
-          : "Dueño: crea tu restaurante. Si el dueño te dio de alta como gerente o mesero, usa Iniciar sesión (no registres un local nuevo)."
+          : "Dueño: crea tu restaurante. Si el dueño te dio de alta como gerente o Camarero, usa Iniciar sesión (no registres un local nuevo)."
       }
     >
       {!firebaseReady ? (
@@ -159,7 +159,7 @@ function RegisterForm() {
                   {id === "trial"
                     ? "gratis (14 días)"
                     : `${formatPlanPrice(BILLING_PLANS[id].monthlyPriceCents)}/mes`}
-                  {BILLING_PLANS[id].recommended ? " ★" : ""}
+                  {BILLING_PLANS[id].recommended ? " â˜…" : ""}
                 </option>
               ))}
             </Select>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { formatCurrency } from "@/lib/format";
@@ -190,7 +190,7 @@ export function CashierSellPage() {
             Vender
           </h1>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-[#a8b5a4]">
-            Venta propia e independiente de los meseros. Carta completa: cocina,
+            Venta propia e independiente de los Camareros. Carta completa: cocina,
             barra y todo el catálogo.
           </p>
           <button

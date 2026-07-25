@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useKitchen } from "@/modules/kitchen/context/KitchenProvider";
 import { toast } from "@/ui";
 import { BellRing } from "lucide-react";
 import { useMemo, useState } from "react";
 
-/** Chips compactos: avisar mesero por mesa. */
+/** Chips compactos: avisar Camarero por mesa. */
 export function ActiveTablesAlertBar() {
   const { tickets, alertWaiter } = useKitchen();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -53,7 +53,7 @@ export function ActiveTablesAlertBar() {
               try {
                 setBusyId(t.orderId);
                 await alertWaiter(t.orderId, t.itemIds);
-                toast(`Mesero avisado · ${t.tableName}`, "success");
+                toast(`Camarero avisado · ${t.tableName}`, "success");
               } catch (e) {
                 toast(e instanceof Error ? e.message : "Error", "error");
               } finally {

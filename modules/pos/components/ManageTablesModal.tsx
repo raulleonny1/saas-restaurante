@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/context/AuthProvider";
 import { usePos } from "@/modules/pos/context/PosProvider";
@@ -99,7 +99,7 @@ export function ManageTablesModal({
       open={open}
       onClose={onClose}
       title="Gestionar mesas y barras"
-      description="Crea o elimina mesas de la sucursal. El mesero las verá en /waiter."
+      description="Crea o elimina mesas de la sucursal. El Camarero las verá en /waiter."
       size="lg"
       footer={
         <Button variant="secondary" onClick={onClose}>

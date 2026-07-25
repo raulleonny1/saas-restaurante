@@ -1,4 +1,4 @@
-/** Avisos sonoros del mesero (más fuertes que el KDS). */
+﻿/** Avisos sonoros del Camarero (más fuertes que el KDS). */
 
 let ctx: AudioContext | null = null;
 let unlocked = false;

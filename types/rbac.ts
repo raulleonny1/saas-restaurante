@@ -1,4 +1,4 @@
-/**
+﻿/**
  * RBAC contracts — SmartServe AI
  * Permission IDs are stable forever; never rename, only deprecate.
  */
@@ -9,7 +9,7 @@ export type RoleId =
   | "gerente"
   | "supervisor"
   | "cajero"
-  | "mesero"
+  | "camarero"
   | "cocinero"
   | "barista"
   | "repartidor"
