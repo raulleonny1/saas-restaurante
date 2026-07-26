@@ -502,10 +502,17 @@ export async function lookupStaffByEmail(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
   });
-  const data = (await res.json()) as StaffLookupInfo & {
-    ok?: boolean;
-    error?: string;
-  };
+  let data: StaffLookupInfo & { ok?: boolean; error?: string };
+  try {
+    data = (await res.json()) as StaffLookupInfo & {
+      ok?: boolean;
+      error?: string;
+    };
+  } catch {
+    throw new Error(
+      "El servidor no respondió bien. Reinicia npm run dev y revisa FIREBASE_SERVICE_ACCOUNT_PATH.",
+    );
+  }
   if (!res.ok || data.ok === false) {
     throw new Error(data.error || "No se pudo consultar el correo");
   }

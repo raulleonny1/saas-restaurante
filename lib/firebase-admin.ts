@@ -72,11 +72,22 @@ export function getFirebaseAdmin(): any | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const admin = require("firebase-admin");
-    if (!admin.apps.length) {
+    const apps =
+      typeof admin.getApps === "function"
+        ? admin.getApps()
+        : Array.isArray(admin.apps)
+          ? admin.apps
+          : [];
+    if (!apps.length) {
       const cred = loadServiceAccount();
       if (!cred) {
         cached = null;
         return null;
+      }
+      // private_key en .env a veces llega con \\n literales
+      const asRecord = cred as { private_key?: string };
+      if (typeof asRecord.private_key === "string") {
+        asRecord.private_key = asRecord.private_key.replace(/\\n/g, "\n");
       }
       admin.initializeApp({
         credential: admin.credential.cert(cred),
