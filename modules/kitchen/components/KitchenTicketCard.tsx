@@ -6,6 +6,7 @@ import {
   PRIORITY_STYLES,
   formatElapsed,
 } from "@/modules/kitchen/domain/priority";
+import { orderHeading } from "@/modules/pos/domain/orderNumber";
 import type { KitchenColumnId, KitchenTicket } from "@/types/kitchen";
 import { Badge, Button, toast } from "@/ui";
 import { BellRing, Printer } from "lucide-react";
@@ -82,10 +83,13 @@ export function KitchenTicketCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-base font-semibold tracking-tight">
-              {ticket.order.tableName ?? "Sin mesa"}
+              {orderHeading(ticket.order)}
             </p>
             <p className="text-caption">
-              #{ticket.order.id.slice(0, 8)} · {ticket.order.channel}
+              {ticket.order.channel}
+              {ticket.order.servedByName
+                ? ` · ${ticket.order.servedByName}`
+                : ""}
             </p>
           </div>
           <div className="text-right">

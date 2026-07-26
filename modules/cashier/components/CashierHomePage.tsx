@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/format";
 import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { isDrinkStation } from "@/modules/kitchen/domain/stations";
 import { usePos } from "@/modules/pos/context/PosProvider";
+import { orderHeading } from "@/modules/pos/domain/orderNumber";
 import { balanceDue, roundMoney } from "@/modules/pos/domain/totals";
 import { subscribePaymentsForBranch } from "@/modules/pos/services/payments.service";
 import { formatSlot } from "@/modules/reservations/domain/time";
@@ -532,7 +533,7 @@ export function CashierHomePage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate font-medium">
-                    Mesa {order.tableName || "—"}
+                    {orderHeading(order)}
                   </p>
                   <p className={`mt-0.5 text-xs font-medium ${phase.className}`}>
                     {phase.label}

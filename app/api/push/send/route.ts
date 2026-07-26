@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getFirebaseAdmin } from "@/lib/firebase-admin";
 
 /**
  * Push FCM vía Admin SDK (si hay credenciales) o legacy FCM_SERVER_KEY.
@@ -14,82 +15,35 @@ type Body = {
   tokens?: string[];
 };
 
-type AdminNs = {
-  apps: unknown[];
-  app: () => unknown;
-  initializeApp: (opts: { credential: unknown }) => unknown;
-  credential: {
-    cert: (c: object) => unknown;
-    applicationDefault: () => unknown;
-  };
-  firestore: () => {
-    collection: (path: string) => {
-      doc: (id: string) => {
-        collection: (sub: string) => {
-          get: () => Promise<{
-            docs: { data: () => { token?: string } }[];
-          }>;
-        };
-      };
-    };
-  };
-  messaging: () => {
-    sendEachForMulticast: (msg: {
-      tokens: string[];
-      notification: { title: string; body: string };
-      data: Record<string, string>;
-    }) => Promise<{ successCount: number }>;
-  };
-};
-
-function loadAdmin(): AdminNs | null {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("firebase-admin") as AdminNs;
-  } catch {
-    return null;
-  }
-}
-
-function getAdminApp(admin: AdminNs) {
-  if (admin.apps.length) return admin.app();
-  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (json) {
-    const cred = JSON.parse(json) as object;
-    return admin.initializeApp({ credential: admin.credential.cert(cred) });
-  }
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    return admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-    });
-  }
-  return null;
-}
-
 async function tokensFromAdmin(
-  admin: AdminNs,
   uids: string[],
 ): Promise<string[]> {
-  if (!uids.length) return [];
+  const admin = getFirebaseAdmin();
+  if (!admin || !uids.length) return [];
   const db = admin.firestore();
   const tokens: string[] = [];
   for (const uid of uids) {
-    const snap = await db.collection("users").doc(uid).collection("fcmTokens").get();
+    const snap = await db
+      .collection("users")
+      .doc(uid)
+      .collection("fcmTokens")
+      .get();
     for (const d of snap.docs) {
       const t = d.data()?.token;
-      if (t) tokens.push(t);
+      if (typeof t === "string" && t) tokens.push(t);
     }
   }
   return tokens;
 }
 
 async function sendWithAdmin(
-  admin: AdminNs,
   tokens: string[],
   title: string,
   body: string,
   data?: Record<string, string>,
 ) {
+  const admin = getFirebaseAdmin();
+  if (!admin) return { sent: 0, simulated: true as const };
   const res = await admin.messaging().sendEachForMulticast({
     tokens,
     notification: { title, body },
@@ -142,13 +96,10 @@ export async function POST(req: Request) {
   const body = payload.body?.trim() || "";
   let tokens = [...(payload.tokens ?? [])];
 
-  const admin = loadAdmin();
-  if (admin && payload.targetUids?.length) {
+  if (payload.targetUids?.length) {
     try {
-      if (getAdminApp(admin)) {
-        const more = await tokensFromAdmin(admin, payload.targetUids);
-        tokens.push(...more);
-      }
+      const more = await tokensFromAdmin(payload.targetUids);
+      tokens.push(...more);
     } catch {
       /* admin no configurado */
     }
@@ -159,18 +110,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, simulated: true, sent: 0 });
   }
 
-  if (admin) {
+  if (getFirebaseAdmin()) {
     try {
-      if (getAdminApp(admin)) {
-        const adminResult = await sendWithAdmin(
-          admin,
-          tokens,
-          title,
-          body,
-          payload.data,
-        );
-        return NextResponse.json({ ok: true, ...adminResult });
-      }
+      const adminResult = await sendWithAdmin(
+        tokens,
+        title,
+        body,
+        payload.data,
+      );
+      return NextResponse.json({ ok: true, ...adminResult });
     } catch {
       /* fallback legacy */
     }

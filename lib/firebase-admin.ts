@@ -1,18 +1,35 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /**
- * Firebase Admin singleton (server-only).
+ * Firebase Admin singleton (server-only) — compatible con firebase-admin v14+
+ * (API modular: cert / getAuth / getFirestore).
  *
  * Opciones (en este orden):
- * 1. FIREBASE_SERVICE_ACCOUNT_JSON — JSON en UNA sola línea (o entre comillas)
+ * 1. FIREBASE_SERVICE_ACCOUNT_JSON — JSON en UNA sola línea
  * 2. FIREBASE_SERVICE_ACCOUNT_PATH — ruta a un .json de service account
  * 3. GOOGLE_APPLICATION_CREDENTIALS — ruta a .json (ADC)
  */
 
 import { existsSync, readFileSync } from "fs";
 import { isAbsolute, resolve } from "path";
+import {
+  applicationDefault,
+  cert,
+  getApps,
+  initializeApp,
+  type App,
+  type Credential,
+} from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
+import { getMessaging } from "firebase-admin/messaging";
 
-let cached: any = undefined;
+export type FirebaseAdminCompat = {
+  auth: () => ReturnType<typeof getAuth>;
+  firestore: () => ReturnType<typeof getFirestore>;
+  messaging: () => ReturnType<typeof getMessaging>;
+  app: () => App;
+};
+
+let cached: FirebaseAdminCompat | null | undefined = undefined;
 let lastError: string | null = null;
 
 export function getFirebaseAdminInitError(): string | null {
@@ -22,7 +39,6 @@ export function getFirebaseAdminInitError(): string | null {
 function loadServiceAccount(): object | null {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
   if (raw) {
-    // Quita comillas envolventes si las hay
     let text = raw;
     if (
       (text.startsWith("'") && text.endsWith("'")) ||
@@ -30,7 +46,6 @@ function loadServiceAccount(): object | null {
     ) {
       text = text.slice(1, -1);
     }
-    // .env a veces escapa saltos: \n literales en la private_key ya vienen como \\n
     try {
       return JSON.parse(text) as object;
     } catch (e) {
@@ -49,7 +64,7 @@ function loadServiceAccount(): object | null {
       ? pathEnv
       : resolve(process.cwd(), pathEnv);
     if (!existsSync(filePath)) {
-      lastError = `No existe el archivo de service account: ${filePath}`;
+      lastError = `No existe el archivo de service account: ${filePath}. Descarga el JSON en Firebase Console → Configuración del proyecto → Cuentas de servicio.`;
       return null;
     }
     try {
@@ -63,39 +78,63 @@ function loadServiceAccount(): object | null {
   }
 
   lastError =
-    "Falta FIREBASE_SERVICE_ACCOUNT_JSON (una línea) o FIREBASE_SERVICE_ACCOUNT_PATH (ruta al .json).";
+    "Falta FIREBASE_SERVICE_ACCOUNT_JSON (una línea) o FIREBASE_SERVICE_ACCOUNT_PATH (ruta al .json). Reinicia npm run dev tras configurarlo.";
   return null;
 }
 
-export function getFirebaseAdmin(): any | null {
+function buildCredential(): Credential | null {
+  const sa = loadServiceAccount();
+  if (sa) {
+    const asRecord = sa as { private_key?: string };
+    if (typeof asRecord.private_key === "string") {
+      asRecord.private_key = asRecord.private_key.replace(/\\n/g, "\n");
+    }
+    return cert(sa as Parameters<typeof cert>[0]);
+  }
+  // Sin JSON explícito: intentar ADC solo si hay GOOGLE_APPLICATION_CREDENTIALS
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim()) {
+    try {
+      return applicationDefault();
+    } catch (e) {
+      lastError =
+        e instanceof Error
+          ? e.message
+          : "No se pudo usar applicationDefault()";
+      return null;
+    }
+  }
+  return null;
+}
+
+function wrapApp(app: App): FirebaseAdminCompat {
+  return {
+    auth: () => getAuth(app),
+    firestore: () => getFirestore(app),
+    messaging: () => getMessaging(app),
+    app: () => app,
+  };
+}
+
+export function getFirebaseAdmin(): FirebaseAdminCompat | null {
   if (cached !== undefined) return cached;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const admin = require("firebase-admin");
-    const apps =
-      typeof admin.getApps === "function"
-        ? admin.getApps()
-        : Array.isArray(admin.apps)
-          ? admin.apps
-          : [];
-    if (!apps.length) {
-      const cred = loadServiceAccount();
-      if (!cred) {
-        cached = null;
-        return null;
-      }
-      // private_key en .env a veces llega con \\n literales
-      const asRecord = cred as { private_key?: string };
-      if (typeof asRecord.private_key === "string") {
-        asRecord.private_key = asRecord.private_key.replace(/\\n/g, "\n");
-      }
-      admin.initializeApp({
-        credential: admin.credential.cert(cred),
-      });
+    const existing = getApps();
+    if (existing.length > 0) {
+      lastError = null;
+      cached = wrapApp(existing[0]!);
+      return cached;
     }
+
+    const credential = buildCredential();
+    if (!credential) {
+      cached = null;
+      return null;
+    }
+
+    const app = initializeApp({ credential });
     lastError = null;
-    cached = admin;
-    return admin;
+    cached = wrapApp(app);
+    return cached;
   } catch (e) {
     lastError =
       e instanceof Error

@@ -347,6 +347,12 @@ service cloud.firestore {
         allow update, delete: if isMember(restaurantId);
       }
 
+      /** Contador secuencial de órdenes (Orden #001, #002…). */
+      match /counters/{counterId} {
+        allow read: if isMember(restaurantId) || isSignedIn();
+        allow create, update: if isMember(restaurantId) || isSignedIn();
+      }
+
       match /reservations/{reservationId} {
         allow read: if isMember(restaurantId)
           || (isSignedIn() && resource.data.customerUid == request.auth.uid);

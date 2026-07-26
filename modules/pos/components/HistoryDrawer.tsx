@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { formatCurrency } from "@/lib/format";
 import { usePos } from "@/modules/pos/context/PosProvider";
+import { orderHeading, orderNumberTag } from "@/modules/pos/domain/orderNumber";
 import { refundPayment, subscribePaymentsForOrder } from "@/modules/pos/services/payments.service";
 import type { Payment } from "@/types/orders";
 import { Badge, Button, Modal, toast } from "@/ui";
@@ -60,7 +61,8 @@ export function HistoryDrawer({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium">
-                    {o.tableName ?? "Sin mesa"}
+                    {orderNumberTag(o)}
+                    {o.tableName ? ` · ${o.tableName}` : ""}
                   </span>
                   <Badge
                     tone={
@@ -92,7 +94,7 @@ export function HistoryDrawer({
           ) : (
             <div className="space-y-3">
               <p className="text-sm font-medium">
-                #{selected.id.slice(0, 8)} · {selected.tableName}
+                {orderHeading(selected)}
               </p>
               <ul className="space-y-1 text-sm">
                 {selected.items.map((i) => (

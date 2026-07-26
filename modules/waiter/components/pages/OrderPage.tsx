@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/format";
 import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { ProductGrid } from "@/modules/pos/components/ProductGrid";
 import { usePos } from "@/modules/pos/context/PosProvider";
+import { orderHeading } from "@/modules/pos/domain/orderNumber";
 import { lineTotal } from "@/modules/pos/domain/totals";
 import { orderItemStatusLabel } from "@/modules/waiter/domain/itemStatus";
 import type { OrderItem } from "@/types/orders";
@@ -79,7 +80,12 @@ export function WaiterOrderPage() {
   }
 
   const itemCount = activeOrder?.items.length ?? 0;
-  const tableTitle = activeOrder?.tableName ?? table.name;
+  const pageTitle = activeOrder
+    ? orderHeading({
+        ...activeOrder,
+        tableName: activeOrder.tableName ?? table.name,
+      })
+    : `Mesa ${table.name}`;
 
   const ticketPanel = (
     <TicketPanel
@@ -129,8 +135,8 @@ export function WaiterOrderPage() {
             await sendKitchen();
             setMsg(
               pendingSendCount === 1
-                ? "1 línea nueva enviada a cocina / barra"
-                : `${pendingSendCount} líneas nuevas enviadas a cocina / barra`,
+                ? "1 línea nueva añadida a la orden y enviada"
+                : `${pendingSendCount} líneas nuevas añadidas a la orden y enviadas`,
             );
           } catch (e) {
             setMsg(e instanceof Error ? e.message : "Error");
@@ -140,7 +146,7 @@ export function WaiterOrderPage() {
         })();
       }}
       payHref={routes.pay}
-      emptyHint="Añade platos desde la carta. La mesa se abre al primer producto."
+      emptyHint="Añade platos desde la carta. Se abre una orden al primer producto; luego puedes pedir más en la misma orden."
       canPay={Boolean(activeOrder && itemCount > 0)}
     />
   );
@@ -186,12 +192,12 @@ export function WaiterOrderPage() {
             </p>
           ) : null}
           <h1 className="font-[family-name:var(--font-display)] text-2xl tracking-tight lg:text-3xl">
-            Mesa {tableTitle}
+            {pageTitle}
           </h1>
           <p className="text-xs text-[#8fa08c] lg:text-sm">
             {activeOrder
-              ? `${activeOrder.status} · pendiente ${formatCurrency(balance, currency)}`
-              : "Toca un producto para empezar el pedido"}
+              ? `${activeOrder.status} · pendiente ${formatCurrency(balance, currency)} · misma orden hasta cobrar`
+              : "Toca un producto para abrir la orden de esta mesa"}
           </p>
         </div>
         {activeOrder ? (
@@ -291,8 +297,8 @@ function TicketPanel({
       ) : null}
       {pendingSendCount > 0 ? (
         <div className="rounded-xl border border-amber-400/40 bg-amber-950/35 px-3 py-2.5 text-sm text-amber-100">
-          {pendingSendCount} sin enviar · al pulsar Enviar solo va esto (no lo
-          que ya está en cocina/barra).
+          {pendingSendCount} adicional{pendingSendCount === 1 ? "" : "es"} sin
+          enviar · se añaden a esta misma orden; cocina solo recibe lo nuevo.
         </div>
       ) : null}
       <ul className="min-h-0 flex-1 space-y-2">

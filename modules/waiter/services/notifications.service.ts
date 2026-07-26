@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { getDb } from "@/lib/firebase";
+import { orderHeading } from "@/modules/pos/domain/orderNumber";
 import type { AppNotification } from "@/types/notifications";
 import type { Order } from "@/types/orders";
 import {
@@ -89,7 +90,7 @@ export function kitchenReadyAlerts(
         restaurantId: o.restaurantId,
         uid: "local",
         type: "order" as const,
-        title: `¡Retirar de cocina! · ${o.tableName ?? "Mesa"}`,
+        title: `¡Retirar! · ${orderHeading(o)}`,
         body,
         href: "/waiter/pedido",
         read: false,

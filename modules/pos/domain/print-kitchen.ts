@@ -138,13 +138,18 @@ export function printKitchenTicket(
     })}
     <h1>${escapeHtml(restaurantName)}</h1>
     <div class="meta">COMANDA</div>
+    <div class="big">Orden ${escapeHtml(
+      order.orderNumber != null
+        ? `#${String(order.orderNumber).padStart(3, "0")}`
+        : `#${order.id.slice(0, 6)}`,
+    )}</div>
     <div class="big">Mesa ${escapeHtml(order.tableName || "—")}</div>
     ${
       camarero ? `<div class="camarero">Camarero: ${escapeHtml(camarero)}</div>`
         : `<div class="meta">Camarero: —</div>`
     }
     <div class="when">${escapeHtml(fecha)} · ${escapeHtml(hora)}</div>
-    <div class="meta">#${escapeHtml(order.id.slice(0, 10))} · ${escapeHtml(order.channel)}</div>
+    <div class="meta">${escapeHtml(order.channel)}</div>
     ${body}
     <div class="foot">— fin comanda —</div>
     <script>window.onload=function(){window.print();}</script>

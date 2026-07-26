@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/format";
 import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { ProductGrid } from "@/modules/pos/components/ProductGrid";
 import { usePos } from "@/modules/pos/context/PosProvider";
+import { orderHeading } from "@/modules/pos/domain/orderNumber";
 import { orderForTable } from "@/modules/pos/domain/tableTone";
 import { balanceDue, lineTotal } from "@/modules/pos/domain/totals";
 import { orderItemStatusLabel } from "@/modules/waiter/domain/itemStatus";
@@ -287,7 +288,11 @@ export function CashierSellPage() {
     );
   }
 
-  const title = activeOrder?.tableName ?? table?.name ?? "Venta";
+  const title = activeOrder
+    ? orderHeading(activeOrder)
+    : table?.name
+      ? `Mesa ${table.name}`
+      : "Venta";
 
   return (
     <div className="space-y-3 lg:space-y-4">
@@ -326,8 +331,8 @@ export function CashierSellPage() {
           </h1>
           <p className="text-xs text-[#8fa08c] lg:text-sm">
             {activeOrder
-              ? `Pendiente ${formatCurrency(balance, currency)}`
-              : "Toca un producto para empezar el ticket"}
+              ? `Pendiente ${formatCurrency(balance, currency)} · misma orden hasta cobrar`
+              : "Toca un producto para abrir la orden"}
           </p>
         </div>
         {activeOrder ? (
@@ -545,7 +550,8 @@ function SellTicket({
       ) : null}
       {pendingSendCount > 0 ? (
         <div className="rounded-xl border border-amber-400/40 bg-amber-950/35 px-3 py-2.5 text-sm text-amber-100">
-          {pendingSendCount} sin enviar · solo irá lo nuevo a cocina/barra.
+          {pendingSendCount} adicional{pendingSendCount === 1 ? "" : "es"} sin
+          enviar · se añaden a esta misma orden; cocina solo recibe lo nuevo.
         </div>
       ) : null}
 

@@ -19,6 +19,7 @@ import type {
   KitchenTicket,
   KitchenTicketItem,
 } from "@/types/kitchen";
+import { orderHeading } from "@/modules/pos/domain/orderNumber";
 import type { Order, OrderItem, OrderStatus } from "@/types/orders";
 import type { Branch } from "@/types/restaurant";
 import {
@@ -407,12 +408,11 @@ function notifyWaiterPush(input: {
       requestPushNotify({
         restaurantId: input.restaurantId,
         targetUids: [uid],
-        title: input.order.tableName
-          ? `Listo · ${input.order.tableName}`
-          : "Pedido listo",
+        title: `Listo · ${orderHeading(input.order)}`,
         body: input.body,
         data: {
           orderId: input.order.id,
+          orderNumber: String(input.order.orderNumber ?? ""),
           type: "kitchen_ready",
         },
       }),

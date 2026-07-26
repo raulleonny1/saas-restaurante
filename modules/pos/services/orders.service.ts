@@ -4,6 +4,7 @@ import { getDb } from "@/lib/firebase";
 import { stripUndefined } from "@/lib/firestore-safe";
 import { resolveItemStation } from "@/modules/kitchen/domain/stations";
 import { recalculateOrder, roundMoney } from "@/modules/pos/domain/totals";
+import { allocateOrderNumber } from "@/modules/pos/services/order-number.service";
 import type { Product, ProductCategory } from "@/types/catalog";
 import type { CurrencyCode } from "@/types/common";
 import type {
@@ -212,10 +213,12 @@ export async function openTable(input: OpenTableInput): Promise<Order> {
 
   const orderId = newId("ord");
   const stamp = nowIso();
+  const orderNumber = await allocateOrderNumber(restaurantId);
   const order: Order = {
     id: orderId,
     restaurantId,
     branchId,
+    orderNumber,
     tableId: table.id,
     tableName: table.name,
     mergedTableIds: [],

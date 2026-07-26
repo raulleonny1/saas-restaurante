@@ -787,7 +787,10 @@ export function PosProvider({ children }: { children: ReactNode }) {
           amountCents: Math.round(amount * 100),
           tipCents: Math.round(tipAmount * 100),
           currency: order.currency || "EUR",
-          description: `Mesa ${order.tableName || "—"} · ${order.id.slice(-6)}`,
+          description:
+            order.orderNumber != null
+              ? `Orden #${String(order.orderNumber).padStart(3, "0")} · Mesa ${order.tableName || "—"}`
+              : `Mesa ${order.tableName || "—"} · ${order.id.slice(-6)}`,
         });
         if (!result.ok) {
           throw new Error(result.error || "Pago rechazado por la pasarela");

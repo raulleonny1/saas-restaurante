@@ -1,6 +1,7 @@
 "use client";
 
 import { getDb } from "@/lib/firebase";
+import { allocateOrderNumber } from "@/modules/pos/services/order-number.service";
 import { newId, nowIso } from "@/modules/website/domain/ids";
 import { normalizeHost } from "@/modules/website/domain/slug";
 import type { Product, ProductCategory } from "@/types/catalog";
@@ -234,6 +235,7 @@ export async function submitPublicOrder(input: {
 }): Promise<Order> {
   const stamp = nowIso();
   const id = newId("ord");
+  const orderNumber = await allocateOrderNumber(input.restaurantId);
   const subtotal = input.items.reduce(
     (s, i) => s + i.unitPrice * i.quantity,
     0,
@@ -242,6 +244,7 @@ export async function submitPublicOrder(input: {
     id,
     restaurantId: input.restaurantId,
     branchId: input.branchId,
+    orderNumber,
     channel: "online",
     items: input.items.map((i, idx) => ({
       id: `li_${idx}`,

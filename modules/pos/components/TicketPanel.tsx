@@ -1,6 +1,7 @@
 "use client";
 
 import { formatCurrency } from "@/lib/format";
+import { orderNumberTag } from "@/modules/pos/domain/orderNumber";
 import { lineTotal } from "@/modules/pos/domain/totals";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import { Button, IconButton, Input } from "@/ui";
@@ -81,12 +82,16 @@ export function TicketPanel({
       <div className="border-b border-border px-4 py-3 sm:px-5">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h2 className="text-title">Ticket · {activeOrder.tableName}</h2>
+            <h2 className="text-title">
+              Orden {orderNumberTag(activeOrder)}
+              {activeOrder.tableName ? ` · Mesa ${activeOrder.tableName}` : ""}
+            </h2>
             <p className="text-caption">
-              #{activeOrder.id.slice(0, 8)} · {activeOrder.status}
+              {activeOrder.status}
               {activeOrder.mergedTableIds?.length
                 ? ` · unida (${activeOrder.mergedTableIds.length})`
                 : ""}
+              {" · "}puedes añadir más productos a esta misma orden
             </p>
           </div>
           {activeOrder.status === "paid" || balance <= 0.001 ? (

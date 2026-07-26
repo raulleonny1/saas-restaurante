@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  getFirebaseAdmin,
+  getFirebaseAdminInitError,
+} from "@/lib/firebase-admin";
 
 /**
  * Actualización de rol/permisos de member — Admin SDK.
@@ -13,49 +17,6 @@ type Body = {
   permissionDeny?: string[];
   callerUid?: string;
 };
-
-function loadAdmin() {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const admin = require("firebase-admin") as {
-      apps: unknown[];
-      initializeApp: (o: { credential: unknown }) => unknown;
-      credential: {
-        cert: (c: object) => unknown;
-        applicationDefault: () => unknown;
-      };
-      firestore: () => {
-        collection: (p: string) => {
-          doc: (id: string) => {
-            collection: (s: string) => {
-              doc: (id: string) => {
-                get: () => Promise<{ exists: boolean; data: () => Record<string, unknown> }>;
-                update: (d: object) => Promise<void>;
-              };
-            };
-          };
-        };
-      };
-    };
-    if (!admin.apps.length) {
-      const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-      if (json) {
-        admin.initializeApp({
-          credential: admin.credential.cert(JSON.parse(json) as object),
-        });
-      } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-        admin.initializeApp({
-          credential: admin.credential.applicationDefault(),
-        });
-      } else {
-        return null;
-      }
-    }
-    return admin;
-  } catch {
-    return null;
-  }
-}
 
 export async function POST(req: Request) {
   let body: Body;
@@ -72,13 +33,14 @@ export async function POST(req: Request) {
     );
   }
 
-  const admin = loadAdmin();
+  const admin = getFirebaseAdmin();
   if (!admin) {
     return NextResponse.json(
       {
         ok: false,
         error:
-          "Backend no configurado. Configura FIREBASE_SERVICE_ACCOUNT_JSON para cambiar roles.",
+          getFirebaseAdminInitError() ||
+          "Backend no configurado. Usa FIREBASE_SERVICE_ACCOUNT_PATH para cambiar roles.",
       },
       { status: 503 },
     );

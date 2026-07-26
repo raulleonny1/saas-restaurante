@@ -90,10 +90,15 @@ export function printOrderReceipt(
     .join("");
 
   const tableLabel = escapeHtml(order.tableName ?? "Barra");
+  const orderLabel = escapeHtml(
+    order.orderNumber != null
+      ? `#${String(order.orderNumber).padStart(3, "0")}`
+      : `#${order.id.slice(0, 6)}`,
+  );
   const when = new Date(order.paidAt || order.openedAt).toLocaleString("es-ES");
 
   const html = `<!doctype html><html><head><meta charset="utf-8"/>
-    <title>Ticket ${tableLabel}</title>
+    <title>Ticket ${orderLabel}</title>
     <style>
       ${thermalPageCss(mm)}
       .brand{text-align:center;margin:0 0 2px}
@@ -118,9 +123,10 @@ export function printOrderReceipt(
     <div class="brand"><h1>${name}</h1></div>
     <div class="sub">Ticket de cliente</div>
     <hr class="rule"/>
-    <div class="mesa">${tableLabel}</div>
+    <div class="mesa">Orden ${orderLabel}</div>
+    <div class="sub">Mesa ${tableLabel}</div>
     <div class="sub">${when}</div>
-    <div class="sub">#${escapeHtml(order.id.slice(0, 10))} · ${escapeHtml(order.channel.toUpperCase())}</div>
+    <div class="sub">${escapeHtml(order.channel.toUpperCase())}</div>
     <hr class="rule-d"/>
     <table>${lines}</table>
     <hr class="rule"/>

@@ -2,6 +2,7 @@
 
 import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { usePos } from "@/modules/pos/context/PosProvider";
+import { orderNumberTag } from "@/modules/pos/domain/orderNumber";
 import { useWaiterNotifications } from "@/modules/waiter/context/WaiterNotificationsProvider";
 import {
   isWaiterAudioUnlocked,
@@ -53,6 +54,7 @@ export function ReadyPickupBanner() {
   const order = openOrders.find((o) => o.id === top.referenceId)!;
   const rawTable = order.tableName?.trim() || "mesa";
   const tableLabel = /^mesa\b/i.test(rawTable) ? rawTable : `Mesa ${rawTable}`;
+  const ordenLabel = orderNumberTag(order);
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-[max(0.5rem,env(safe-area-inset-top))] z-[80] flex justify-center px-3">
@@ -67,7 +69,7 @@ export function ReadyPickupBanner() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-white/85">
-              Listo en cocina
+              Listo · Orden {ordenLabel}
             </p>
             <p className="mt-0.5 font-[family-name:var(--font-display)] text-2xl leading-tight">
               Llevar a {tableLabel}

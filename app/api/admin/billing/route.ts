@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
-import { BILLING_PLANS, type BillingPlanId, normalizeBillingPlanId } from "@/types/billing";
+import {
+  getFirebaseAdmin,
+  getFirebaseAdminInitError,
+} from "@/lib/firebase-admin";
+import {
+  BILLING_PLANS,
+  type BillingPlanId,
+  normalizeBillingPlanId,
+} from "@/types/billing";
 
 /**
  * Cambio de plan SaaS — solo Admin SDK (no escritura directa desde cliente).
- * Requiere FIREBASE_SERVICE_ACCOUNT_JSON.
  */
 
 type Body = {
@@ -13,54 +20,6 @@ type Body = {
   invoiceId?: string;
   callerUid?: string;
 };
-
-function loadAdmin() {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const admin = require("firebase-admin") as {
-      apps: unknown[];
-      app: () => { firestore: () => FirebaseFirestore };
-      initializeApp: (o: { credential: unknown }) => unknown;
-      credential: {
-        cert: (c: object) => unknown;
-        applicationDefault: () => unknown;
-      };
-      firestore: () => FirebaseFirestore;
-    };
-    type FirebaseFirestore = {
-      collection: (p: string) => {
-        doc: (id: string) => {
-          get: () => Promise<{ exists: boolean; data: () => Record<string, unknown> }>;
-          set: (d: object, opts?: object) => Promise<void>;
-          update: (d: object) => Promise<void>;
-          collection: (s: string) => {
-            doc: (id: string) => {
-              set: (d: object) => Promise<void>;
-              update: (d: object) => Promise<void>;
-            };
-          };
-        };
-      };
-    };
-    if (!admin.apps.length) {
-      const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-      if (json) {
-        admin.initializeApp({
-          credential: admin.credential.cert(JSON.parse(json) as object),
-        });
-      } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-        admin.initializeApp({
-          credential: admin.credential.applicationDefault(),
-        });
-      } else {
-        return null;
-      }
-    }
-    return admin;
-  } catch {
-    return null;
-  }
-}
 
 export async function POST(req: Request) {
   let body: Body;
@@ -74,13 +33,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "restaurantId requerido" }, { status: 400 });
   }
 
-  const admin = loadAdmin();
+  const admin = getFirebaseAdmin();
   if (!admin) {
     return NextResponse.json(
       {
         ok: false,
         error:
-          "Backend no configurado (FIREBASE_SERVICE_ACCOUNT_JSON). No se permite cambiar facturación desde el cliente.",
+          getFirebaseAdminInitError() ||
+          "Backend no configurado (FIREBASE_SERVICE_ACCOUNT_PATH). No se permite cambiar facturación desde el cliente.",
       },
       { status: 503 },
     );
@@ -131,11 +91,7 @@ export async function POST(req: Request) {
       .collection("restaurants")
       .doc(body.restaurantId)
       .collection("billing")
-      .doc("current") as unknown as {
-      get: () => Promise<{ exists: boolean }>;
-      set: (d: object) => Promise<void>;
-      update: (d: object) => Promise<void>;
-    };
+      .doc("current");
     const existing = await billingRef.get();
     if (!existing.exists) {
       await billingRef.set({

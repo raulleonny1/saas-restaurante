@@ -6,6 +6,7 @@ import { formatCurrency } from "@/lib/format";
 import { getEffectivePrintSettings } from "@/lib/printer-device-prefs";
 import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { openCashDrawer } from "@/modules/pos/domain/cash-drawer";
+import { orderHeading } from "@/modules/pos/domain/orderNumber";
 import { printOrderReceipt } from "@/modules/pos/domain/print";
 import { balanceDue, roundMoney } from "@/modules/pos/domain/totals";
 import { usePos } from "@/modules/pos/context/PosProvider";
@@ -277,7 +278,7 @@ export function WaiterPayPage() {
           Cobrar
         </h1>
         <p className="text-sm text-[#a8b5a4]">
-          Mesa {activeOrder.tableName} · total{" "}
+          {orderHeading(activeOrder)} · total{" "}
           {formatCurrency(activeOrder.total, currency)} · ya pagado{" "}
           {formatCurrency(activeOrder.amountPaid ?? 0, currency)}
         </p>

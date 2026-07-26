@@ -3,6 +3,7 @@
 import { getDb } from "@/lib/firebase";
 import { stripUndefined } from "@/lib/firestore-safe";
 import { newId, nowIso } from "@/modules/customer-app/domain/ids";
+import { allocateOrderNumber } from "@/modules/pos/services/order-number.service";
 import type { Order } from "@/types/orders";
 import {
   collection,
@@ -58,6 +59,7 @@ export async function placeCustomerOrder(input: {
 }): Promise<Order> {
   const stamp = nowIso();
   const id = newId("ord");
+  const orderNumber = await allocateOrderNumber(input.restaurantId);
   const subtotal = input.items.reduce(
     (s, i) => s + i.unitPrice * i.quantity,
     0,
@@ -66,6 +68,7 @@ export async function placeCustomerOrder(input: {
     id,
     restaurantId: input.restaurantId,
     branchId: input.branchId,
+    orderNumber,
     customerId: input.customerId,
     customerUid: input.customerUid,
     channel: "online",
@@ -120,7 +123,7 @@ export async function placeCustomerOrder(input: {
         uid: input.customerUid,
         type: "order",
         title: "Pedido recibido",
-        body: `Tu pedido ···${id.slice(-6)} está en cocina.`,
+        body: `Tu pedido ${orderNumber != null ? `#${String(orderNumber).padStart(3, "0")}` : `···${id.slice(-6)}`} está en cocina.`,
         href: "/seguimiento",
         read: false,
         referenceType: "order",

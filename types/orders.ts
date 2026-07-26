@@ -84,6 +84,11 @@ export interface Order extends Timestamps, SoftDelete {
   id: string;
   restaurantId: string;
   branchId: string;
+  /**
+   * Número de orden humano (secuencial del local).
+   * Se muestra en cocina, barra, caja y camarero: Orden #042 · Mesa 5.
+   */
+  orderNumber?: number;
   tableId?: string | null;
   tableName?: string;
   /** Secondary tables merged into this check. */
