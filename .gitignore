@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (never commit secrets)
 .env*
 !.env.example
+/secrets/
+!/secrets/.gitkeep
+!/secrets/README.md
 
 # vercel
 .vercel

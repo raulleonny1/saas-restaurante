@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getFirebaseAdmin } from "@/lib/firebase-admin";
+import {
+  getFirebaseAdmin,
+  getFirebaseAdminInitError,
+} from "@/lib/firebase-admin";
 import { isValidStaffPin, normalizeStaffPin } from "@/lib/pin";
 import { normalizeRoleId } from "@/lib/roles";
 import { buildMemberPermissionCache } from "@/lib/rbac/evaluate";
@@ -15,7 +18,8 @@ export async function POST(req: Request) {
       {
         ok: false,
         error:
-          "Firebase Admin no configurado. Añade FIREBASE_SERVICE_ACCOUNT_JSON en el servidor.",
+          getFirebaseAdminInitError() ||
+          "Firebase Admin no configurado. Usa FIREBASE_SERVICE_ACCOUNT_PATH y reinicia npm run dev.",
       },
       { status: 503 },
     );
