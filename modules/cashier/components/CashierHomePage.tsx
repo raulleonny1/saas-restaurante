@@ -309,10 +309,10 @@ export function CashierHomePage() {
               Vender ahora
             </Link>
             <Link
-              href={routes.printers}
+              href="/settings?tab=printers"
               className="inline-block text-xs text-emerald-400 hover:underline"
             >
-              Configurar impresora de ventas
+              Ajustes · Impresoras
             </Link>
           </div>
         </div>

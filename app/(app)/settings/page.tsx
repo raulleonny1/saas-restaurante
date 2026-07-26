@@ -1,7 +1,7 @@
 "use client";
 
-import { SettingsView } from "@/modules/settings";
+import { SettingsViewWithSuspense } from "@/modules/settings";
 
 export default function SettingsPage() {
-  return <SettingsView />;
+  return <SettingsViewWithSuspense />;
 }

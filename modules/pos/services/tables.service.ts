@@ -46,12 +46,14 @@ export function subscribeTables(
   );
 }
 
+export type FloorZone = "sala" | "barra" | "terraza" | "vip";
+
 export async function createTable(input: {
   restaurantId: string;
   branchId: string;
   name: string;
   seats: number;
-  zone?: "sala" | "barra" | "terraza";
+  zone?: FloorZone;
   existingCount?: number;
 }): Promise<Table> {
   const name = input.name.trim();
@@ -61,6 +63,14 @@ export async function createTable(input: {
   const stamp = nowIso();
   const id = newTableId();
   const index = input.existingCount ?? 0;
+  const lower = name.toLowerCase();
+  const inferredZone: FloorZone = lower.includes("vip")
+    ? "vip"
+    : lower.includes("barra") || lower.includes("bar ")
+      ? "barra"
+      : lower.includes("terraza")
+        ? "terraza"
+        : "sala";
   const row: Table = {
     id,
     restaurantId: input.restaurantId,
@@ -72,7 +82,7 @@ export async function createTable(input: {
     y: Math.floor(index / 4),
     currentOrderId: null,
     mergedWith: [],
-    zone: input.zone ?? (name.toLowerCase().includes("barra") ? "barra" : "sala"),
+    zone: input.zone ?? inferredZone,
     createdAt: stamp,
     updatedAt: stamp,
     deletedAt: null,
@@ -92,6 +102,72 @@ export async function createTable(input: {
     throw e;
   }
   return row;
+}
+
+export type CreateTableDraft = {
+  name: string;
+  seats: number;
+  zone: FloorZone;
+};
+
+/**
+ * Crea varias mesas/bares/VIP en una sola escritura Firestore (writeBatch).
+ */
+export async function createTablesBatch(input: {
+  restaurantId: string;
+  branchId: string;
+  drafts: CreateTableDraft[];
+  existingCount?: number;
+}): Promise<Table[]> {
+  if (!input.branchId) throw new Error("Falta la sucursal");
+  if (!input.drafts.length) throw new Error("No hay sitios que crear");
+  if (input.drafts.length > 400) {
+    throw new Error("Máximo 400 sitios por tanda");
+  }
+
+  const stamp = nowIso();
+  const base = input.existingCount ?? 0;
+  const rows: Table[] = input.drafts.map((d, i) => {
+    const name = d.name.trim();
+    const seats = Math.max(1, Math.min(50, Math.floor(Number(d.seats)) || 4));
+    const index = base + i;
+    return {
+      id: newTableId(),
+      restaurantId: input.restaurantId,
+      branchId: input.branchId,
+      name,
+      seats,
+      status: "available" as const,
+      x: index % 4,
+      y: Math.floor(index / 4),
+      currentOrderId: null,
+      mergedWith: [],
+      zone: d.zone,
+      createdAt: stamp,
+      updatedAt: stamp,
+      deletedAt: null,
+    };
+  });
+
+  try {
+    const batch = writeBatch(getDb());
+    for (const row of rows) {
+      batch.set(
+        doc(getDb(), "restaurants", input.restaurantId, "tables", row.id),
+        stripUndefined({ ...row }),
+      );
+    }
+    await batch.commit();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/permission|insufficient/i.test(msg)) {
+      throw new Error(
+        "Firestore denegó guardar el plano. Publica firestore.rules (firebase deploy --only firestore:rules) y revisa que tu usuario sea miembro de la sucursal.",
+      );
+    }
+    throw e;
+  }
+  return rows;
 }
 
 const COUNTER_NAME = "Mostrador";

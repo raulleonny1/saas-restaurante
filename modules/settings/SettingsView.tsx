@@ -3,6 +3,7 @@
 import { useAuth } from "@/context/AuthProvider";
 import { useRestaurant } from "@/context/RestaurantProvider";
 import { useTenant } from "@/context/TenantProvider";
+import { getEffectivePrintSettings } from "@/lib/printer-device-prefs";
 import { isSalaAdminRole, ROLE_LABELS, STAFF_ROLES } from "@/lib/roles";
 import {
   changePlan,
@@ -28,6 +29,10 @@ import {
   normalizeBillingPlanId,
 } from "@/types/billing";
 import type { RoleId } from "@/types/rbac";
+import type {
+  KitchenOutputMode,
+  RestaurantPrintersSettings,
+} from "@/types/restaurant";
 import {
   Alert,
   Button,
@@ -37,17 +42,63 @@ import {
   Skeleton,
   toast,
 } from "@/ui";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
-type Tab = "general" | "branches" | "users" | "billing";
+type Tab = "general" | "printers" | "branches" | "users" | "billing";
+
+const TAB_IDS: Tab[] = [
+  "general",
+  "printers",
+  "branches",
+  "users",
+  "billing",
+];
+
+function parseTab(raw: string | null): Tab | null {
+  if (!raw) return null;
+  return TAB_IDS.includes(raw as Tab) ? (raw as Tab) : null;
+}
 
 export function SettingsView() {
   const { can, user, role } = useAuth();
   const { restaurant, restaurantId, refresh } = useRestaurant();
   const { ready, members, branches, billing, invoices, canManage } = useTenant();
-  const [tab, setTab] = useState<Tab>("general");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const canEditSettings =
     can("settings.manage") || canManage || isSalaAdminRole(role);
+  const canFullSettings =
+    can("settings.read") || canManage || isSalaAdminRole(role);
+  /** Caja/TPV: solo impresoras de este PC */
+  const canPrintersOnly =
+    !canFullSettings &&
+    (can("payments.cash_drawer") || can("pos.access") || can("payments.charge"));
+
+  const [tab, setTab] = useState<Tab>(() => {
+    const fromUrl = parseTab(searchParams.get("tab"));
+    if (fromUrl === "printers") return "printers";
+    if (canFullSettings) return fromUrl && fromUrl !== "printers" ? fromUrl : "general";
+    return "printers";
+  });
+
+  useEffect(() => {
+    const fromUrl = parseTab(searchParams.get("tab"));
+    if (fromUrl) {
+      if (!canFullSettings && fromUrl !== "printers") {
+        setTab("printers");
+        return;
+      }
+      setTab(fromUrl);
+    }
+  }, [searchParams, canFullSettings]);
+
+  function goTab(next: Tab) {
+    setTab(next);
+    const qs = next === "general" ? "/settings" : `/settings?tab=${next}`;
+    router.replace(qs, { scroll: false });
+  }
 
   if (!ready || !restaurantId || !restaurant) {
     return (
@@ -58,7 +109,7 @@ export function SettingsView() {
     );
   }
 
-  if (!can("settings.read") && !canManage && !isSalaAdminRole(role)) {
+  if (!canFullSettings && !canPrintersOnly) {
     return (
       <Alert tone="warning" title="Sin acceso">
         No tienes permiso para ver los ajustes del restaurante.
@@ -66,18 +117,25 @@ export function SettingsView() {
     );
   }
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "general", label: "General" },
-    { id: "branches", label: "Sucursales" },
-    { id: "users", label: "Usuarios" },
-    { id: "billing", label: "Facturación" },
-  ];
+  const tabs: { id: Tab; label: string }[] = canFullSettings
+    ? [
+        { id: "general", label: "General" },
+        { id: "printers", label: "Impresoras" },
+        { id: "branches", label: "Sucursales" },
+        { id: "users", label: "Usuarios" },
+        { id: "billing", label: "Facturación" },
+      ]
+    : [{ id: "printers", label: "Impresoras" }];
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Ajustes multi-tenant"
-        description={`${restaurant.name} · datos y facturación aislados de otros restaurantes.`}
+        title="Ajustes"
+        description={
+          canFullSettings
+            ? `${restaurant.name} · configuración del restaurante, impresoras y facturación.`
+            : `${restaurant.name} · impresoras y asistente de este PC (caja / TPV).`
+        }
       />
 
       <div className="flex flex-wrap gap-2 border-b border-border pb-2">
@@ -85,7 +143,7 @@ export function SettingsView() {
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            onClick={() => goTab(t.id)}
             className={`rounded-lg px-3 py-1.5 text-sm ${
               tab === t.id
                 ? "bg-accent text-white"
@@ -97,7 +155,7 @@ export function SettingsView() {
         ))}
       </div>
 
-      {tab === "general" ? (
+      {tab === "general" && canFullSettings ? (
         <GeneralPanel
           restaurantId={restaurantId}
           restaurant={restaurant}
@@ -105,14 +163,25 @@ export function SettingsView() {
           onSaved={() => void refresh()}
         />
       ) : null}
-      {tab === "branches" ? (
+      {tab === "printers" ? (
+        <PrintersPanel
+          restaurantId={restaurantId}
+          restaurantName={restaurant.name}
+          kitchenOutput={restaurant.settings.kitchenOutput ?? "kds"}
+          printers={restaurant.settings.printers}
+          restaurantSettings={restaurant.settings}
+          canEdit={canEditSettings || canPrintersOnly}
+          onSaved={() => void refresh({ silent: true })}
+        />
+      ) : null}
+      {tab === "branches" && canFullSettings ? (
         <BranchesPanel
           restaurantId={restaurantId}
           branches={branches}
           canEdit={canManage}
         />
       ) : null}
-      {tab === "users" ? (
+      {tab === "users" && canFullSettings ? (
         <UsersPanel
           restaurantId={restaurantId}
           restaurantName={restaurant.name}
@@ -122,7 +191,7 @@ export function SettingsView() {
           actorUid={user?.uid ?? ""}
         />
       ) : null}
-      {tab === "billing" ? (
+      {tab === "billing" && canFullSettings ? (
         <BillingPanel
           restaurantId={restaurantId}
           billing={billing}
@@ -131,6 +200,78 @@ export function SettingsView() {
         />
       ) : null}
     </div>
+  );
+}
+
+function PrintersPanel({
+  restaurantId,
+  restaurantName,
+  kitchenOutput,
+  printers,
+  restaurantSettings,
+  canEdit,
+  onSaved,
+}: {
+  restaurantId: string;
+  restaurantName: string;
+  kitchenOutput: KitchenOutputMode;
+  printers?: RestaurantPrintersSettings;
+  restaurantSettings: NonNullable<
+    ReturnType<typeof useRestaurant>["restaurant"]
+  >["settings"];
+  canEdit: boolean;
+  onSaved: () => void;
+}) {
+  const [tick, setTick] = useState(0);
+  const effective = useMemo(() => {
+    void tick;
+    return getEffectivePrintSettings(restaurantId, restaurantSettings);
+  }, [restaurantId, restaurantSettings, tick]);
+
+  return (
+    <div className="max-w-3xl space-y-4">
+      <div className="rounded-[var(--radius-lg)] border border-border bg-bg-muted/40 px-3 py-2.5 text-xs text-fg-muted">
+        En este PC: ventas →{" "}
+        <span className="font-medium text-fg">
+          {effective.printers.tpv?.systemName?.trim() || "sin elegir"}
+        </span>
+        {" · "}
+        cocina →{" "}
+        <span className="font-medium text-fg">
+          {effective.printers.kitchen?.systemName?.trim() || "sin elegir"}
+        </span>
+      </div>
+      <section className="rounded-[var(--radius-xl)] border border-border bg-bg-elevated p-4 sm:p-5">
+        <PrinterSetupPanel
+          restaurantId={restaurantId}
+          restaurantName={restaurantName}
+          kitchenOutput={kitchenOutput ?? effective.kitchenOutput}
+          printers={printers ?? effective.printers}
+          canEdit={canEdit}
+          storage="device"
+          onSaved={async () => {
+            setTick((n) => n + 1);
+            onSaved();
+          }}
+        />
+      </section>
+    </div>
+  );
+}
+
+/** Wrapper por useSearchParams (Next.js). */
+export function SettingsViewWithSuspense() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-56" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      }
+    >
+      <SettingsView />
+    </Suspense>
   );
 }
 
@@ -221,17 +362,6 @@ function GeneralPanel({
           </Button>
         ) : null}
       </form>
-
-      <section className="max-w-3xl rounded-[var(--radius-xl)] border border-border bg-bg-elevated p-4 sm:p-5">
-        <PrinterSetupPanel
-          restaurantId={restaurantId}
-          restaurantName={restaurant.name}
-          kitchenOutput={restaurant.settings.kitchenOutput ?? "kds"}
-          printers={restaurant.settings.printers}
-          canEdit={canEdit}
-          onSaved={onSaved}
-        />
-      </section>
     </div>
   );
 }

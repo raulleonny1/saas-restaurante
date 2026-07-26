@@ -1,5 +1,6 @@
-import { CashierPrintersPage } from "@/modules/cashier/components/CashierPrintersPage";
+import { redirect } from "next/navigation";
 
+/** Impresoras se configuran en Ajustes. */
 export default function CajaImpresorasPage() {
-  return <CashierPrintersPage />;
+  redirect("/settings?tab=printers");
 }

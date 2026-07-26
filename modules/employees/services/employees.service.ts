@@ -250,19 +250,27 @@ export async function setEmployeeAssignedTables(input: {
   employeeId: string;
   tableIds: string[];
 }): Promise<void> {
-  await updateDoc(
-    doc(
-      getDb(),
-      "restaurants",
-      input.restaurantId,
-      "employees",
-      input.employeeId,
-    ),
-    {
+  const ref = doc(
+    getDb(),
+    "restaurants",
+    input.restaurantId,
+    "employees",
+    input.employeeId,
+  );
+  try {
+    await updateDoc(ref, {
       assignedTableIds: input.tableIds,
       updatedAt: nowIso(),
-    },
-  );
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/permission|insufficient/i.test(msg)) {
+      throw new Error(
+        "Firestore denegó guardar la zona del Camarero. Publica firestore.rules y comprueba que eres gerente/propietario.",
+      );
+    }
+    throw e;
+  }
 }
 
 export async function markEmployeeInviteSent(input: {

@@ -26,7 +26,7 @@ const WaiterRoutes: FloorRoutes = {
   history: "/waiter/historial",
   notifications: "/waiter/notificaciones",
   move: "/waiter/mover",
-  printers: "/waiter/impresoras",
+  printers: "/settings?tab=printers",
   cierre: "/waiter/historial",
 };
 
@@ -39,7 +39,7 @@ const CashierRoutes: FloorRoutes = {
   history: "/caja/historial",
   notifications: "/caja/notificaciones",
   move: "/caja/mover",
-  printers: "/caja/impresoras",
+  printers: "/settings?tab=printers",
   cierre: "/caja/cierre",
 };
 

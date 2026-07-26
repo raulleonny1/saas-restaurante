@@ -62,10 +62,13 @@ import {
 import { recordPaymentInDailyStats } from "@/modules/reports/services/daily-stats.service";
 import {
   createTable,
+  createTablesBatch,
   deleteTable,
   markTableClean as markTableCleanService,
   subscribeTables,
   updateTable,
+  type CreateTableDraft,
+  type FloorZone,
 } from "@/modules/pos/services/tables.service";
 import type { Product, ProductCategory } from "@/types/catalog";
 import type { InventoryLevel } from "@/types/inventory";
@@ -117,8 +120,10 @@ interface PosContextValue {
   createFloorTable: (input: {
     name: string;
     seats: number;
-    zone?: "sala" | "barra" | "terraza";
+    zone?: FloorZone;
   }) => Promise<Table>;
+  /** Guarda varias mesas/bares/VIP en Firebase de una vez. */
+  createFloorTablesBatch: (drafts: CreateTableDraft[]) => Promise<Table[]>;
   updateFloorTable: (input: {
     tableId: string;
     name?: string;
@@ -964,9 +969,13 @@ export function PosProvider({ children }: { children: ReactNode }) {
     async (input: {
       name: string;
       seats: number;
-      zone?: "sala" | "barra" | "terraza";
+      zone?: FloorZone;
     }) => {
-      if (!restaurantId || !branchId) throw new Error("Sin sucursal");
+      if (!restaurantId || !branchId) {
+        throw new Error(
+          "Sin sucursal. Espera a que cargue el local o elige sucursal arriba.",
+        );
+      }
       const table = await createTable({
         restaurantId,
         branchId,
@@ -983,6 +992,32 @@ export function PosProvider({ children }: { children: ReactNode }) {
             ),
       );
       return table;
+    },
+    [restaurantId, branchId, tables.length],
+  );
+
+  const createFloorTablesBatch = useCallback(
+    async (drafts: CreateTableDraft[]) => {
+      if (!restaurantId || !branchId) {
+        throw new Error(
+          "Sin sucursal. Espera a que cargue el local o elige sucursal arriba.",
+        );
+      }
+      const created = await createTablesBatch({
+        restaurantId,
+        branchId,
+        drafts,
+        existingCount: tables.length,
+      });
+      setTables((prev) => {
+        const ids = new Set(prev.map((t) => t.id));
+        const merged = [
+          ...prev,
+          ...created.filter((t) => !ids.has(t.id)),
+        ].sort((a, b) => a.name.localeCompare(b.name, "es"));
+        return merged;
+      });
+      return created;
     },
     [restaurantId, branchId, tables.length],
   );
@@ -1080,6 +1115,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
     restaurantName,
     bootstrap,
     createFloorTable,
+    createFloorTablesBatch,
     updateFloorTable,
     removeFloorTable,
     markTableClean,

@@ -483,6 +483,17 @@ service cloud.firestore {
         allow delete: if canManage(restaurantId);
       }
 
+      // Empleados (asignación de mesas al Camarero, fichas, etc.)
+      match /employees/{employeeId} {
+        allow read: if isMember(restaurantId);
+        allow create: if canManage(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update: if canManage(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == restaurantId;
+        allow delete: if canManage(restaurantId);
+      }
+
       // Default tenant collections — membership + branch ACL
       match /{collection}/{docId} {
         allow read: if isMember(restaurantId) && (
