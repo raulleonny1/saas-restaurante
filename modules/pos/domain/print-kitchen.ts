@@ -145,6 +145,11 @@ export function printKitchenTicket(
     )}</div>
     <div class="big">Mesa ${escapeHtml(order.tableName || "—")}</div>
     ${
+      order.takeaway || /para\s*llevar/i.test(order.notes ?? "")
+        ? `<div class="big" style="border:2px solid #000;padding:6px;margin:6px 0">★ PARA LLEVAR ★</div>`
+        : ""
+    }
+    ${
       camarero ? `<div class="camarero">Camarero: ${escapeHtml(camarero)}</div>`
         : `<div class="meta">Camarero: —</div>`
     }

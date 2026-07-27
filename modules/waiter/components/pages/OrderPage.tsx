@@ -6,10 +6,11 @@ import { useFloorRoutes } from "@/modules/floor/FloorRoutesContext";
 import { ProductGrid } from "@/modules/pos/components/ProductGrid";
 import { usePos } from "@/modules/pos/context/PosProvider";
 import { orderHeading } from "@/modules/pos/domain/orderNumber";
+import { isOrderTakeaway } from "@/modules/pos/domain/takeaway";
 import { lineTotal } from "@/modules/pos/domain/totals";
 import { orderItemStatusLabel } from "@/modules/waiter/domain/itemStatus";
 import type { OrderItem } from "@/types/orders";
-import { ArrowLeft, Check, Minus, Plus, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Minus, Plus, Send, ShoppingBag, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -24,6 +25,7 @@ export function WaiterOrderPage() {
     removeItem,
     sendKitchen,
     markItemsServed,
+    setTakeaway,
     currency,
     balance,
   } = usePos();
@@ -96,6 +98,25 @@ export function WaiterOrderPage() {
       msg={msg}
       currency={currency}
       balance={balance}
+      takeaway={isOrderTakeaway(activeOrder)}
+      canToggleTakeaway={Boolean(activeOrder && itemCount > 0)}
+      onToggleTakeaway={(next) => {
+        void (async () => {
+          try {
+            setBusy(true);
+            await setTakeaway(next);
+            setMsg(
+              next
+                ? "Marcado PARA LLEVAR · cocina lo verá al enviar"
+                : "Quitado aviso para llevar",
+            );
+          } catch (e) {
+            setMsg(e instanceof Error ? e.message : "Error");
+          } finally {
+            setBusy(false);
+          }
+        })();
+      }}
       onSetQty={(id, qty) => void setItemQty(id, qty)}
       onRemove={(id) => void removeItem(id)}
       onServeOne={(id) => {
@@ -262,6 +283,9 @@ function TicketPanel({
   msg,
   currency,
   balance,
+  takeaway,
+  canToggleTakeaway,
+  onToggleTakeaway,
   onSetQty,
   onRemove,
   onServeOne,
@@ -278,6 +302,9 @@ function TicketPanel({
   msg: string | null;
   currency: string;
   balance: number;
+  takeaway: boolean;
+  canToggleTakeaway: boolean;
+  onToggleTakeaway: (next: boolean) => void;
   onSetQty: (id: string, qty: number) => void;
   onRemove: (id: string) => void;
   onServeOne: (id: string) => void;
@@ -289,10 +316,30 @@ function TicketPanel({
 }) {
   return (
     <div className="flex h-full flex-col gap-3">
+      {canToggleTakeaway ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onToggleTakeaway(!takeaway)}
+          className={`flex w-full touch-manipulation items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold ${
+            takeaway
+              ? "border-amber-400/70 bg-amber-500 text-black"
+              : "border-white/15 bg-white/[0.04] text-[#e7efe4]"
+          }`}
+        >
+          <ShoppingBag className="h-4 w-4" />
+          {takeaway ? "PARA LLEVAR · activado" : "Marcar para llevar"}
+        </button>
+      ) : null}
+      {takeaway ? (
+        <div className="rounded-xl border border-amber-400/50 bg-amber-950/40 px-3 py-2.5 text-sm text-amber-100">
+          Aviso: este pedido es para llevar. Cocina/barra lo verán en la comanda.
+        </div>
+      ) : null}
       {readyCount > 0 ? (
         <div className="rounded-xl border border-cyan-400/50 bg-cyan-950/40 px-3 py-2.5 text-sm text-cyan-100">
-          {readyCount} listo{readyCount === 1 ? "" : "s"} para llevar · cuando
-          lo dejes en la mesa, pulsa «Ya lo llevé al cliente».
+          {readyCount} listo{readyCount === 1 ? "" : "s"} para servir · cuando
+          lo dejes al cliente, pulsa «Ya lo llevé al cliente».
         </div>
       ) : null}
       {pendingSendCount > 0 ? (

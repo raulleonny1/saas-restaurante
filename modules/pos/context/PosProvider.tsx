@@ -148,6 +148,8 @@ interface PosContextValue {
   removeItem: (itemId: string) => Promise<void>;
   setDiscount: (percent: number, amount?: number) => Promise<void>;
   setTip: (percent: number, amount?: number) => Promise<void>;
+  /** Marca el pedido como para llevar (aviso en cocina/comanda). */
+  setTakeaway: (takeaway: boolean) => Promise<void>;
   /** Envía a cocina/barra (el ticket térmico sale en /kitchen|/bar, no en el camarero). */
   sendKitchen: () => Promise<{ printed: boolean }>;
   /** Camarero: lleva a mesa → marca ítems listos como servidos. */
@@ -640,6 +642,47 @@ export function PosProvider({ children }: { children: ReactNode }) {
     [requireOrder, taxPercent],
   );
 
+  const setTakeaway = useCallback(
+    async (takeaway: boolean) => {
+      const { order, restaurantId: rid, uid } = requireOrder();
+      const { notesWithTakeawayFlag } = await import(
+        "@/modules/pos/domain/takeaway"
+      );
+      const TAKEAWAY_LINE = "PARA LLEVAR";
+      const items = order.items.map((item) => {
+        if (item.status === "cancelled") return item;
+        // Solo líneas aún no enviadas: las nuevas llevan la marca a cocina
+        if (item.status !== "open") return item;
+        const base = (item.kitchenNotes ?? "")
+          .split("·")
+          .map((p) => p.trim())
+          .filter((p) => p && p !== TAKEAWAY_LINE && !/^para\s*llevar$/i.test(p))
+          .join(" · ");
+        return {
+          ...item,
+          kitchenNotes: takeaway
+            ? base
+              ? `${TAKEAWAY_LINE} · ${base}`
+              : TAKEAWAY_LINE
+            : base || undefined,
+        };
+      });
+      await saveOrder(
+        rid,
+        {
+          ...order,
+          takeaway,
+          notes: notesWithTakeawayFlag(order.notes, takeaway),
+          items,
+        },
+        taxPercent,
+        uid,
+        takeaway ? "order.takeaway.on" : "order.takeaway.off",
+      );
+    },
+    [requireOrder, taxPercent],
+  );
+
   const sendKitchen = useCallback(async () => {
     const { order, restaurantId: rid, uid } = requireOrder();
     await sendToKitchen(
@@ -1127,6 +1170,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
     removeItem,
     setDiscount,
     setTip,
+    setTakeaway,
     sendKitchen,
     markItemsServed,
     moveToTable,

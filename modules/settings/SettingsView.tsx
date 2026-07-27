@@ -79,7 +79,7 @@ export function SettingsView() {
   const [tab, setTab] = useState<Tab>(() => {
     const fromUrl = parseTab(searchParams.get("tab"));
     if (fromUrl === "printers") return "printers";
-    if (canFullSettings) return fromUrl && fromUrl !== "printers" ? fromUrl : "general";
+    if (canFullSettings) return fromUrl ?? "general";
     return "printers";
   });
 

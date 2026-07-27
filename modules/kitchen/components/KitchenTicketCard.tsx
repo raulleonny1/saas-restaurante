@@ -7,9 +7,10 @@ import {
   formatElapsed,
 } from "@/modules/kitchen/domain/priority";
 import { orderHeading } from "@/modules/pos/domain/orderNumber";
+import { isOrderTakeaway } from "@/modules/pos/domain/takeaway";
 import type { KitchenColumnId, KitchenTicket } from "@/types/kitchen";
 import { Badge, Button, toast } from "@/ui";
-import { BellRing, Printer } from "lucide-react";
+import { BellRing, Printer, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 
 const NEXT: Partial<Record<KitchenColumnId, KitchenColumnId>> = {
@@ -91,6 +92,12 @@ export function KitchenTicketCard({
                 ? ` · ${ticket.order.servedByName}`
                 : ""}
             </p>
+            {isOrderTakeaway(ticket.order) ? (
+              <p className="mt-1 inline-flex items-center gap-1 rounded-md bg-amber-500/90 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-black">
+                <ShoppingBag className="h-3 w-3" />
+                Para llevar
+              </p>
+            ) : null}
           </div>
           <div className="text-right">
             <Badge

@@ -124,6 +124,11 @@ export interface Order extends Timestamps, SoftDelete {
   /** Nombre del Camarero (para comanda impresa / cocina). */
   servedByName?: string;
   notes?: string;
+  /**
+   * Cliente pide para llevar (aunque esté en mesa).
+   * Se muestra en camarero, cocina/barra y comanda impresa.
+   */
+  takeaway?: boolean;
   printCount?: number;
   lastPrintedAt?: ISODateString;
   /** Cocina pulsa «Avisar Camarero» → el Camarero ve aviso flotante + sonido. */
